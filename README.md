@@ -3,6 +3,8 @@
 > **Preview:** SolarHarness is under active development. Its interfaces, behavior,
 > and safety boundaries may change before a stable release.
 
+**Born in public:** SolarHarness was started and first published on 20 September 2026.
+
 SolarHarness is a terminal-native agent capable of separate delegation. Solar acts
 as a read-only coordinator: it clarifies the requested outcome, creates a parallel
 worker plan, and waits for approval. Accepted tasks run through isolated,
