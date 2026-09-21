@@ -79,7 +79,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   useEffect(() => {
     if (!busy) return;
     setElapsed(0);
-    // Advance one character every 240 ms; color stays fixed while emphasis moves.
+    // Animate only the adjacent glyph; the activity text remains one color span.
     const spinnerTimer = setInterval(() => setSpinner(value => value + 1), 240);
     const elapsedTimer = setInterval(() => setElapsed(value => value + 1), 1_000);
     return () => { clearInterval(spinnerTimer); clearInterval(elapsedTimer); };
@@ -325,7 +325,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         <Box marginTop={1} flexDirection="column">
           <Box>
             <Text color={theme.pulse}>{spinnerFrames[spinner % spinnerFrames.length]} </Text>
-            <ShimmerText text={phaseInfo.activity} frame={spinner} />
+            <ActivityText text={phaseInfo.activity} />
             <Text color={theme.subtle}> · {elapsed}s</Text>
           </Box>
           {activityLog.slice(-3).map((activity, index) => (
@@ -378,15 +378,10 @@ function NewSessionConfirmation({ pending, workspace }: { pending: PendingNew; w
   );
 }
 
-function ShimmerText({ text, frame }: { text: string; frame: number }): React.JSX.Element {
-  const highlight = frame % Math.max(text.length, 1);
-  return (
-    <Text color={theme.pulse}>
-      {[...text].map((character, index) => (
-        <Text key={`${index}-${character}`} color={theme.pulse} bold={Math.abs(index - highlight) <= 1}>{character}</Text>
-      ))}
-    </Text>
-  );
+function ActivityText({ text }: { text: string }): React.JSX.Element {
+  // Keep this as one ANSI color span. Per-character bold/reset sequences can
+  // briefly restore the terminal's default (often green) foreground on Windows.
+  return <Text color={theme.pulse}>{text}</Text>;
 }
 
 function Header({ compact, workspace, status, statusColor }: { compact: boolean; workspace: string; status: string; statusColor: string }): React.JSX.Element {
