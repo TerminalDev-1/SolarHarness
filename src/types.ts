@@ -1,6 +1,9 @@
 export type AgentStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
-export type ReasoningEffort = "low" | "medium" | "high";
+/** User-facing effort levels. "light" maps to Codex's low reasoning setting. */
+export type ReasoningEffort = "light" | "medium" | "high" | "xhigh" | "max";
+
+export const REASONING_EFFORTS: readonly ReasoningEffort[] = ["light", "medium", "high", "xhigh", "max"];
 
 export interface AgentTask {
   title: string;

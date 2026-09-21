@@ -8,6 +8,7 @@ export type ToolDefinition<TInput, TResult> = {
 
 export type SpawnSubAgentInput = AgentTask & { context: string; reasoning: ReasoningEffort };
 export type OrchestrateInput = { action: "list" | "cancel" | "inject_context" | "set_reasoning"; agentId?: string; context?: string; reasoning?: ReasoningEffort };
+export type AdjustSubEffortLevelInput = { agentId: string; effortLevel: ReasoningEffort };
 
 /** Runtime tool boundary. Tool contracts live here, never in a system prompt. */
 export class ToolRegistry {
@@ -50,6 +51,11 @@ export function registerHarnessTools(dependencies: {
       }
       return dependencies.orchestrate(input);
     }
+  });
+  registry.register<AdjustSubEffortLevelInput, AgentRecord>({
+    name: "adjust-sub-effort-level",
+    description: "Change the reasoning effort used for a specific sub-agent's next exchange.",
+    execute: async input => dependencies.setReasoning(input.agentId, input.effortLevel)
   });
   return registry;
 }

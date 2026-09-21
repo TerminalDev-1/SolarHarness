@@ -10,8 +10,8 @@ export class AgentManager {
   constructor(private readonly provider: CodexCliProvider, private readonly options: CodexRunOptions) {}
 
   async spawn(input: SpawnSubAgentInput): Promise<AgentRecord> {
-    if ([...this.records.values()].filter(agent => agent.status === "running").length >= 3) {
-      throw new Error("Solar Harness Preview allows no more than three active workers.");
+    if ([...this.records.values()].filter(agent => agent.status === "running").length >= 8) {
+      throw new Error("Solar Harness Preview allows no more than eight active workers.");
     }
     const id = `worker-${randomUUID().slice(0, 6)}`;
     const record: AgentRecord = { ...input, id, status: "queued", reasoning: input.reasoning, latestActivity: "Queued", injectedContext: [] };
@@ -74,6 +74,12 @@ export class AgentManager {
   }
 
   list(): AgentRecord[] { return [...this.records.values()]; }
+
+  reset(): void {
+    for (const controller of this.aborters.values()) controller.abort();
+    this.aborters.clear();
+    this.records.clear();
+  }
 
   private async continueWorker(record: AgentRecord, context: string): Promise<void> {
     record.status = "running";

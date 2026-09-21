@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { mkdirSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 import { SolarHarness } from "./harness.js";
 import { startSolarUi } from "./ui.js";
-import type { ReasoningEffort } from "./types.js";
+import { REASONING_EFFORTS, type ReasoningEffort } from "./types.js";
 
 const program = new Command();
 
@@ -11,15 +13,18 @@ program
   .description("Solar Harness Preview — a terminal-native Codex worker orchestrator");
 
 program
-  .command("chat")
+  .command("chat", { isDefault: true })
   .description("Start the Solar Harness Preview terminal UI")
   .option("--model <model>", "Codex model", "gpt-5.6-luna")
-  .option("--reasoning <effort>", "Default worker reasoning: low, medium, or high", "medium")
+  .option("--reasoning <effort>", "Default reasoning: light, medium, high, xhigh, or max", "light")
   .action(({ model, reasoning }: { model: string; reasoning: ReasoningEffort }) => {
-    if (!["low", "medium", "high"].includes(reasoning)) {
-      throw new Error("--reasoning must be low, medium, or high.");
+    if (!REASONING_EFFORTS.includes(reasoning)) {
+      throw new Error("--reasoning must be light, medium, high, xhigh, or max.");
     }
-    const harness = new SolarHarness({ task: "", model, reasoning, cwd: process.cwd() });
+    const launchDirectory = resolve(process.cwd());
+    const workspace = basename(launchDirectory).toLowerCase() === "test" ? launchDirectory : join(launchDirectory, "test");
+    mkdirSync(workspace, { recursive: true });
+    const harness = new SolarHarness({ task: "", model, reasoning, cwd: workspace });
     startSolarUi(harness, model, reasoning);
   });
 
