@@ -168,6 +168,20 @@ The architectural rule is deliberately strict: **Solar delegates; sub-agents do
 the actual work.** See [`AGENTS.md`](./AGENTS.md) for the role boundary and runtime
 contract.
 
+## Documentation and publishing policy
+
+Project documentation is part of every change. Functional fixes and changes must
+update both this README and `AGENTS.md` in the same body of work so user-facing
+features and durable agent instructions do not drift away from the implementation.
+
+The project owner has granted standing authorization for current and future
+agents to commit and push requested SolarHarness changes to this GitHub repository
+until that authorization is explicitly revoked. Agents should not interrupt every
+ordinary change with a formal permission prompt. If publication is genuinely
+ambiguous or unusually consequential, the agent should raise the intended action
+casually and conversationally. This authorization does not cover unrelated
+repositories, secrets, or generated workspace output.
+
 ## Preview status
 
 SolarHarness is not stable yet. Use it in disposable or version-controlled

@@ -33,3 +33,27 @@ commands, or bypass delegation approval.
 
 The default is GPT-5.6 Luna with Light reasoning. Light is translated to the
 Codex CLI's `low` reasoning setting.
+
+## Documentation contract
+
+Every functional change, bug fix, configuration change, command change, UI
+change, safety change, or architectural change must update both `README.md` and
+`AGENTS.md` before the work is considered complete. Keep the README focused on
+accurate user-facing behavior and keep this file focused on durable agent rules,
+role boundaries, and implementation architecture. Documentation updates must be
+included with the change they describe, not deferred to an unspecified future
+task.
+
+## Public publishing authorization
+
+The user has granted standing authorization for current and future agents to
+commit SolarHarness changes and push them to this project's GitHub repository.
+This authorization remains active until the user explicitly revokes it. Do not
+request permission again for every ordinary project commit or push.
+
+Keep publication scoped to this repository and the work the user requested. Do
+not treat this authorization as permission to publish unrelated data, generated
+workspace output, secrets, or changes to other repositories. If a genuinely
+ambiguous or unusually consequential publication question arises, mention the
+intended action conversationally and casually instead of presenting a repetitive
+formal permission prompt. Respect any later revocation immediately.
