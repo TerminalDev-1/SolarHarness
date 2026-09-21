@@ -47,7 +47,9 @@ const themes: Record<ThemeName, Theme> = { dark: darkTheme, light: lightTheme };
 let theme = darkTheme;
 
 const icon = ["▝▜▄  ", "  ▝▜▄", " ▗▟▀ ", "▝▀   "];
-const spinnerFrames = ["✢", "✳", "✶", "✳"];
+// Avoid emoji-capable glyphs such as ✳, which Windows Terminal renders as a
+// green full-color emoji regardless of the requested ANSI foreground color.
+const spinnerFrames = ["·", "✦", "✧", "✦"];
 
 interface SolarAppProps {
   harness: SolarHarness;
