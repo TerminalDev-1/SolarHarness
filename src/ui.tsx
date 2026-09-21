@@ -26,7 +26,7 @@ const darkTheme: Theme = {
   error: "#f28b82",
   prompt: "#a8c7fa",
   background: "#0b0b0b",
-  pulse: ["#7c5cff", "#a78bfa", "#d8b4fe", "#a78bfa"]
+  pulse: ["#9a5b45", "#c97857", "#e6a07e", "#c97857"]
 };
 
 const lightTheme: Theme = {
@@ -40,7 +40,7 @@ const lightTheme: Theme = {
   error: "#b3261e",
   prompt: "#174ea6",
   background: "#f8f9fa",
-  pulse: ["#7c3aed", "#8b5cf6", "#a855f7", "#8b5cf6"]
+  pulse: ["#9a3412", "#c2410c", "#ea580c", "#c2410c"]
 };
 
 const themes: Record<ThemeName, Theme> = { dark: darkTheme, light: lightTheme };
@@ -79,7 +79,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   useEffect(() => {
     if (!busy) return;
     setElapsed(0);
-    const spinnerTimer = setInterval(() => setSpinner(value => (value + 1) % spinnerFrames.length), 90);
+    const spinnerTimer = setInterval(() => setSpinner(value => (value + 1) % spinnerFrames.length), 160);
     const elapsedTimer = setInterval(() => setElapsed(value => value + 1), 1_000);
     return () => { clearInterval(spinnerTimer); clearInterval(elapsedTimer); };
   }, [busy]);
