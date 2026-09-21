@@ -32,7 +32,7 @@ coordinator itself.
 - Adjust a particular worker's next-exchange effort through a command or a
   natural-language request to Solar.
 - Display live worker state, elapsed time, recent activity, and a Claude Code-like
-  pulse and shimmer while work is running.
+  activity pulse while work is running.
 - Switch the whole terminal between dark and light palettes—not only the input
   box—and always display the active workspace.
 - Find the native Codex executable installed with the Codex desktop app even when
@@ -168,19 +168,25 @@ The architectural rule is deliberately strict: **Solar delegates; sub-agents do
 the actual work.** See [`AGENTS.md`](./AGENTS.md) for the role boundary and runtime
 contract.
 
-## Documentation and publishing policy
+## Claude Code-style activity indicator
 
-Project documentation is part of every change. Functional fixes and changes must
-update both this README and `AGENTS.md` in the same body of work so user-facing
-features and durable agent instructions do not drift away from the implementation.
+SolarHarness uses a compact activity treatment inspired by Claude Code: a small
+animated symbol, a short status such as `Thinking…`, and elapsed time on one line.
+It is an approximation designed for this Ink-based terminal UI rather than a copy
+of Claude Code's renderer.
 
-The project owner has granted standing authorization for current and future
-agents to commit and push requested SolarHarness changes to this GitHub repository
-until that authorization is explicitly revoked. Agents should not interrupt every
-ordinary change with a formal permission prompt. If publication is genuinely
-ambiguous or unusually consequential, the agent should raise the intended action
-casually and conversationally. This authorization does not cover unrelated
-repositories, secrets, or generated workspace output.
+The first implementation attempted a moving, multishade text shimmer. On Windows
+Terminal it exposed two rendering problems: per-character ANSI style resets could
+briefly reveal the terminal's default foreground color, and the `✳` spinner frame
+was promoted to a full-color green emoji that ignored the requested orange ANSI
+color. Changing the palette could not fix an emoji renderer overriding that
+palette, which is why the green flash survived several color adjustments.
+
+The corrected implementation renders the activity label as one fixed
+terracotta/orange ANSI span and animates only an adjacent text-safe sequence:
+`·`, `✦`, `✧`, `✦`. Frames advance every 240 ms. This preserves the calm
+Claude Code-like feel without per-character color cycling, emoji substitution, or
+green flashes across supported terminal themes.
 
 ## Preview status
 
