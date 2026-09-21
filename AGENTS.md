@@ -36,13 +36,26 @@ Codex CLI's `low` reasoning setting.
 
 ## Documentation contract
 
-Every functional change, bug fix, configuration change, command change, UI
-change, safety change, or architectural change must update both `README.md` and
-`AGENTS.md` before the work is considered complete. Keep the README focused on
-accurate user-facing behavior and keep this file focused on durable agent rules,
-role boundaries, and implementation architecture. Documentation updates must be
-included with the change they describe, not deferred to an unspecified future
-task.
+Update `AGENTS.md` whenever agent behavior, orchestration, tool contracts, role
+boundaries, implementation constraints, durable compatibility decisions, or
+agent-facing policy changes. Keep those rules here so future agents inherit them.
+
+Do not update `README.md` for every small fix or internal change. Update the
+README only when the public harness architecture, installation, commands,
+workflow, safety model, or meaningful user-facing capabilities change. Keep it
+concise and avoid turning routine maintenance into release-note noise.
+
+## Claude Code-style activity indicator
+
+The Windows Terminal green-hue bug is fixed. It was not an orchestration or ANSI
+palette problem: the `✳` spinner frame was promoted to a full-color green emoji,
+ignoring the requested foreground color. The activity indicator now uses only
+text-safe frames (`·`, `✦`, `✧`, `✦`) and one fixed terracotta/orange ANSI color.
+Activity text is rendered as a single color span, while only the adjacent glyph
+animates at a calm 240 ms cadence. Do not reintroduce emoji-capable spinner
+characters or per-character ANSI styling; those can recreate green flashes and
+color bleed. The resulting status treatment intentionally resembles Claude Code
+without copying an emoji-rendered spinner.
 
 ## Public publishing authorization
 
