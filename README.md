@@ -14,7 +14,8 @@ coordinator itself.
 ## What it can do
 
 - Turn a natural-language request into an implementation-ready worker plan.
-- Run as many as eight independently scoped Codex sub-agents concurrently.
+- Choose the smallest useful worker set automatically—from one sub-agent up to a
+  hard maximum of eight—based on genuinely parallel scopes in the request.
 - Create multiple directories and their contents in parallel inside `test`. For
   example, eight approved workers can create `test/agent-1` through
   `test/agent-8` during the same run.
@@ -51,9 +52,11 @@ Create eight independent agent directories. In each directory, create five test
 files and verify their contents.
 ```
 
-can be split into eight concurrent worker assignments. Each worker can own a
-different directory, allowing directory trees to be created at once instead of
-sequentially.
+can be split into eight concurrent worker assignments because it has eight clear,
+non-overlapping scopes. Eight is a ceiling, not a default: ordinary review work
+is grouped into fewer assignments when additional workers add no value. Each
+worker can own a different directory, allowing directory trees to be created at
+once instead of sequentially.
 
 Workers are separate Codex sessions but share the same `test` workspace. Give
 parallel workers non-overlapping directory or file ownership when possible. Solar

@@ -79,7 +79,8 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   useEffect(() => {
     if (!busy) return;
     setElapsed(0);
-    const spinnerTimer = setInterval(() => setSpinner(value => (value + 1) % spinnerFrames.length), 160);
+    // Four frames at 240 ms gives the shimmer a calm ~1 second cycle.
+    const spinnerTimer = setInterval(() => setSpinner(value => (value + 1) % spinnerFrames.length), 240);
     const elapsedTimer = setInterval(() => setElapsed(value => value + 1), 1_000);
     return () => { clearInterval(spinnerTimer); clearInterval(elapsedTimer); };
   }, [busy]);
@@ -160,7 +161,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
   const changeTheme = (nextTheme: ThemeName): void => {
     theme = themes[nextTheme];
-    applyTerminalTheme(stdout, theme);
+    applyTerminalTheme(stdout, theme, nextTheme);
     setThemeName(nextTheme);
     addMessage({ role: "solar", text: `Theme changed to ${nextTheme}.` });
   };
@@ -297,7 +298,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const terminalWidth = stdout.columns || 80;
   const compact = terminalWidth < 62;
   return (
-    <Box flexDirection="column" paddingX={compact ? 0 : 1}>
+    <Box key={themeName} flexDirection="column" paddingX={compact ? 0 : 1}>
       <Header compact={compact} workspace={workspace} status={busy ? phaseInfo.activity : pendingPlan ? "review required" : pendingEffort ? "choose effort" : pendingNew ? "confirm new session" : "ready"} statusColor={busy ? phaseInfo.color : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.success} />
 
       {conversation.length === 0 && (
@@ -484,6 +485,11 @@ export function startSolarUi(harness: SolarHarness, model: string, reasoning: Re
   render(<SolarApp harness={harness} model={model} reasoning={reasoning} />, { exitOnCtrlC: false });
 }
 
-function applyTerminalTheme(stdout: NodeJS.WriteStream, palette: Theme): void {
-  stdout.write(`\x1b]10;${palette.primary}\x07\x1b]11;${palette.background}\x07\x1b[2J\x1b[H`);
+function applyTerminalTheme(stdout: NodeJS.WriteStream, palette: Theme, themeName: ThemeName): void {
+  if (themeName === "dark") {
+    // Restore native terminal colors so light-mode black cannot survive on dark.
+    stdout.write("\x1b]110\x07\x1b]111\x07\x1b[0m\x1b[2J\x1b[H");
+    return;
+  }
+  stdout.write(`\x1b]10;${palette.primary}\x07\x1b]11;${palette.background}\x07\x1b[0m\x1b[2J\x1b[H`);
 }

@@ -75,6 +75,12 @@ export class AgentManager {
 
   list(): AgentRecord[] { return [...this.records.values()]; }
 
+  pruneFinished(): void {
+    for (const [id, record] of this.records) {
+      if (["completed", "failed", "cancelled"].includes(record.status)) this.records.delete(id);
+    }
+  }
+
   reset(): void {
     for (const controller of this.aborters.values()) controller.abort();
     this.aborters.clear();

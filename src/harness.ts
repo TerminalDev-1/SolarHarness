@@ -93,6 +93,7 @@ export class SolarHarness {
   }
 
   async executePlan(plan: DelegationPlan, request: string, context: string, onProgress: (agents: AgentRecord[]) => void, onActivity?: (message: string) => void): Promise<string> {
+    this.manager.pruneFinished();
     const workers = plan.tasks.map(task => this.tools.call<SpawnSubAgentInput, AgentRecord>("spawn_sub_agent", {
       ...task, context: [context, task.context].filter(Boolean).join("\n"), reasoning: this.options.reasoning
     }));

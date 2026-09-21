@@ -20,7 +20,7 @@ export class CodexCliProvider {
       SOLAR_SYSTEM_PROMPT,
       "Act strictly as the Solar Harness Preview coordinator. Do not implement the request.",
       "Return only the requested delegation plan. Do not inspect the workspace, invoke tools, create subagents, or claim that any task has already been completed.",
-      "Break the request into independent, implementation-ready worker tasks. Use no more than eight tasks.",
+      "Break the request into the smallest useful set of independent, implementation-ready worker tasks. Choose the worker count dynamically from the task: use one worker when one is sufficient, add workers only for genuinely parallel scopes, group related review work, and never treat eight as a target. Use no more than eight tasks.",
       "Every task runs concurrently. Never make one task depend on another task's output; combine sequential create-and-verify steps into the same worker task.",
       "Every task must be concrete, scoped, and useful to another coding agent.",
       `User request: ${task}`,
