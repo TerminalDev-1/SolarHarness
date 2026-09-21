@@ -12,7 +12,7 @@ type ThemeName = "dark" | "light";
 type Theme = {
   accent: string; accentStrong: string; primary: string; secondary: string;
   subtle: string; success: string; warning: string; error: string; prompt: string;
-  background: string; pulse: readonly string[];
+  background: string; pulse: string;
 };
 
 const darkTheme: Theme = {
@@ -26,7 +26,7 @@ const darkTheme: Theme = {
   error: "#f28b82",
   prompt: "#a8c7fa",
   background: "#0b0b0b",
-  pulse: ["#9a5b45", "#c97857", "#e6a07e", "#c97857"]
+  pulse: "#d97757"
 };
 
 const lightTheme: Theme = {
@@ -40,7 +40,7 @@ const lightTheme: Theme = {
   error: "#b3261e",
   prompt: "#174ea6",
   background: "#f8f9fa",
-  pulse: ["#9a3412", "#c2410c", "#ea580c", "#c2410c"]
+  pulse: "#b45309"
 };
 
 const themes: Record<ThemeName, Theme> = { dark: darkTheme, light: lightTheme };
@@ -79,8 +79,8 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   useEffect(() => {
     if (!busy) return;
     setElapsed(0);
-    // Four frames at 240 ms gives the shimmer a calm ~1 second cycle.
-    const spinnerTimer = setInterval(() => setSpinner(value => (value + 1) % spinnerFrames.length), 240);
+    // Advance one character every 240 ms; color stays fixed while emphasis moves.
+    const spinnerTimer = setInterval(() => setSpinner(value => value + 1), 240);
     const elapsedTimer = setInterval(() => setElapsed(value => value + 1), 1_000);
     return () => { clearInterval(spinnerTimer); clearInterval(elapsedTimer); };
   }, [busy]);
@@ -324,7 +324,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       {busy && (
         <Box marginTop={1} flexDirection="column">
           <Box>
-            <Text color={theme.pulse[spinner]}>{spinnerFrames[spinner]} </Text>
+            <Text color={theme.pulse}>{spinnerFrames[spinner % spinnerFrames.length]} </Text>
             <ShimmerText text={phaseInfo.activity} frame={spinner} />
             <Text color={theme.subtle}> · {elapsed}s</Text>
           </Box>
@@ -379,10 +379,11 @@ function NewSessionConfirmation({ pending, workspace }: { pending: PendingNew; w
 }
 
 function ShimmerText({ text, frame }: { text: string; frame: number }): React.JSX.Element {
+  const highlight = frame % Math.max(text.length, 1);
   return (
-    <Text>
+    <Text color={theme.pulse}>
       {[...text].map((character, index) => (
-        <Text key={`${index}-${character}`} color={theme.pulse[(index + frame) % theme.pulse.length]}>{character}</Text>
+        <Text key={`${index}-${character}`} color={theme.pulse} bold={Math.abs(index - highlight) <= 1}>{character}</Text>
       ))}
     </Text>
   );
