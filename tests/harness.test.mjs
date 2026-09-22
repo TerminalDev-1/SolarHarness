@@ -94,6 +94,27 @@ test("an explicit click request continues past the first page snapshot", async (
   assert.match(result.reply, /Example Domains/);
 });
 
+test("a browser screenshot request completes and still applies auto permissions", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const actions = [];
+  harness.browser.execute = async input => {
+    actions.push(input.action);
+    return { url: "https://example.com/", title: "Example Domain", snapshot: "Example Domain", screenshotPath: input.action === "screenshot" ? "C:\\capture.png" : undefined };
+  };
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"open","url":"https://example.com"}', sessionId: "browser-session" });
+  let resumes = 0;
+  harness.provider.resume = async () => ({
+    text: ++resumes === 1 ? "The page is open.\nSOLAR_STATE: DISCOVER"
+      : resumes === 2 ? 'SOLAR_TOOL: browser {"action":"screenshot","fullPage":true}'
+        : "Screenshot saved to C:\\capture.png.\nSOLAR_STATE: DISCOVER",
+    sessionId: "browser-session"
+  });
+  const result = await harness.converse("Open the browser, navigate to https://example.com, take a screenshot, and turn auto permissions on.");
+  assert.deepEqual(actions, ["open", "screenshot"]);
+  assert.equal(harness.getAutoPermissions().enabled, true);
+  assert.match(result.reply, /Screenshot saved/);
+});
+
 test("named workers can create Light-pinned named sub-workers", async () => {
   const provider = {
     async run(_prompt, options) {

@@ -1,21 +1,29 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { mkdir } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 
 export type BrowserInput = {
-  action: "open" | "snapshot" | "click" | "fill" | "press" | "scroll" | "back" | "forward" | "close";
+  action: "open" | "snapshot" | "screenshot" | "click" | "fill" | "press" | "scroll" | "back" | "forward" | "close";
   url?: string;
   selector?: string;
   value?: string;
   key?: string;
   direction?: "up" | "down";
+  fullPage?: boolean;
 };
 
-export type BrowserResult = { url: string; title: string; snapshot: string };
+export type BrowserResult = { url: string; title: string; snapshot: string; screenshotPath?: string };
 
 /** One isolated, non-persistent Chromium context for the coordinator session. */
 export class CoordinatorBrowser {
   private browser?: Browser;
   private context?: BrowserContext;
   private page?: Page;
+
+  constructor(private workspace: string = process.cwd()) {}
+
+  setWorkspace(workspace: string): void { this.workspace = workspace; }
 
   get active(): boolean { return Boolean(this.page && !this.page.isClosed()); }
 
@@ -37,6 +45,13 @@ export class CoordinatorBrowser {
     const page = this.page;
     switch (input.action) {
       case "snapshot": break;
+      case "screenshot": {
+        const directory = join(this.workspace, ".solarharness", "screenshots");
+        await mkdir(directory, { recursive: true });
+        const screenshotPath = join(directory, `browser-${Date.now()}-${randomUUID().slice(0, 8)}.png`);
+        await page.screenshot({ path: screenshotPath, fullPage: input.fullPage ?? true });
+        return { ...await this.describe(page), screenshotPath };
+      }
       case "click":
         if (!input.selector) throw new Error("click requires a selector.");
         await page.locator(input.selector).click({ timeout: 10_000 });
@@ -70,11 +85,21 @@ export class CoordinatorBrowser {
 
   private async getPage(): Promise<Page> {
     if (this.page && !this.page.isClosed()) return this.page;
-    try {
-      this.browser = await chromium.launch({ headless: true });
-    } catch (error) {
-      throw new Error(`Unable to launch Chromium. Run "npx playwright install chromium" first. ${error instanceof Error ? error.message : String(error)}`);
+    const attempts = [
+      { name: "bundled Chromium", options: { headless: true } },
+      { name: "Microsoft Edge", options: { headless: true, channel: "msedge" as const } },
+      { name: "Google Chrome", options: { headless: true, channel: "chrome" as const } }
+    ];
+    const failures: string[] = [];
+    for (const attempt of attempts) {
+      try {
+        this.browser = await chromium.launch(attempt.options);
+        break;
+      } catch (error) {
+        failures.push(`${attempt.name}: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+      }
     }
+    if (!this.browser) throw new Error(`No Chromium-compatible browser could launch. Run "npx playwright install chromium". ${failures.join("; ")}`);
     this.context = await this.browser.newContext({ acceptDownloads: false });
     this.page = await this.context.newPage();
     this.page.setDefaultTimeout(10_000);

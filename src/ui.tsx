@@ -46,7 +46,6 @@ const lightTheme: Theme = {
 const themes: Record<ThemeName, Theme> = { dark: darkTheme, light: lightTheme };
 let theme = darkTheme;
 
-const icon = ["▝▜▄  ", "  ▝▜▄", " ▗▟▀ ", "▝▀   "];
 // Avoid emoji-capable glyphs such as ✳, which Windows Terminal renders as a
 // green full-color emoji regardless of the requested ANSI foreground color.
 const spinnerFrames = ["·", "✦", "✧", "✦"];
@@ -335,14 +334,6 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     <Box key={themeName} flexDirection="column" paddingX={compact ? 0 : 1}>
       <Header compact={compact} workspace={workspace} status={busy ? phaseInfo.activity : pendingPlan ? "review required" : pendingEffort ? "choose effort" : pendingNew ? "confirm new session" : "ready"} statusColor={busy ? phaseInfo.color : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.success} />
 
-      {conversation.length === 0 && (
-        <Box flexDirection="column" marginBottom={1}>
-          <Text color={theme.primary}>A workspace for focused work.</Text>
-          <Text color={theme.secondary}>Describe a goal, or ask Solar to inspect the web. Implementation plans appear for review.</Text>
-          <Text color={theme.subtle}>Workers share the workspace · browser sessions are isolated</Text>
-        </Box>
-      )}
-
       <Box flexDirection="column">
         {conversation.map((message, index) => <Message key={index} message={message} />)}
       </Box>
@@ -378,7 +369,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         {!busy && !pendingPlan && !pendingEffort && !pendingNew && <Text inverse> </Text>}
       </Box>
 
-      <Footer workspace={workspace} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} browserActive={harness.browser.active} />
+      <Footer workspace={workspace} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} />
     </Box>
   );
 }
@@ -424,16 +415,10 @@ function ActivityText({ text }: { text: string }): React.JSX.Element {
 
 function Header({ compact, workspace, status, statusColor }: { compact: boolean; workspace: string; status: string; statusColor: string }): React.JSX.Element {
   return (
-    <Box marginTop={1} marginBottom={1} paddingLeft={1} flexDirection={compact ? "column" : "row"}>
-      <Box flexDirection="column" marginRight={compact ? 0 : 2}>
-        {icon.map((line, index) => <Text key={line} color={index < 2 ? theme.accentStrong : theme.accent}>{line}</Text>)}
-      </Box>
-      <Box flexDirection="column" marginTop={compact ? 1 : 0}>
-        <Text bold color={theme.primary}>SOLAR</Text><Text color={theme.accentStrong}>  /  HARNESS</Text><Text color={theme.subtle}>  PREVIEW</Text>
-        <Text color={theme.secondary}>Coordinator  ·  browser  ·  named workers</Text>
-        <Text color={theme.subtle}>Workspace: {workspace}</Text>
-        {status !== "ready" && <Text color={statusColor}>✦ {status}</Text>}
-      </Box>
+    <Box marginTop={1} marginBottom={1} paddingLeft={1} flexDirection="column">
+      <Text><Text bold color={theme.primary}>Solar Harness</Text><Text color={theme.subtle}>  preview</Text></Text>
+      <Text color={theme.subtle}>{compact ? "" : "Workspace: "}{workspace}</Text>
+      {status !== "ready" && <Text color={statusColor}>✦ {status}</Text>}
     </Box>
   );
 }
@@ -513,12 +498,12 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
   );
 }
 
-function Footer({ workspace, model, reasoning, themeName, autoApprove, browserActive }: { workspace: string; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean; browserActive: boolean }): React.JSX.Element {
+function Footer({ workspace, model, reasoning, themeName, autoApprove }: { workspace: string; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean }): React.JSX.Element {
   const workspaceName = workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace;
   return (
     <Box paddingX={1} justifyContent="space-between">
       <Text color={theme.subtle}>workspace: {workspaceName}</Text>
-      <Text color={theme.subtle}><Text color={browserActive ? theme.success : theme.subtle}>●</Text> browser {browserActive ? "open" : "idle"} · {model} · {reasoning} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>
+      <Text color={theme.subtle}>{model} · {reasoning} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>
     </Box>
   );
 }

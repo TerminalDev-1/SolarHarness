@@ -15,7 +15,9 @@
 Never let the main coordinator do the actual work. The main coordinator must
 delegate implementation to workers; only workers and sub-workers perform implementation.
 The coordinator remains read-only and must not edit files, run implementation
-commands, or bypass delegation approval.
+commands, or bypass delegation approval. The browser tool may save requested
+screenshot artifacts under `.solarharness/screenshots`; that does not grant the
+coordinator source-editing access.
 
 ## Runtime behavior
 
@@ -39,10 +41,13 @@ commands, or bypass delegation approval.
   future worker plans from natural-language conversation. It changes the same
   harness-level state as `/auto-approve on|off` and never bypasses `/new`.
 - `browser` lets Solar inspect and interact with web pages through a separate,
-  non-persistent Playwright Chromium context. Browser actions return the page URL,
-  title, and accessibility snapshot to the same coordinator session. Solar may
-  browse for research but must still delegate project implementation to workers.
-  The browser context closes when the coordinator session resets.
+  non-persistent Playwright Chromium context. Launch tries bundled Chromium,
+  then installed Microsoft Edge and Google Chrome. Browser actions return the
+  page URL, title, and accessibility snapshot to the same coordinator session;
+  `screenshot` also saves a PNG under `.solarharness/screenshots` in the
+  workspace and returns its path. Solar may browse for research but must still
+  delegate project implementation to workers. The browser context closes when
+  the coordinator session resets.
 - Worker plans require user review by default. `/auto-approve on` is the user's
   standing approval for subsequent plans to launch immediately; `/auto-approve
   off` restores per-plan review.

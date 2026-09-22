@@ -26,8 +26,8 @@ never by the coordinator itself.
 - Let every worker create nested directories and files recursively, run relevant
   commands, validate its own assignment, and return a concise report.
 - Keep the coordinator read-only while workers receive workspace-write access.
-- Let Solar browse and interact with web pages in an isolated Playwright
-  Chromium session, with page content returned to the coordinator.
+- Let Solar browse, interact with web pages, and save full-page screenshots in
+  an isolated Playwright Chromium session.
 - Present every proposed worker separately so tasks can be accepted or rejected,
   or allow `/auto-approve on` to launch future plans without pausing.
 - Retain coordinator context across user turns, planning, worker execution, and
@@ -73,7 +73,7 @@ only the workers launched for the current approved plan.
 
 - Node.js 20 or newer.
 - An authenticated Codex CLI or Codex desktop installation.
-- Playwright Chromium for browser use (`npx playwright install chromium`).
+- Playwright's bundled Chromium, Microsoft Edge, or Google Chrome for browser use.
 
 SolarHarness first honors `SOLAR_CODEX_PATH`, then checks `PATH`, the Windows Codex
 desktop installation, and the standard global npm installation. If discovery
@@ -83,9 +83,10 @@ fails, the displayed error explains how to configure the executable explicitly.
 
 ```powershell
 npm install
-npx playwright install chromium
 npm run dev
 ```
+
+If no supported browser is installed, run `npx playwright install chromium`.
 
 `chat` is the default command, so `npm run dev` opens the interface directly.
 For a compiled production run:
@@ -180,8 +181,9 @@ The runtime `ToolRegistry` exposes five main capabilities:
 - `adjust-sub-effort-level` changes one existing agent's next-exchange effort.
 - `set-auto-permissions` enables or disables automatic worker-plan approval.
 - `browser` opens and inspects web pages, clicks, fills fields, presses keys,
-  scrolls, navigates history, and closes its isolated session. Solar receives
-  URL, title, and an accessibility snapshot after each action.
+  scrolls, navigates history, saves screenshots, and closes its isolated session.
+  Solar receives URL, title, and an accessibility snapshot after each action.
+  Screenshots are saved under `.solarharness/screenshots` in the workspace.
 
 Each agent receives its own Codex session and assignment while sharing the test
 workspace. A top-level worker can return a structured sub-worker request; the
