@@ -35,6 +35,9 @@ commands, or bypass delegation approval.
   to workers and sub-workers.
 - `adjust-sub-effort-level` changes one existing agent's next-exchange effort
   to Light, Medium, High, XHigh, or Max.
+- `set-auto-permissions` lets Solar enable or disable automatic approval of
+  future worker plans from natural-language conversation. It changes the same
+  harness-level state as `/auto-approve on|off` and never bypasses `/new`.
 - Worker plans require user review by default. `/auto-approve on` is the user's
   standing approval for subsequent plans to launch immediately; `/auto-approve
   off` restores per-plan review.

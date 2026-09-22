@@ -141,6 +141,11 @@ means you can say something like “set Forge to max effort” instead of
 typing the explicit `/agent` form. The harness validates the worker ID and effort
 before applying the adjustment.
 
+The coordinator also has a registered `set-auto-permissions` tool, so a natural
+request such as “turn auto permissions on” updates the same state as
+`/auto-approve on`. This only pre-approves future worker plans; it cannot bypass
+the explicit `/new` workspace-deletion confirmation.
+
 ## Session and workspace safety
 
 - The coordinator runs through Codex's read-only sandbox and cannot implement the
@@ -163,12 +168,13 @@ main coordinator session is stored and resumed between conversational turns and
 after worker synthesis. Planning uses a constrained JSON schema, and a plan may
 contain one to eight independent tasks.
 
-The runtime `ToolRegistry` exposes three main capabilities:
+The runtime `ToolRegistry` exposes four main capabilities:
 
 - `spawn_sub_agent` creates a named worker or direct sub-worker.
 - `orchestrate` lists, cancels, changes reasoning, supplies context to, or resumes
   any agent Solar owns.
 - `adjust-sub-effort-level` changes one existing agent's next-exchange effort.
+- `set-auto-permissions` enables or disables automatic worker-plan approval.
 
 Each agent receives its own Codex session and assignment while sharing the test
 workspace. A top-level worker can return a structured sub-worker request; the

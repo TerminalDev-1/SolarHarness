@@ -3,7 +3,7 @@ import { CodexCliProvider } from "./codex-provider.js";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { SOLAR_SYSTEM_PROMPT } from "./system-prompt.js";
-import { registerHarnessTools, type AdjustSubEffortLevelInput, type SpawnSubAgentInput, type ToolRegistry } from "./tool-registry.js";
+import { registerHarnessTools, type AdjustSubEffortLevelInput, type AutoPermissionsState, type SetAutoPermissionsInput, type SpawnSubAgentInput, type ToolRegistry } from "./tool-registry.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type HarnessOptions, type ReasoningEffort } from "./types.js";
 
 export class SolarHarness {
@@ -12,13 +12,15 @@ export class SolarHarness {
   readonly tools: ToolRegistry;
   private coordinatorSessionId?: string;
   private readonly coordinatorTranscript: string[] = [];
+  private autoPermissions = false;
 
   constructor(private readonly options: HarnessOptions) {
     this.manager = new AgentManager(this.provider, options);
     this.tools = registerHarnessTools({
       spawn: input => this.manager.spawn(input),
       orchestrate: input => this.manager.orchestrate(input),
-      setReasoning: (agentId, reasoning) => this.manager.setReasoning(agentId, reasoning)
+      setReasoning: (agentId, reasoning) => this.manager.setReasoning(agentId, reasoning),
+      setAutoPermissions: enabled => this.setAutoPermissions(enabled)
     });
   }
 
@@ -27,6 +29,7 @@ export class SolarHarness {
     const turnPrompt = [
       "Continue the conversation in a useful, detailed, natural Codex style. Be chatty about what you understand, what you will delegate, approximately how many workers fit the job, their reasoning level, and what validation you expect. Avoid generic ChatGPT filler. If the request is actionable, do not ask for ceremony or a delegation command: explain your understanding and mark it ready immediately. Ask a clarifying question only when a missing answer would materially change the work. Never implement the request yourself. Do not discuss whether this Codex session has worker or delegation tools; Solar Harness handles planning outside this call.",
       "You have a registered coordinator tool named adjust-sub-effort-level. When the user naturally asks to change a specific existing worker or sub-worker's effort, emit exactly one tool line in this form: SOLAR_TOOL: adjust-sub-effort-level {\"agentId\":\"name-or-id\",\"effortLevel\":\"light|medium|high|xhigh|max\"}. Do not mark an effort adjustment as ready for new delegation.",
+      `You also have a registered coordinator tool named set-auto-permissions. When the user naturally asks to turn automatic permissions or auto-approval on or off, emit exactly one tool line in this form: SOLAR_TOOL: set-auto-permissions {"enabled":true|false}. This controls worker-plan approval only and never bypasses the /new deletion confirmation. Auto permissions are currently ${this.autoPermissions ? "enabled" : "disabled"}.`,
       `Current agent tree:\n${agentRoster}`,
       "Finish with exactly one control line: SOLAR_STATE: READY when the scope is sufficiently clear to delegate, otherwise SOLAR_STATE: DISCOVER.",
       `User: ${message}`
@@ -36,11 +39,12 @@ export class SolarHarness {
       ? await this.provider.resume(this.coordinatorSessionId, turnPrompt, runOptions)
       : await this.provider.run([SOLAR_SYSTEM_PROMPT, turnPrompt].join("\n\n"), runOptions);
     this.coordinatorSessionId = response.sessionId ?? this.coordinatorSessionId;
-    const toolMatch = response.text.match(/^SOLAR_TOOL:\s*adjust-sub-effort-level\s+(\{[^\r\n]+\})\s*$/m);
+    const effortToolMatch = response.text.match(/^SOLAR_TOOL:\s*adjust-sub-effort-level\s+(\{[^\r\n]+\})\s*$/m);
+    const permissionsToolMatch = response.text.match(/^SOLAR_TOOL:\s*set-auto-permissions\s+(\{[^\r\n]+\})\s*$/m);
     let toolNotice = "";
-    if (toolMatch) {
+    if (effortToolMatch) {
       try {
-        const input = JSON.parse(toolMatch[1]) as AdjustSubEffortLevelInput;
+        const input = JSON.parse(effortToolMatch[1]) as AdjustSubEffortLevelInput;
         if (!input.agentId || !REASONING_EFFORTS.includes(input.effortLevel)) throw new Error("Invalid agent id or effort level.");
         await this.tools.call<AdjustSubEffortLevelInput, AgentRecord>("adjust-sub-effort-level", input);
         toolNotice = `\n\nAdjusted ${input.agentId} to ${input.effortLevel} effort.`;
@@ -48,9 +52,20 @@ export class SolarHarness {
         toolNotice = `\n\nCould not adjust the agent: ${error instanceof Error ? error.message : String(error)}`;
       }
     }
-    const readyToDelegate = !toolMatch && /SOLAR_STATE:\s*READY\s*$/m.test(response.text);
+    if (permissionsToolMatch) {
+      try {
+        const input = JSON.parse(permissionsToolMatch[1]) as SetAutoPermissionsInput;
+        if (typeof input.enabled !== "boolean") throw new Error("Invalid enabled value.");
+        const state = await this.tools.call<SetAutoPermissionsInput, AutoPermissionsState>("set-auto-permissions", input);
+        toolNotice += `\n\nAuto permissions are now ${state.enabled ? "on" : "off"}.`;
+      } catch (error) {
+        toolNotice += `\n\nCould not change auto permissions: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    }
+    const readyToDelegate = !effortToolMatch && /SOLAR_STATE:\s*READY\s*$/m.test(response.text);
     const reply = response.text
       .replace(/^SOLAR_TOOL:\s*adjust-sub-effort-level\s+\{[^\r\n]+\}\s*$/m, "")
+      .replace(/^SOLAR_TOOL:\s*set-auto-permissions\s+\{[^\r\n]+\}\s*$/m, "")
       .replace(/\s*SOLAR_STATE:\s*(READY|DISCOVER)\s*$/m, "")
       .trim() + toolNotice;
     this.coordinatorTranscript.push(`User: ${message}`, `Solar: ${reply}`);
@@ -59,6 +74,15 @@ export class SolarHarness {
 
   setReasoning(reasoning: ReasoningEffort): void {
     this.options.reasoning = reasoning;
+  }
+
+  setAutoPermissions(enabled: boolean): AutoPermissionsState {
+    this.autoPermissions = enabled;
+    return { enabled: this.autoPermissions };
+  }
+
+  getAutoPermissions(): AutoPermissionsState {
+    return { enabled: this.autoPermissions };
   }
 
   resetConversation(): void {

@@ -72,7 +72,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [pendingEffort, setPendingEffort] = useState<PendingEffort | null>(null);
   const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
-  const [autoApprove, setAutoApprove] = useState(false);
+  const [autoApprove, setAutoApprove] = useState(harness.getAutoPermissions().enabled);
   const [themeName, setThemeName] = useState<ThemeName>("dark");
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
@@ -131,7 +131,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const preparePlan = async (request: string, context: string): Promise<void> => {
     setPhase("planning");
     const plan = await harness.plan(request, context, reportActivity);
-    if (autoApprove) {
+    if (harness.getAutoPermissions().enabled) {
       addMessage({ role: "solar", text: `Auto-approve is on, so I’m accepting the ${plan.tasks.length}-worker plan without pausing for review.` });
       await executeApprovedPlan(plan, request, context);
     } else {
@@ -230,6 +230,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         const setting = line.slice(14).trim();
         if (setting === "on" || setting === "off") {
           const enabled = setting === "on";
+          harness.setAutoPermissions(enabled);
           setAutoApprove(enabled);
           addMessage({ role: "solar", text: `Auto-approve is now ${setting}. ${enabled ? "Future worker plans will launch immediately without the review screen." : "Future worker plans will wait for your review before launch."}` });
         } else addMessage({ role: "error", text: "Usage: /auto-approve <on|off>" });
@@ -259,6 +260,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         const nextBrief = [...brief, line];
         setBrief(nextBrief);
         const response = await harness.converse(line, reportActivity);
+        setAutoApprove(harness.getAutoPermissions().enabled);
         setAgents(harness.manager.list());
         addMessage({ role: "solar", text: response.reply });
         if (response.readyToDelegate) {

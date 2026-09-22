@@ -22,6 +22,28 @@ test("resetIntoTestWorkspace clears contents but keeps the test directory", asyn
   }
 });
 
+test("the coordinator tool can turn auto permissions on and off", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-5.6-luna", reasoning: "light", cwd: process.cwd() });
+  assert.equal(harness.getAutoPermissions().enabled, false);
+  assert.ok(harness.tools.list().some(tool => tool.name === "set-auto-permissions"));
+
+  assert.deepEqual(await harness.tools.call("set-auto-permissions", { enabled: true }), { enabled: true });
+  assert.equal(harness.getAutoPermissions().enabled, true);
+
+  assert.deepEqual(await harness.tools.call("set-auto-permissions", { enabled: false }), { enabled: false });
+  assert.equal(harness.getAutoPermissions().enabled, false);
+  await assert.rejects(harness.tools.call("set-auto-permissions", { enabled: "yes" }), /boolean enabled value/);
+
+  harness.provider.run = async () => ({
+    text: 'I’ll enable automatic worker-plan approval.\nSOLAR_TOOL: set-auto-permissions {"enabled":true}\nSOLAR_STATE: DISCOVER',
+    sessionId: "coordinator-session"
+  });
+  const response = await harness.converse("Turn auto permissions on.");
+  assert.equal(harness.getAutoPermissions().enabled, true);
+  assert.match(response.reply, /Auto permissions are now on/);
+  assert.doesNotMatch(response.reply, /SOLAR_TOOL/);
+});
+
 test("named workers can create Light-pinned named sub-workers", async () => {
   const provider = {
     async run(_prompt, options) {
