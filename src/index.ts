@@ -15,7 +15,7 @@ program
 program
   .command("chat", { isDefault: true })
   .description("Start the Solar Harness Preview terminal UI")
-  .option("--model <model>", "Codex model", "gpt-5.6-luna")
+  .option("--model <model>", "Codex model", "gpt-6-luna")
   .option("--reasoning <effort>", "Default reasoning: light, medium, high, xhigh, or max", "light")
   .action(({ model, reasoning }: { model: string; reasoning: ReasoningEffort }) => {
     if (!REASONING_EFFORTS.includes(reasoning)) {

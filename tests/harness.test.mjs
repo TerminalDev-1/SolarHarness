@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { AgentManager } from "../dist/agent-manager.js";
+import { CoordinatorBrowser } from "../dist/browser-tool.js";
 import { SolarHarness } from "../dist/harness.js";
 
 test("resetIntoTestWorkspace clears contents but keeps the test directory", async () => {
@@ -14,7 +15,7 @@ test("resetIntoTestWorkspace clears contents but keeps the test directory", asyn
     await writeFile(join(workspace, "top.txt"), "old session");
     await writeFile(join(workspace, "nested", "child.txt"), "old worker");
 
-    const harness = new SolarHarness({ task: "", model: "gpt-5.6-luna", reasoning: "light", cwd: root });
+    const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: root });
     assert.equal(await harness.resetIntoTestWorkspace(), workspace);
     assert.deepEqual(await readdir(workspace), []);
   } finally {
@@ -23,7 +24,7 @@ test("resetIntoTestWorkspace clears contents but keeps the test directory", asyn
 });
 
 test("the coordinator tool can turn auto permissions on and off", async () => {
-  const harness = new SolarHarness({ task: "", model: "gpt-5.6-luna", reasoning: "light", cwd: process.cwd() });
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   assert.equal(harness.getAutoPermissions().enabled, false);
   assert.ok(harness.tools.list().some(tool => tool.name === "set-auto-permissions"));
 
@@ -44,6 +45,30 @@ test("the coordinator tool can turn auto permissions on and off", async () => {
   assert.doesNotMatch(response.reply, /SOLAR_TOOL/);
 });
 
+test("the coordinator feeds browser results back into the same model session", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const calls = [];
+  harness.browser.execute = async input => {
+    calls.push(input);
+    return { url: "https://example.com/", title: "Example", snapshot: '- heading "Example"' };
+  };
+  harness.provider.run = async () => ({
+    text: 'SOLAR_TOOL: browser {"action":"open","url":"https://example.com"}',
+    sessionId: "browser-session"
+  });
+  harness.provider.resume = async (sessionId, prompt) => {
+    assert.equal(sessionId, "browser-session");
+    assert.match(prompt, /heading/);
+    return { text: "The page says Example.\nSOLAR_STATE: DISCOVER", sessionId };
+  };
+  const result = await harness.converse("Open example.com");
+  assert.deepEqual(calls, [{ action: "open", url: "https://example.com" }]);
+  assert.equal(result.reply, "The page says Example.");
+  assert.equal(result.readyToDelegate, false);
+  assert.ok(harness.tools.list().some(tool => tool.name === "browser"));
+  await assert.rejects(new CoordinatorBrowser().execute({ action: "open", url: "file:///etc/passwd" }), /Only http and https/);
+});
+
 test("named workers can create Light-pinned named sub-workers", async () => {
   const provider = {
     async run(_prompt, options) {
@@ -59,7 +84,7 @@ test("named workers can create Light-pinned named sub-workers", async () => {
       return { text: "Parent integrated the child report", sessionId: "parent-session" };
     }
   };
-  const manager = new AgentManager(provider, { model: "gpt-5.6-luna", reasoning: "light", cwd: process.cwd() });
+  const manager = new AgentManager(provider, { model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
 
   const parent = await manager.spawn({ name: "Forge", title: "Parent task", instructions: "Delegate", context: "", reasoning: "medium" });
   const child = manager.list().find(record => record.parentId === parent.id);
@@ -89,7 +114,7 @@ test("a worker cannot raise its own sub-worker above Light", async () => {
     },
     async resume() { return { text: "Integrated", sessionId: "parent-session" }; }
   };
-  const manager = new AgentManager(provider, { model: "gpt-5.6-luna", reasoning: "light", cwd: process.cwd() });
+  const manager = new AgentManager(provider, { model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const parent = await manager.spawn({ name: "Prism", title: "Parent task", instructions: "Delegate", context: "", reasoning: "light" });
   const child = manager.list().find(record => record.parentId === parent.id);
   assert.ok(child);

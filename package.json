@@ -2,7 +2,9 @@
   "name": "solar-harness",
   "private": true,
   "type": "module",
-  "bin": { "solar-harness": "./dist/index.js" },
+  "bin": {
+    "solar-harness": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
@@ -10,10 +12,13 @@
     "check": "tsc --noEmit",
     "test": "npm run build && node --test tests/*.test.mjs"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "commander": "^14.0.0",
     "ink": "^6.8.0",
+    "playwright": "^1.63.0",
     "react": "^19.3.0"
   },
   "devDependencies": {

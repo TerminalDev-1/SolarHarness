@@ -38,13 +38,18 @@ commands, or bypass delegation approval.
 - `set-auto-permissions` lets Solar enable or disable automatic approval of
   future worker plans from natural-language conversation. It changes the same
   harness-level state as `/auto-approve on|off` and never bypasses `/new`.
+- `browser` lets Solar inspect and interact with web pages through a separate,
+  non-persistent Playwright Chromium context. Browser actions return the page URL,
+  title, and accessibility snapshot to the same coordinator session. Solar may
+  browse for research but must still delegate project implementation to workers.
+  The browser context closes when the coordinator session resets.
 - Worker plans require user review by default. `/auto-approve on` is the user's
   standing approval for subsequent plans to launch immediately; `/auto-approve
   off` restores per-plan review.
 
 ## Model defaults
 
-The default is GPT-5.6 Luna with Light reasoning. Light is translated to the
+The default is GPT-6 Luna with Light reasoning. Light is translated to the
 Codex CLI's `low` reasoning setting. Solar and top-level workers inherit the
 selected default. Every new sub-worker always starts pinned to Light regardless
 of its parent's setting. A worker cannot raise its sub-worker above Light; only

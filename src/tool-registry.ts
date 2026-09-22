@@ -1,4 +1,5 @@
 import type { AgentRecord, AgentTask, ReasoningEffort } from "./types.js";
+import type { BrowserInput, BrowserResult } from "./browser-tool.js";
 
 export type ToolDefinition<TInput, TResult> = {
   name: string;
@@ -36,6 +37,7 @@ export function registerHarnessTools(dependencies: {
   orchestrate: (input: OrchestrateInput) => Promise<AgentRecord[]>;
   setReasoning: (agentId: string, reasoning: ReasoningEffort) => AgentRecord;
   setAutoPermissions: (enabled: boolean) => AutoPermissionsState;
+  browser: (input: BrowserInput) => Promise<BrowserResult>;
 }): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register<SpawnSubAgentInput, AgentRecord>({
@@ -67,6 +69,11 @@ export function registerHarnessTools(dependencies: {
       if (typeof input.enabled !== "boolean") throw new Error("set-auto-permissions requires a boolean enabled value.");
       return dependencies.setAutoPermissions(input.enabled);
     }
+  });
+  registry.register<BrowserInput, BrowserResult>({
+    name: "browser",
+    description: "Browse web pages in an isolated Playwright Chromium session: open, snapshot, click, fill, press, scroll, back, forward, or close.",
+    execute: dependencies.browser
   });
   return registry;
 }

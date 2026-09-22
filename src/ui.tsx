@@ -3,7 +3,7 @@ import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import { SolarHarness } from "./harness.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type ReasoningEffort } from "./types.js";
 
-type UiPhase = "idle" | "thinking" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating";
+type UiPhase = "idle" | "thinking" | "browsing" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating";
 type ChatMessage = { role: "user" | "solar" | "error"; text: string };
 type PendingPlan = { plan: DelegationPlan; request: string; context: string; selected: boolean[]; cursor: number };
 type PendingEffort = { cursor: number };
@@ -89,8 +89,9 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   }, [busy]);
 
   useEffect(() => () => {
+    void harness.browser.close();
     stdout.write("\x1b]110\x07\x1b]111\x07");
-  }, [stdout]);
+  }, [harness, stdout]);
 
   const activeWorkers = agents.filter(agent => agent.status === "running").length;
   const phaseInfo = phaseCopy(phase, activeWorkers);
@@ -107,6 +108,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     if (clean) {
       setActivityLog(current => [...current.slice(-5), clean]);
       if (clean.startsWith("Running command:")) setPhase("command");
+      if (clean.startsWith("Browser:")) setPhase("browsing");
     }
   };
 
@@ -221,7 +223,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe the outcome naturally. I’ll explain the delegation, name the workers, show their commands and sub-workers, then synthesize the result. Controls: /new · /auto-approve <on|off> · /theme <light|dark> · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
+        addMessage({ role: "solar", text: "Describe a goal or ask Solar to browse a web page. Controls: /new · /auto-approve <on|off> · /theme <light|dark> · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
       } else if (line === "/auto-approve") {
@@ -335,9 +337,9 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
       {conversation.length === 0 && (
         <Box flexDirection="column" marginBottom={1}>
-          <Text color={theme.primary}>Welcome to Solar Harness Preview.</Text>
-          <Text color={theme.secondary}>Describe a goal. Solar will clarify only when needed, then propose specialist work for approval.</Text>
-          <Text color={theme.subtle}>Worker file access is restricted to this workspace.</Text>
+          <Text color={theme.primary}>A workspace for focused work.</Text>
+          <Text color={theme.secondary}>Describe a goal, or ask Solar to inspect the web. Implementation plans appear for review.</Text>
+          <Text color={theme.subtle}>Workers share the workspace · browser sessions are isolated</Text>
         </Box>
       )}
 
@@ -376,7 +378,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         {!busy && !pendingPlan && !pendingEffort && !pendingNew && <Text inverse> </Text>}
       </Box>
 
-      <Footer workspace={workspace} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} />
+      <Footer workspace={workspace} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} browserActive={harness.browser.active} />
     </Box>
   );
 }
@@ -427,8 +429,8 @@ function Header({ compact, workspace, status, statusColor }: { compact: boolean;
         {icon.map((line, index) => <Text key={line} color={index < 2 ? theme.accentStrong : theme.accent}>{line}</Text>)}
       </Box>
       <Box flexDirection="column" marginTop={compact ? 1 : 0}>
-        <Text bold color={theme.primary}>Solar</Text><Text color={theme.subtle}>  Harness Preview</Text>
-        <Text color={theme.secondary}>Coordinator · named workers · nested delegation</Text>
+        <Text bold color={theme.primary}>SOLAR</Text><Text color={theme.accentStrong}>  /  HARNESS</Text><Text color={theme.subtle}>  PREVIEW</Text>
+        <Text color={theme.secondary}>Coordinator  ·  browser  ·  named workers</Text>
         <Text color={theme.subtle}>Workspace: {workspace}</Text>
         {status !== "ready" && <Text color={statusColor}>✦ {status}</Text>}
       </Box>
@@ -511,18 +513,19 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
   );
 }
 
-function Footer({ workspace, model, reasoning, themeName, autoApprove }: { workspace: string; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean }): React.JSX.Element {
+function Footer({ workspace, model, reasoning, themeName, autoApprove, browserActive }: { workspace: string; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean; browserActive: boolean }): React.JSX.Element {
   const workspaceName = workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace;
   return (
     <Box paddingX={1} justifyContent="space-between">
       <Text color={theme.subtle}>workspace: {workspaceName}</Text>
-      <Text color={theme.subtle}>{model} · {reasoning} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>
+      <Text color={theme.subtle}><Text color={browserActive ? theme.success : theme.subtle}>●</Text> browser {browserActive ? "open" : "idle"} · {model} · {reasoning} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>
     </Box>
   );
 }
 
 function phaseCopy(phase: UiPhase, activeWorkers: number): { activity: string; color: string } {
   if (phase === "thinking") return { activity: "Thinking…", color: theme.accentStrong };
+  if (phase === "browsing") return { activity: "Browsing the web…", color: theme.pulse };
   if (phase === "planning") return { activity: "Preparing the delegation…", color: theme.warning };
   if (phase === "delegating") return { activity: "Assigning specialist work…", color: theme.accent };
   if (phase === "working") return { activity: `${activeWorkers} worker${activeWorkers === 1 ? "" : "s"} running…`, color: theme.accent };

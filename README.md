@@ -26,6 +26,8 @@ never by the coordinator itself.
 - Let every worker create nested directories and files recursively, run relevant
   commands, validate its own assignment, and return a concise report.
 - Keep the coordinator read-only while workers receive workspace-write access.
+- Let Solar browse and interact with web pages in an isolated Playwright
+  Chromium session, with page content returned to the coordinator.
 - Present every proposed worker separately so tasks can be accepted or rejected,
   or allow `/auto-approve on` to launch future plans without pausing.
 - Retain coordinator context across user turns, planning, worker execution, and
@@ -71,6 +73,7 @@ only the workers launched for the current approved plan.
 
 - Node.js 20 or newer.
 - An authenticated Codex CLI or Codex desktop installation.
+- Playwright Chromium for browser use (`npx playwright install chromium`).
 
 SolarHarness first honors `SOLAR_CODEX_PATH`, then checks `PATH`, the Windows Codex
 desktop installation, and the standard global npm installation. If discovery
@@ -80,6 +83,7 @@ fails, the displayed error explains how to configure the executable explicitly.
 
 ```powershell
 npm install
+npx playwright install chromium
 npm run dev
 ```
 
@@ -91,11 +95,11 @@ npm run build
 npm run start -- chat
 ```
 
-GPT-5.6 Luna with Light reasoning is the default. These can be overridden at
+GPT-6 Luna with Light reasoning is the default. These can be overridden at
 launch:
 
 ```powershell
-npm run dev -- chat --model gpt-5.6-luna --reasoning max
+npm run dev -- chat --model gpt-6-luna --reasoning max
 ```
 
 ## Delegation workflow
@@ -168,13 +172,16 @@ main coordinator session is stored and resumed between conversational turns and
 after worker synthesis. Planning uses a constrained JSON schema, and a plan may
 contain one to eight independent tasks.
 
-The runtime `ToolRegistry` exposes four main capabilities:
+The runtime `ToolRegistry` exposes five main capabilities:
 
 - `spawn_sub_agent` creates a named worker or direct sub-worker.
 - `orchestrate` lists, cancels, changes reasoning, supplies context to, or resumes
   any agent Solar owns.
 - `adjust-sub-effort-level` changes one existing agent's next-exchange effort.
 - `set-auto-permissions` enables or disables automatic worker-plan approval.
+- `browser` opens and inspects web pages, clicks, fills fields, presses keys,
+  scrolls, navigates history, and closes its isolated session. Solar receives
+  URL, title, and an accessibility snapshot after each action.
 
 Each agent receives its own Codex session and assignment while sharing the test
 workspace. A top-level worker can return a structured sub-worker request; the
