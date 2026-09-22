@@ -6,7 +6,7 @@ export type ToolDefinition<TInput, TResult> = {
   execute: (input: TInput) => Promise<TResult>;
 };
 
-export type SpawnSubAgentInput = AgentTask & { context: string; reasoning: ReasoningEffort };
+export type SpawnSubAgentInput = AgentTask & { context: string; reasoning: ReasoningEffort; parentId?: string };
 export type OrchestrateInput = { action: "list" | "cancel" | "inject_context" | "set_reasoning"; agentId?: string; context?: string; reasoning?: ReasoningEffort };
 export type AdjustSubEffortLevelInput = { agentId: string; effortLevel: ReasoningEffort };
 
@@ -37,12 +37,12 @@ export function registerHarnessTools(dependencies: {
   const registry = new ToolRegistry();
   registry.register<SpawnSubAgentInput, AgentRecord>({
     name: "spawn_sub_agent",
-    description: "Create a context-aware worker. The scheduler enforces a maximum of three active workers.",
+    description: "Create a named context-aware worker or sub-worker. The scheduler enforces eight concurrent agent processes.",
     execute: dependencies.spawn
   });
   registry.register<OrchestrateInput, AgentRecord[]>({
     name: "orchestrate",
-    description: "Inspect, cancel, or inject context into a worker managed by this harness.",
+    description: "Inspect, cancel, change reasoning, or inject context into any worker or sub-worker managed by this harness.",
     execute: async input => {
       if (input.action === "set_reasoning") {
         if (!input.agentId || !input.reasoning) throw new Error("set_reasoning requires agentId and reasoning.");
@@ -54,7 +54,7 @@ export function registerHarnessTools(dependencies: {
   });
   registry.register<AdjustSubEffortLevelInput, AgentRecord>({
     name: "adjust-sub-effort-level",
-    description: "Change the reasoning effort used for a specific sub-agent's next exchange.",
+    description: "Change the reasoning effort used for a specific worker or sub-worker's next exchange.",
     execute: async input => dependencies.setReasoning(input.agentId, input.effortLevel)
   });
   return registry;

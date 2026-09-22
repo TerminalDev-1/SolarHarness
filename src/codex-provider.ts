@@ -23,6 +23,7 @@ export class CodexCliProvider {
       "Break the request into the smallest useful set of independent, implementation-ready worker tasks. Choose the worker count dynamically from the task: use one worker when one is sufficient, add workers only for genuinely parallel scopes, group related review work, and never treat eight as a target. Use no more than eight tasks.",
       "Every task runs concurrently. Never make one task depend on another task's output; combine sequential create-and-verify steps into the same worker task.",
       "Every task must be concrete, scoped, and useful to another coding agent.",
+      "Give every worker a short, distinctive, single-token human name. Names must be unique within the plan and should be easy to type and recognize.",
       `User request: ${task}`,
       context ? `Shared context: ${context}` : ""
     ].filter(Boolean).join("\n\n");
@@ -35,7 +36,7 @@ export class CodexCliProvider {
   }
 
   async run(prompt: string, options: CodexRunOptions, extraArgs: string[] = []): Promise<CodexRunResult> {
-    const sandbox = options.role === "worker" ? "workspace-write" : "read-only";
+    const sandbox = options.role === "worker" || options.role === "sub-worker" ? "workspace-write" : "read-only";
     const args = [
       "exec", "--json", "--sandbox", sandbox,
       "--model", options.model,
@@ -68,7 +69,7 @@ export class CodexCliProvider {
           }
           const item = event.item;
           if (item?.type === "agent_message" && item.text) finalMessages.push(item.text);
-          const activity = item?.command ?? (item?.type === "agent_message" ? undefined : item?.text) ?? (typeof event.error === "string" ? event.error : event.error?.message);
+          const activity = commandActivity(item) ?? (item?.type === "agent_message" ? undefined : item?.text) ?? (typeof event.error === "string" ? event.error : event.error?.message);
           if (activity) options.onEvent?.(activity.slice(0, 180));
         } catch {
           options.onEvent?.(line.slice(0, 180));
@@ -109,8 +110,8 @@ export class CodexCliProvider {
         summary: { type: "string" },
         tasks: {
           type: "array", minItems: 1, maxItems: 8,
-          items: { type: "object", additionalProperties: false, required: ["title", "instructions", "context"], properties: {
-            title: { type: "string" }, instructions: { type: "string" }, context: { type: "string" }
+          items: { type: "object", additionalProperties: false, required: ["name", "title", "instructions", "context"], properties: {
+            name: { type: "string" }, title: { type: "string" }, instructions: { type: "string" }, context: { type: "string" }
           }}
         }
       }
@@ -136,7 +137,7 @@ export class CodexCliProvider {
           if (message) eventErrors.push(message);
         }
         if (event.item?.type === "agent_message" && event.item.text) messages.push(event.item.text);
-        const activity = event.item?.command ?? (event.item?.type === "agent_message" ? undefined : event.item?.text);
+        const activity = commandActivity(event.item) ?? (event.item?.type === "agent_message" ? undefined : event.item?.text);
         if (activity) options.onEvent?.(activity.slice(0, 180));
       } catch { if (line) options.onEvent?.(line.slice(0, 180)); }
     };
@@ -218,4 +219,11 @@ function cleanStderr(stderr: string): string | undefined {
     !line.startsWith("Reading additional input from stdin")
   );
   return useful.length ? useful.join("\n") : undefined;
+}
+
+function commandActivity(item: CodexEvent["item"]): string | undefined {
+  if (!item?.command) return undefined;
+  const command = item.command.replace(/\s+/g, " ").trim();
+  if (!command) return undefined;
+  return item.status === "completed" ? `Command completed: ${command}` : `Running command: ${command}`;
 }

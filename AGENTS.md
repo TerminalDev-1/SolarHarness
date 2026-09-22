@@ -4,13 +4,16 @@
 
 - Solar is the main coordinator. It owns conversation continuity, clarification,
   planning, delegation approval, worker orchestration, and report synthesis.
-- Sub-agents are implementation workers. They inspect the workspace, edit files,
-  run commands, validate changes, and report results to Solar.
+- Named workers inspect the workspace, edit files, run commands, validate changes,
+  and report results to Solar.
+- A worker may request named sub-workers for independent parts of its assignment.
+  Sub-workers report to their parent worker. Solar can inspect and control the
+  complete tree; a worker can control only its own direct sub-workers.
 
 ## Non-negotiable boundary
 
 Never let the main coordinator do the actual work. The main coordinator must
-delegate implementation to sub-agents; only sub-agents perform implementation.
+delegate implementation to workers; only workers and sub-workers perform implementation.
 The coordinator remains read-only and must not edit files, run implementation
 commands, or bypass delegation approval.
 
@@ -18,21 +21,31 @@ commands, or bypass delegation approval.
 
 - The coordinator retains one Codex session across turns and worker synthesis.
 - Solar creates and runs inside the project `test` workspace by default.
-- `/new` asks for confirmation with No selected by default. Only selecting Yes
-  and pressing Enter discards the coordinator session and transcript, creates
-  the test workspace if needed, clears prior worker records, and activates it for
-  the fresh session.
-- Up to eight sub-agents may run concurrently.
-- `spawn_sub_agent` launches an implementation worker.
-- `orchestrate` lists, cancels, resumes, or supplies context to workers.
-- `adjust-sub-effort-level` changes one existing sub-agent's next-exchange effort
+- `/new` asks for confirmation with No selected by default and explicitly warns
+  about both kinds of deletion. Only selecting Yes and pressing Enter discards
+  the coordinator session and transcript, stops and clears worker records,
+  deletes every entry inside the `test` workspace, recreates it if needed, and
+  activates the empty folder for the fresh session.
+- Up to eight worker processes may run concurrently across the full agent tree.
+  Coordinator plans may contain up to eight top-level workers. A top-level worker
+  may request up to eight direct sub-workers, subject to the global concurrency
+  limit. Sub-workers cannot create another delegation level.
+- `spawn_sub_agent` launches a named worker or a named sub-worker.
+- `orchestrate` lists, cancels, changes reasoning, resumes, or supplies context
+  to workers and sub-workers.
+- `adjust-sub-effort-level` changes one existing agent's next-exchange effort
   to Light, Medium, High, XHigh, or Max.
-- All proposed worker tasks require user approval before launch.
+- Worker plans require user review by default. `/auto-approve on` is the user's
+  standing approval for subsequent plans to launch immediately; `/auto-approve
+  off` restores per-plan review.
 
 ## Model defaults
 
 The default is GPT-5.6 Luna with Light reasoning. Light is translated to the
-Codex CLI's `low` reasoning setting.
+Codex CLI's `low` reasoning setting. Solar and top-level workers inherit the
+selected default. Every new sub-worker always starts pinned to Light regardless
+of its parent's setting. A worker cannot raise its sub-worker above Light; only
+an explicit Solar/coordinator adjustment can authorize that increase.
 
 ## Documentation contract
 
@@ -56,6 +69,10 @@ animates at a calm 240 ms cadence. Do not reintroduce emoji-capable spinner
 characters or per-character ANSI styling; those can recreate green flashes and
 color bleed. The resulting status treatment intentionally resembles Claude Code
 without copying an emoji-rendered spinner.
+
+Codex command events are surfaced as compact terminal lines beneath the activity
+indicator. Command activity may change the status copy, but it must reuse the
+same text-safe spinner and fixed terracotta/orange color treatment.
 
 ## Public publishing authorization
 

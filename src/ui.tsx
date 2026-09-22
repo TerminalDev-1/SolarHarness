@@ -3,7 +3,7 @@ import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import { SolarHarness } from "./harness.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type ReasoningEffort } from "./types.js";
 
-type UiPhase = "idle" | "thinking" | "planning" | "delegating" | "working" | "synthesizing" | "updating";
+type UiPhase = "idle" | "thinking" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating";
 type ChatMessage = { role: "user" | "solar" | "error"; text: string };
 type PendingPlan = { plan: DelegationPlan; request: string; context: string; selected: boolean[]; cursor: number };
 type PendingEffort = { cursor: number };
@@ -72,6 +72,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [pendingEffort, setPendingEffort] = useState<PendingEffort | null>(null);
   const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
+  const [autoApprove, setAutoApprove] = useState(false);
   const [themeName, setThemeName] = useState<ThemeName>("dark");
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
@@ -96,19 +97,46 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
   const updateWorkers = (nextAgents: AgentRecord[]): void => {
     setAgents(nextAgents);
-    setPhase(nextAgents.some(agent => agent.status === "running") ? "working" : "synthesizing");
+    const executing = nextAgents.filter(agent => agent.status === "running");
+    setPhase(executing.some(agent => agent.latestActivity.startsWith("Running command:")) ? "command" : executing.length ? "working" : "synthesizing");
   };
 
   const addMessage = (message: ChatMessage): void => setConversation(current => [...current, message]);
   const reportActivity = (message: string): void => {
     const clean = message.replace(/\s+/g, " ").trim();
-    if (clean) setActivityLog(current => [...current.slice(-4), clean]);
+    if (clean) {
+      setActivityLog(current => [...current.slice(-5), clean]);
+      if (clean.startsWith("Running command:")) setPhase("command");
+    }
+  };
+
+  const executeApprovedPlan = async (plan: DelegationPlan, request: string, context: string): Promise<void> => {
+    setPendingPlan(null);
+    setBusy(true);
+    setPhase("delegating");
+    setActivityLog([`Launching ${plan.tasks.length} named worker${plan.tasks.length === 1 ? "" : "s"} at ${currentReasoning} reasoning`]);
+    addMessage({ role: "solar", text: `Okay — I’m launching ${plan.tasks.length} named worker${plan.tasks.length === 1 ? "" : "s"} at ${currentReasoning} reasoning: ${plan.tasks.map(task => `${task.name} (${task.title})`).join(", ")}. They can create Light-pinned sub-workers when that makes the work genuinely more parallel.` });
+    try {
+      const result = await harness.executePlan(plan, request, context, updateWorkers, reportActivity);
+      addMessage({ role: "solar", text: result });
+      setBrief([]);
+    } catch (error) {
+      addMessage({ role: "error", text: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setBusy(false);
+      setPhase("idle");
+    }
   };
 
   const preparePlan = async (request: string, context: string): Promise<void> => {
     setPhase("planning");
     const plan = await harness.plan(request, context, reportActivity);
-    setPendingPlan({ plan, request, context, selected: plan.tasks.map(() => true), cursor: 0 });
+    if (autoApprove) {
+      addMessage({ role: "solar", text: `Auto-approve is on, so I’m accepting the ${plan.tasks.length}-worker plan without pausing for review.` });
+      await executeApprovedPlan(plan, request, context);
+    } else {
+      setPendingPlan({ plan, request, context, selected: plan.tasks.map(() => true), cursor: 0 });
+    }
   };
 
   const rejectPlan = (): void => {
@@ -123,20 +151,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     if (!tasks.length) { rejectPlan(); return; }
     const approved = { ...pendingPlan.plan, tasks };
     const { request, context } = pendingPlan;
-    setPendingPlan(null);
-    setBusy(true);
-    setPhase("delegating");
-    setActivityLog([`Approved ${tasks.length} worker task${tasks.length === 1 ? "" : "s"}`]);
-    try {
-      const result = await harness.executePlan(approved, request, context, updateWorkers, reportActivity);
-      addMessage({ role: "solar", text: result });
-      setBrief([]);
-    } catch (error) {
-      addMessage({ role: "error", text: error instanceof Error ? error.message : String(error) });
-    } finally {
-      setBusy(false);
-      setPhase("idle");
-    }
+    await executeApprovedPlan(approved, request, context);
   };
 
   const controlAgent = async (line: string): Promise<void> => {
@@ -149,8 +164,12 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       const next = await harness.tools.call("orchestrate", { action: "inject_context", agentId: id, context: rest.join(" ") }) as AgentRecord[];
       setAgents(next);
       addMessage({ role: "solar", text: `Passed the new context to ${id}.` });
+    } else if (action === "cancel") {
+      const next = await harness.tools.call("orchestrate", { action: "cancel", agentId: id }) as AgentRecord[];
+      setAgents(next);
+      addMessage({ role: "solar", text: `Cancelled ${id} and any sub-workers it owns.` });
     } else {
-      addMessage({ role: "error", text: "Usage: /agent <id> reasoning <light|medium|high|xhigh|max> | context <message>" });
+      addMessage({ role: "error", text: "Usage: /agent <id-or-name> reasoning <light|medium|high|xhigh|max> | context <message> | cancel" });
     }
   };
 
@@ -158,7 +177,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     harness.setReasoning(effort);
     setCurrentReasoning(effort);
     setPendingEffort(null);
-    addMessage({ role: "solar", text: `Reasoning effort is now ${effort}. This applies to Solar and newly launched workers.` });
+    addMessage({ role: "solar", text: `Reasoning effort is now ${effort}. This applies to Solar and newly launched top-level workers; new sub-workers remain pinned to Light until Solar explicitly authorizes a change.` });
   };
 
   const changeTheme = (nextTheme: ThemeName): void => {
@@ -181,7 +200,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       setBrief([]);
       setPendingPlan(null);
       setPendingEffort(null);
-      setConversation([{ role: "solar", text: `Started a fresh coordinator session in the test workspace: ${nextWorkspace}` }]);
+      setConversation([{ role: "solar", text: `Started a completely fresh coordinator session. The test workspace was cleared and is now empty: ${nextWorkspace}` }]);
     } catch (error) {
       addMessage({ role: "error", text: `Unable to start the test workspace: ${error instanceof Error ? error.message : String(error)}` });
     }
@@ -202,9 +221,18 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe the outcome naturally. Solar will clarify only when necessary, propose worker tasks, and wait for your approval. Controls: /new · /theme <light|dark> · /effort [level] · /agents · /agent <id> reasoning <level> · /agent <id> context <message> · /quit" });
+        addMessage({ role: "solar", text: "Describe the outcome naturally. I’ll explain the delegation, name the workers, show their commands and sub-workers, then synthesize the result. Controls: /new · /auto-approve <on|off> · /theme <light|dark> · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
+      } else if (line === "/auto-approve") {
+        addMessage({ role: "solar", text: `Auto-approve is ${autoApprove ? "on" : "off"}. Usage: /auto-approve <on|off>` });
+      } else if (line.startsWith("/auto-approve ")) {
+        const setting = line.slice(14).trim();
+        if (setting === "on" || setting === "off") {
+          const enabled = setting === "on";
+          setAutoApprove(enabled);
+          addMessage({ role: "solar", text: `Auto-approve is now ${setting}. ${enabled ? "Future worker plans will launch immediately without the review screen." : "Future worker plans will wait for your review before launch."}` });
+        } else addMessage({ role: "error", text: "Usage: /auto-approve <on|off>" });
       } else if (line === "/theme") {
         addMessage({ role: "solar", text: `Current theme: ${themeName}. Usage: /theme <light|dark>` });
       } else if (line.startsWith("/theme ")) {
@@ -317,6 +345,8 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
       {agents.length > 0 && <Workers agents={agents} />}
 
+      {agents.length > 0 && <TerminalActivity agents={agents} spinner={spinner} />}
+
       {pendingPlan && <PlanApproval pending={pendingPlan} />}
 
       {pendingEffort && <EffortPicker pending={pendingEffort} current={currentReasoning} />}
@@ -330,8 +360,8 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
             <ActivityText text={phaseInfo.activity} />
             <Text color={theme.subtle}> · {elapsed}s</Text>
           </Box>
-          {activityLog.slice(-3).map((activity, index) => (
-            <Text key={`${activity}-${index}`} color={theme.subtle}>  │ {activity}</Text>
+          {activityLog.slice(-4).map((activity, index) => (
+            <Text key={`${activity}-${index}`} color={activity.startsWith("Running command:") ? theme.secondary : theme.subtle}>  {activity.startsWith("Running command:") ? "└─ $ " + activity.slice(17) : "│ " + activity}</Text>
           ))}
         </Box>
       )}
@@ -344,7 +374,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         {!busy && !pendingPlan && !pendingEffort && !pendingNew && <Text inverse> </Text>}
       </Box>
 
-      <Footer workspace={workspace} model={model} reasoning={currentReasoning} themeName={themeName} agents={agents} />
+      <Footer workspace={workspace} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} />
     </Box>
   );
 }
@@ -367,9 +397,11 @@ function EffortPicker({ pending, current }: { pending: PendingEffort; current: R
 function NewSessionConfirmation({ pending, workspace }: { pending: PendingNew; workspace: string }): React.JSX.Element {
   return (
     <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.warning} paddingX={1}>
-      <Text bold color={theme.warning}>Start a fresh session?</Text>
-      <Text color={theme.secondary}>Previous coordinator context will be discarded.</Text>
-      <Text color={theme.secondary}>Workspace: <Text color={theme.primary}>{workspace}</Text></Text>
+      <Text bold color={theme.warning}>Start a completely fresh session?</Text>
+      <Text color={theme.secondary}>This discards the coordinator conversation, stops all workers, and clears their records.</Text>
+      <Text color={theme.error}>Every file and folder inside this test workspace will also be deleted:</Text>
+      <Text color={theme.primary}>{workspace}</Text>
+      <Text color={theme.subtle}>The empty test folder is kept and becomes the new session workspace. This cannot be undone by Solar Harness.</Text>
       <Box marginTop={1}>
         <Text color={pending.cursor === 0 ? theme.success : theme.secondary}>{pending.cursor === 0 ? "› " : "  "}[ Yes ]</Text>
         <Text>  </Text>
@@ -393,9 +425,8 @@ function Header({ compact, workspace, status, statusColor }: { compact: boolean;
         {icon.map((line, index) => <Text key={line} color={index < 2 ? theme.accentStrong : theme.accent}>{line}</Text>)}
       </Box>
       <Box flexDirection="column" marginTop={compact ? 1 : 0}>
-        <Text bold color={theme.primary}>Solar Harness Preview</Text>
-        <Text> </Text>
-        <Text color={theme.secondary}>Multi-agent coding workspace</Text>
+        <Text bold color={theme.primary}>Solar</Text><Text color={theme.subtle}>  Harness Preview</Text>
+        <Text color={theme.secondary}>Coordinator · named workers · nested delegation</Text>
         <Text color={theme.subtle}>Workspace: {workspace}</Text>
         {status !== "ready" && <Text color={statusColor}>✦ {status}</Text>}
       </Box>
@@ -428,7 +459,7 @@ function PlanApproval({ pending }: { pending: PendingPlan }): React.JSX.Element 
               <Text color={focused ? theme.primary : theme.secondary}>
                 <Text color={focused ? theme.warning : theme.subtle}>{focused ? "›" : " "} </Text>
                 <Text color={selected ? theme.success : theme.error}>{selected ? "[accept]" : "[reject]"}</Text>
-                <Text bold={focused}> {task.title}</Text>
+                <Text bold={focused}> {task.name}</Text><Text color={theme.subtle}> — {task.title}</Text>
               </Text>
               <Text color={theme.subtle}>    {task.instructions}</Text>
             </Box>
@@ -448,22 +479,42 @@ function PlanApproval({ pending }: { pending: PendingPlan }): React.JSX.Element 
 function Workers({ agents }: { agents: AgentRecord[] }): React.JSX.Element {
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={2} borderStyle="single" borderLeft borderRight={false} borderTop={false} borderBottom={false} borderColor={theme.subtle}>
-      <Text color={theme.secondary}>WORKERS</Text>
+      <Text color={theme.secondary}>AGENT TREE</Text>
       {agents.map(agent => {
         const color = agent.status === "completed" ? theme.success : agent.status === "failed" ? theme.error : agent.status === "running" ? theme.accent : theme.secondary;
-        const marker = agent.status === "completed" ? "✓" : agent.status === "failed" ? "×" : agent.status === "running" ? "●" : "○";
-        return <Text key={agent.id}><Text color={color}>{marker} {agent.id}</Text><Text color={theme.secondary}>  {agent.latestActivity}</Text></Text>;
+        const marker = agent.status === "completed" ? "✓" : agent.status === "failed" ? "×" : agent.status === "running" ? "●" : agent.status === "waiting" ? "◇" : "○";
+        const branch = agent.depth === 1 ? "  └─ " : "";
+        return <Text key={agent.id}><Text color={color}>{branch}{marker} {agent.name}</Text><Text color={theme.subtle}> [{agent.id}]</Text><Text color={theme.secondary}> · {agent.reasoning}{agent.reasoningPinned ? " pinned" : ""} · {agent.latestActivity}</Text></Text>;
       })}
     </Box>
   );
 }
 
-function Footer({ workspace, model, reasoning, themeName, agents }: { workspace: string; model: string; reasoning: ReasoningEffort; themeName: ThemeName; agents: AgentRecord[] }): React.JSX.Element {
+function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner: number }): React.JSX.Element | null {
+  const commands = agents.flatMap(agent => agent.recentActivity
+    .filter(activity => activity.startsWith("Running command:") || activity.startsWith("Command completed:"))
+    .map(activity => ({ name: agent.name, activity }))
+  ).slice(-5);
+  if (!commands.length) return null;
+  const running = agents.some(agent => agent.status === "running" && agent.latestActivity.startsWith("Running command:"));
+  return (
+    <Box flexDirection="column" marginTop={1} paddingLeft={2} borderStyle="single" borderLeft borderRight={false} borderTop={false} borderBottom={false} borderColor={theme.subtle}>
+      <Text color={running ? theme.pulse : theme.secondary}>{running ? spinnerFrames[spinner % spinnerFrames.length] : "·"} TERMINAL</Text>
+      {commands.map((command, index) => {
+        const completed = command.activity.startsWith("Command completed:");
+        const text = command.activity.replace(/^(Running command|Command completed):\s*/, "");
+        return <Text key={`${command.name}-${text}-${index}`} color={theme.secondary}><Text color={completed ? theme.success : theme.pulse}>{completed ? "✓" : "$"}</Text> <Text color={theme.subtle}>{command.name}</Text>  {text}</Text>;
+      })}
+    </Box>
+  );
+}
+
+function Footer({ workspace, model, reasoning, themeName, autoApprove }: { workspace: string; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean }): React.JSX.Element {
   const workspaceName = workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace;
   return (
     <Box paddingX={1} justifyContent="space-between">
       <Text color={theme.subtle}>workspace: {workspaceName}</Text>
-      <Text color={theme.subtle}>{model} · {reasoning} · {themeName}</Text>
+      <Text color={theme.subtle}>{model} · {reasoning} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>
     </Box>
   );
 }
@@ -473,6 +524,7 @@ function phaseCopy(phase: UiPhase, activeWorkers: number): { activity: string; c
   if (phase === "planning") return { activity: "Preparing the delegation…", color: theme.warning };
   if (phase === "delegating") return { activity: "Assigning specialist work…", color: theme.accent };
   if (phase === "working") return { activity: `${activeWorkers} worker${activeWorkers === 1 ? "" : "s"} running…`, color: theme.accent };
+  if (phase === "command") return { activity: `${activeWorkers} agent${activeWorkers === 1 ? "" : "s"} using the terminal…`, color: theme.pulse };
   if (phase === "synthesizing") return { activity: "Reviewing worker reports…", color: theme.accentStrong };
   if (phase === "updating") return { activity: "Updating worker context…", color: theme.warning };
   return { activity: "Ready", color: theme.success };
