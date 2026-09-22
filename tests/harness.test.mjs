@@ -69,6 +69,31 @@ test("the coordinator feeds browser results back into the same model session", a
   await assert.rejects(new CoordinatorBrowser().execute({ action: "open", url: "file:///etc/passwd" }), /Only http and https/);
 });
 
+test("an explicit click request continues past the first page snapshot", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const actions = [];
+  harness.browser.execute = async input => {
+    actions.push(input.action);
+    return input.action === "open"
+      ? { url: "https://example.com/", title: "Example Domain", snapshot: '- link "Learn more"' }
+      : { url: "https://www.iana.org/help/example-domains", title: "Example Domains", snapshot: '- heading "Example Domains"' };
+  };
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"open","url":"https://example.com"}', sessionId: "browser-session" });
+  let resumes = 0;
+  harness.provider.resume = async () => {
+    resumes++;
+    return {
+      text: resumes === 1 ? "I need to click the link.\nSOLAR_STATE: DISCOVER"
+        : resumes === 2 ? 'SOLAR_TOOL: browser {"action":"click","selector":"role=link[name=\\"Learn more\\"]"}'
+          : "The title is Example Domains.\nSOLAR_STATE: DISCOVER",
+      sessionId: "browser-session"
+    };
+  };
+  const result = await harness.converse("Browse https://example.com and click Learn more.");
+  assert.deepEqual(actions, ["open", "click"]);
+  assert.match(result.reply, /Example Domains/);
+});
+
 test("named workers can create Light-pinned named sub-workers", async () => {
   const provider = {
     async run(_prompt, options) {
