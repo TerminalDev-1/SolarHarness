@@ -17,6 +17,8 @@ never by the coordinator itself.
 - Turn a natural-language request into an implementation-ready worker plan.
 - Choose the smallest useful worker set automatically—from one worker up to a
   hard maximum of eight—based on genuinely parallel scopes in the request.
+- Honor an explicit request for one to eight agents, including when the same
+  message also asks Solar to browse a page.
 - Create multiple directories and their contents in parallel inside `test`. For
   example, eight approved workers can create `test/agent-1` through
   `test/agent-8` during the same run.

@@ -32,6 +32,9 @@ coordinator source-editing access.
   Coordinator plans may contain up to eight top-level workers. A top-level worker
   may request up to eight direct sub-workers, subject to the global concurrency
   limit. Sub-workers cannot create another delegation level.
+- When the user explicitly asks to assign a number of agents from one through
+  eight, the plan must contain that many distinct top-level worker assignments.
+  A browser action in the same request does not suppress this delegation plan.
 - `spawn_sub_agent` launches a named worker or a named sub-worker.
 - `orchestrate` lists, cancels, changes reasoning, resumes, or supplies context
   to workers and sub-workers.

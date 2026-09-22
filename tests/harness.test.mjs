@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { AgentManager } from "../dist/agent-manager.js";
 import { CoordinatorBrowser } from "../dist/browser-tool.js";
+import { CodexCliProvider, requestedWorkerCount } from "../dist/codex-provider.js";
 import { SolarHarness } from "../dist/harness.js";
 
 test("resetIntoTestWorkspace clears contents but keeps the test directory", async () => {
@@ -109,10 +110,28 @@ test("a browser screenshot request completes and still applies auto permissions"
         : "Screenshot saved to C:\\capture.png.\nSOLAR_STATE: DISCOVER",
     sessionId: "browser-session"
   });
-  const result = await harness.converse("Open the browser, navigate to https://example.com, take a screenshot, and turn auto permissions on.");
+  const result = await harness.converse("Open the browser, navigate to https://example.com, take a screenshot, assign 8 agents, and turn auto permissions on.");
   assert.deepEqual(actions, ["open", "screenshot"]);
   assert.equal(harness.getAutoPermissions().enabled, true);
   assert.match(result.reply, /Screenshot saved/);
+  assert.equal(result.readyToDelegate, true);
+});
+
+test("an explicit agent count constrains the worker plan", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-plan-count-"));
+  try {
+    assert.equal(requestedWorkerCount("assign 8 agents to this task"), 8);
+    const provider = new CodexCliProvider();
+    const tasks = Array.from({ length: 8 }, (_, index) => ({ name: `Agent${index + 1}`, title: `Task ${index + 1}`, instructions: "Work", context: "" }));
+    provider.run = async () => ({ text: JSON.stringify({ summary: "Eight workers", tasks }) });
+    const plan = await provider.createPlan("Assign 8 agents to this task", "", { model: "gpt-6-luna", reasoning: "light", cwd: root, role: "coordinator" });
+    const schema = JSON.parse(await readFile(join(root, ".solarharness", "schemas", "delegation-plan.json"), "utf8"));
+    assert.equal(plan.tasks.length, 8);
+    assert.equal(schema.properties.tasks.minItems, 8);
+    assert.equal(schema.properties.tasks.maxItems, 8);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("named workers can create Light-pinned named sub-workers", async () => {

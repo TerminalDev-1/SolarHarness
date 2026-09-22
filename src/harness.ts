@@ -1,6 +1,6 @@
 import { AgentManager } from "./agent-manager.js";
 import { CoordinatorBrowser, type BrowserInput, type BrowserResult } from "./browser-tool.js";
-import { CodexCliProvider } from "./codex-provider.js";
+import { CodexCliProvider, requestedWorkerCount } from "./codex-provider.js";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { SOLAR_SYSTEM_PROMPT } from "./system-prompt.js";
@@ -119,7 +119,7 @@ export class SolarHarness {
       const state = await this.tools.call<SetAutoPermissionsInput, AutoPermissionsState>("set-auto-permissions", { enabled: requestedAutoPermissions });
       toolNotice += `\n\nAuto permissions are now ${state.enabled ? "on" : "off"}.`;
     }
-    const readyToDelegate = !effortToolMatch && /SOLAR_STATE:\s*READY\s*$/m.test(response.text);
+    const readyToDelegate = !effortToolMatch && (/SOLAR_STATE:\s*READY\s*$/m.test(response.text) || requestedWorkerCount(message) !== undefined);
     const reply = response.text
       .replace(/^SOLAR_TOOL:\s*adjust-sub-effort-level\s+\{[^\r\n]+\}\s*$/m, "")
       .replace(/^SOLAR_TOOL:\s*set-auto-permissions\s+\{[^\r\n]+\}\s*$/m, "")
