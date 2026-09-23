@@ -289,6 +289,36 @@ test("a refused local HTML connection prompts Solar to serve and reopen the page
   assert.deepEqual(actions.map(action => action.action), ["open", "serve", "open"]);
 });
 
+test("opening an existing HTML page in the browser uses host tools", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const actions = [];
+  harness.workspace.execute = async input => {
+    actions.push(input.action);
+    return input.action === "serve" ? { started: true, url: "http://localhost:8765/" } : { command: input.command, exitCode: 0, stdout: "galaxy-s26.html", stderr: "" };
+  };
+  harness.browser.execute = async input => {
+    actions.push(input.action);
+    return { url: input.url, title: "Galaxy S26", snapshot: '- heading "Galaxy S26"' };
+  };
+  harness.provider.run = async (prompt, _options, args) => {
+    assert.match(prompt, /First inspect the active workspace/);
+    assert.match(prompt, /Available host tools from the live registry/);
+    assert.match(prompt, /"name":"browser"/);
+    assert.match(prompt, /"name":"workspace_command"/);
+    assert.ok(args.includes("--output-schema"));
+    return { text: 'SOLAR_TOOL: workspace_command {"action":"run","command":"Get-ChildItem -File"}', sessionId: "existing-page" };
+  };
+  const replies = [
+    'SOLAR_TOOL: workspace_command {"action":"serve"}',
+    'SOLAR_TOOL: browser {"action":"open","url":"http://localhost:8765/galaxy-s26.html"}',
+    "I opened the page and saw its heading.\nSOLAR_STATE: DISCOVER"
+  ];
+  harness.provider.resume = async () => ({ text: replies.shift(), sessionId: "existing-page" });
+  const result = await harness.converse("open the HTML page created in the browser");
+  assert.match(result.reply, /opened the page/);
+  assert.deepEqual(actions, ["run", "serve", "open"]);
+});
+
 test("Solar can inspect a local app, run it, and interact with the visible browser", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const hostCalls = [];

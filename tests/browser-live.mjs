@@ -41,7 +41,11 @@ try {
   assert.equal(await cursor.evaluate(element => element.style.left), "300px");
   assert.equal(browser.active, true);
   const screenshot = await browser.execute({ action: "screenshot" });
-  console.log(JSON.stringify({ start: true, press: true, move: true, click: true, browserActive: browser.active, screenshotPath: screenshot.screenshotPath }));
+  await browser.browser.close();
+  assert.equal(browser.active, false);
+  const reopened = await browser.execute({ action: "open", url: `http://127.0.0.1:${address.port}/` });
+  assert.match(reopened.snapshot, /Start game/);
+  console.log(JSON.stringify({ start: true, press: true, move: true, click: true, reopenedAfterWindowClose: true, browserActive: browser.active, screenshotPath: screenshot.screenshotPath }));
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

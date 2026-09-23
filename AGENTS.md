@@ -88,6 +88,12 @@ sub-agents, and sub-delegates run with workspace-write access.
   its own session after each operation. It never opens or closes the visible
   `browser`. The old `browser` `web_search` action is retired. If results are
   unavailable, report that rather than claiming research was completed.
+- Browser requests that name an existing HTML page must use the browser host
+  tool even if they do not name a URL. Every conversation prompt includes a
+  compact JSON manifest generated from the live host tool registry, with names,
+  descriptions, and example inputs. Do not rely on a copied source file as a
+  tool catalog. If the user closes the visible browser window, a later open
+  action launches a fresh browser in the same Solar session.
 - The host records each host tool call, input, result, and failure in a session
   operation log. Solar can query it through the read-only `runtime_operations`
   tool. For questions about earlier actions, Solar asks for the log and answers

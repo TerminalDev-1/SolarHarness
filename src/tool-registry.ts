@@ -6,6 +6,7 @@ import type { WorkspaceCommandInput, WorkspaceCommandResult } from "./workspace-
 export type ToolDefinition<TInput, TResult> = {
   name: string;
   description: string;
+  exampleInput?: TInput;
   execute: (input: TInput) => Promise<TResult>;
 };
 
@@ -70,8 +71,8 @@ export class ToolRegistry {
     this.nextOperationId = 1;
   }
 
-  list(): Array<Pick<ToolDefinition<unknown, unknown>, "name" | "description">> {
-    return [...this.tools.values()].map(({ name, description }) => ({ name, description }));
+  list(): Array<Pick<ToolDefinition<unknown, unknown>, "name" | "description" | "exampleInput">> {
+    return [...this.tools.values()].map(({ name, description, exampleInput }) => ({ name, description, exampleInput }));
   }
 }
 
@@ -88,6 +89,7 @@ export function registerHarnessTools(dependencies: {
   registry.register<RuntimeOperationsInput, RuntimeOperation[]>({
     name: "runtime_operations",
     description: "Read recorded host tool calls, inputs, outcomes, results, and failures from the current Solar session. Use to verify what actually happened earlier.",
+    exampleInput: {},
     execute: async input => registry.getOperations(input)
   });
   registry.register<SpawnSubAgentInput, AgentRecord>({
@@ -110,11 +112,13 @@ export function registerHarnessTools(dependencies: {
   registry.register<AdjustSubEffortLevelInput, AgentRecord>({
     name: "adjust-sub-effort-level",
     description: "Change the reasoning effort used for a specific sub-agent or sub-delegate's next exchange.",
+    exampleInput: { agentId: "agent-name", effortLevel: "light" },
     execute: async input => dependencies.setReasoning(input.agentId, input.effortLevel)
   });
   registry.register<SetAutoPermissionsInput, AutoPermissionsState>({
     name: "set-auto-permissions",
     description: "Enable or disable automatic approval of future sub-agent plans. This does not bypass the destructive /new confirmation.",
+    exampleInput: { enabled: true },
     execute: async input => {
       if (typeof input.enabled !== "boolean") throw new Error("set-auto-permissions requires a boolean enabled value.");
       return dependencies.setAutoPermissions(input.enabled);
@@ -123,16 +127,19 @@ export function registerHarnessTools(dependencies: {
   registry.register<BrowserInput, BrowserResult>({
     name: "browser",
     description: "Interact with a visible Playwright browser: open, search Google or Bing, snapshot, screenshot, move Solar's visible cursor, click a selector, named button or link, or viewport coordinates, fill, press keys, scroll, navigate, search YouTube, or close.",
+    exampleInput: { action: "open", url: "http://localhost:3000/" },
     execute: dependencies.browser
   });
   registry.register<WebSearchHeadlessInput, WebSearchHeadlessResult>({
     name: "web_search_headless",
     description: "Search Google headlessly with Bing fallback, returning source titles, URLs, and snippets; read source pages headlessly by URL.",
+    exampleInput: { action: "search", query: "Galaxy S26" },
     execute: dependencies.webSearchHeadless
   });
   registry.register<WorkspaceCommandInput, WorkspaceCommandResult>({
     name: "workspace_command",
     description: "Run a command, start a long-running process, or serve static files from the active workspace on localhost. The serve action returns its listening URL. Use to inspect, create, run, and verify local projects.",
+    exampleInput: { action: "serve" },
     execute: dependencies.workspaceCommand
   });
   return registry;

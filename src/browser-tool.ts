@@ -31,7 +31,7 @@ export class SolarBrowser {
 
   setWorkspace(workspace: string): void { this.workspace = workspace; }
 
-  get active(): boolean { return Boolean(this.page && !this.page.isClosed()); }
+  get active(): boolean { return Boolean(this.page && !this.page.isClosed() && (!this.browser || this.browser.isConnected())); }
 
   async execute(input: BrowserInput): Promise<BrowserResult> {
     if (!input || typeof input !== "object") throw new Error("browser requires an action.");
@@ -129,7 +129,8 @@ export class SolarBrowser {
   }
 
   private async getPage(): Promise<Page> {
-    if (this.page && !this.page.isClosed()) return this.page;
+    if (this.active && this.page) return this.page;
+    if (this.browser || this.page) await this.close();
     const executablePath = chromium.executablePath();
     const failures: string[] = [];
     if (existsSync(executablePath)) {
