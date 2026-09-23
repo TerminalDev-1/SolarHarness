@@ -94,6 +94,13 @@ sub-agents, and sub-delegates run with workspace-write access.
   descriptions, and example inputs. Do not rely on a copied source file as a
   tool catalog. If the user closes the visible browser window, a later open
   action launches a fresh browser in the same Solar session.
+- Every main-agent conversation turn receives the structured host tool or answer
+  schema and live tool catalog. Wording patterns may require an action for known
+  requests or validate a completed action, but they do not decide whether Solar
+  can access host tools. If Solar says the browser is unavailable while it is
+  registered, require a host tool attempt instead of returning that claim. If
+  Solar claims to have opened or displayed a page without a successful browser
+  host result in the turn, require the browser action before reporting success.
 - The host records each host tool call, input, result, and failure in a session
   operation log. Solar can query it through the read-only `runtime_operations`
   tool. For questions about earlier actions, Solar asks for the log and answers

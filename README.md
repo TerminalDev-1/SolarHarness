@@ -206,9 +206,10 @@ The runtime `ToolRegistry` exposes these main capabilities:
 - `runtime_operations` lets Solar inspect recorded host tool calls and their
   results when asked what actually happened earlier in the session.
 
-Solar receives a JSON tool catalog generated from the live registry on each
-conversation turn. Closing the visible browser window does not end the Solar
-session; the next open action launches a new window.
+Solar receives a JSON tool catalog and the host tool protocol on every
+conversation turn, regardless of the wording of the request. Closing the
+visible browser window does not end the Solar session; the next open action
+launches a new window.
 
 Each agent receives its own Codex session and assignment while sharing the test
 workspace. A top-level sub-agent can return a structured sub-delegate request; the

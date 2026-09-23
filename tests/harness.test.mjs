@@ -301,7 +301,7 @@ test("opening an existing HTML page in the browser uses host tools", async () =>
     return { url: input.url, title: "Galaxy S26", snapshot: '- heading "Galaxy S26"' };
   };
   harness.provider.run = async (prompt, _options, args) => {
-    assert.match(prompt, /First inspect the active workspace/);
+    assert.match(prompt, /Choose host tools from the live registry based on the meaning/);
     assert.match(prompt, /Available host tools from the live registry/);
     assert.match(prompt, /"name":"browser"/);
     assert.match(prompt, /"name":"workspace_command"/);
@@ -317,6 +317,86 @@ test("opening an existing HTML page in the browser uses host tools", async () =>
   const result = await harness.converse("open the HTML page created in the browser");
   assert.match(result.reply, /opened the page/);
   assert.deepEqual(actions, ["run", "serve", "open"]);
+});
+
+test("host tools remain available for browser requests with unfamiliar wording", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.workspace.execute = async () => ({ started: true, url: "http://localhost:8765/" });
+  harness.browser.execute = async input => ({ url: input.url, title: "Galaxy S26", snapshot: '- heading "Galaxy S26"' });
+  harness.provider.run = async (prompt, _options, args) => {
+    assert.match(prompt, /"name":"browser"/);
+    assert.match(args.at(-1), /host-tool-or-answer\.json$/);
+    return { text: 'SOLAR_TOOL: workspace_command {"action":"serve"}', sessionId: "unfamiliar-wording" };
+  };
+  const replies = [
+    'SOLAR_TOOL: browser {"action":"open","url":"http://localhost:8765/galaxy-s26.html"}',
+    "The page is on screen.\nSOLAR_STATE: DISCOVER"
+  ];
+  harness.provider.resume = async () => ({ text: replies.shift(), sessionId: "unfamiliar-wording" });
+  const result = await harness.converse("Put that Galaxy S26 thing on screen for me");
+  assert.match(result.reply, /page is on screen/);
+  const operations = await harness.tools.call("runtime_operations", {});
+  assert.deepEqual(operations.map(operation => operation.tool), ["workspace_command", "browser"]);
+});
+
+test("a false browser-unavailable answer is corrected with a required host action", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.workspace.execute = async () => ({ started: true, url: "http://localhost:8765/" });
+  harness.browser.execute = async input => ({ url: input.url, title: "Galaxy S26", snapshot: '- heading "Galaxy S26"' });
+  harness.provider.run = async () => ({ text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "The visible browser action isn’t available to me in this turn." }), sessionId: "false-unavailable" });
+  let resumes = 0;
+  harness.provider.resume = async (_sessionId, prompt, _options, args) => {
+    resumes++;
+    if (resumes === 1) {
+      assert.match(prompt, /live host registry includes browser/);
+      assert.match(args.at(-1), /host-tool-required\.json$/);
+      return { text: 'SOLAR_TOOL: workspace_command {"action":"serve"}', sessionId: "false-unavailable" };
+    }
+    if (resumes === 2) return { text: 'SOLAR_TOOL: browser {"action":"open","url":"http://localhost:8765/galaxy-s26.html"}', sessionId: "false-unavailable" };
+    return { text: "The page is now visible.\nSOLAR_STATE: DISCOVER", sessionId: "false-unavailable" };
+  };
+  const result = await harness.converse("Put that Galaxy S26 thing on screen for me");
+  assert.match(result.reply, /now visible/);
+  assert.doesNotMatch(result.reply, /no browser is available/i);
+});
+
+test("a claimed browser opening without a host result is corrected", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.workspace.execute = async () => ({ started: true, url: "http://localhost:8765/" });
+  harness.browser.execute = async input => ({ url: input.url, title: "Galaxy S26", snapshot: '- heading "Galaxy S26"' });
+  harness.provider.run = async () => ({ text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "Opened galaxy-s26.html from the workspace in your default browser." }), sessionId: "false-open" });
+  let resumes = 0;
+  harness.provider.resume = async (_sessionId, prompt, _options, args) => {
+    resumes++;
+    if (resumes === 1) {
+      assert.match(prompt, /no successful browser host call/);
+      assert.match(args.at(-1), /host-tool-required\.json$/);
+      return { text: 'SOLAR_TOOL: workspace_command {"action":"serve"}', sessionId: "false-open" };
+    }
+    if (resumes === 2) return { text: 'SOLAR_TOOL: browser {"action":"open","url":"http://localhost:8765/galaxy-s26.html"}', sessionId: "false-open" };
+    return { text: "The Galaxy S26 page loaded in the browser.\nSOLAR_STATE: DISCOVER", sessionId: "false-open" };
+  };
+  const result = await harness.converse("Please display galaxy-s26.html from this workspace for me");
+  assert.match(result.reply, /page loaded in the browser/);
+  assert.deepEqual((await harness.tools.call("runtime_operations", {})).map(operation => operation.tool), ["workspace_command", "browser"]);
+});
+
+test("Solar cannot report browser success when it never produced a browser call", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async () => ({ text: "Opened galaxy-s26.html in the browser.\nSOLAR_STATE: DISCOVER", sessionId: "never-opened" });
+  harness.provider.resume = async () => ({ text: "Opened galaxy-s26.html in the browser.\nSOLAR_STATE: DISCOVER", sessionId: "never-opened" });
+  const result = await harness.converse("Please display galaxy-s26.html from this workspace for me");
+  assert.match(result.reply, /no successful browser host action was recorded/);
+  assert.doesNotMatch(result.reply, /^Opened/);
+});
+
+test("ordinary conversation can answer without a tool in the universal schema", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async (_prompt, _options, args) => {
+    assert.match(args.at(-1), /host-tool-or-answer\.json$/);
+    return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "Hello." }), sessionId: "answer-only" };
+  };
+  assert.equal((await harness.converse("Say hello")).reply, "Hello.");
 });
 
 test("Solar can inspect a local app, run it, and interact with the visible browser", async () => {
