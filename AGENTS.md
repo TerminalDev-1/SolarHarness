@@ -47,6 +47,9 @@ sub-agents, and sub-delegates run with workspace-write access.
 - `set-auto-permissions` lets Solar enable or disable automatic approval of
   future sub-agent plans from natural-language conversation. It changes the same
   harness-level state as `/auto-approve on|off` and never bypasses `/new`.
+  Standalone requests such as "turn on auto permissions" apply immediately in
+  the host and receive a confirmation even if the model is unavailable. When
+  the setting is part of a larger request, Solar still completes that request.
 - `browser` is the visible interactive Playwright tool for website and web app
   testing, including local HTML, Next.js, and Three.js apps. It opens pages,
   clicks, fills fields, presses keys, scrolls, navigates, and captures screenshots.

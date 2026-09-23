@@ -32,6 +32,13 @@ export class SolarHarness {
   }
 
   async converse(message: string, onActivity?: (message: string) => void): Promise<{ reply: string; readyToDelegate: boolean }> {
+    const standaloneAutoPermissions = standaloneAutoPermissionRequest(message);
+    if (standaloneAutoPermissions !== undefined) {
+      const state = await this.tools.call<SetAutoPermissionsInput, AutoPermissionsState>("set-auto-permissions", { enabled: standaloneAutoPermissions });
+      const reply = `Auto permissions are now ${state.enabled ? "on" : "off"}. ${state.enabled ? "Future sub-agent plans will launch without review." : "Future sub-agent plans will wait for your review."}`;
+      this.mainTranscript.push(`User: ${message}`, `Solar: ${reply}`);
+      return { reply, readyToDelegate: false };
+    }
     const agentRoster = this.manager.list().map(agent => `${agent.depth ? "  sub-delegate" : "sub-agent"} ${agent.name} [${agent.id}]: ${agent.title} (${agent.status}, ${agent.reasoning}${agent.reasoningPinned ? ", pinned" : ""})`).join("\n") || "No sub-agents exist yet.";
     const wantsDelegation = delegationRequested(message);
     const turnPrompt = [
@@ -343,6 +350,22 @@ function delegationRequested(message: string): boolean {
 }
 
 function autoPermissionRequest(message: string): boolean | undefined {
-  const match = message.match(/\b(?:unturn|turn|switch|set|enable|disable)\s+(?:the\s+)?auto[ -](?:permissions|approve)\s+(on|off)\b/i);
-  return match ? match[1].toLowerCase() === "on" : undefined;
+  if (/\b(?:do not|don't|never)\s+(?:turn|switch|set|enable|disable)\b/i.test(message)) return undefined;
+  const label = "(?:auto[ -](?:permissions?|approve|approval)|automatic\\s+(?:permissions?|approval))";
+  const prefix = message.match(new RegExp(`\\b(?:turn|switch|set)\\s+(on|off)\\s+(?:the\\s+)?${label}\\b`, "i"));
+  if (prefix) return prefix[1].toLowerCase() === "on";
+  const suffix = message.match(new RegExp(`\\b(?:turn|switch|set)\\s+(?:the\\s+)?${label}\\s+(?:to\\s+)?(on|off)\\b`, "i"));
+  if (suffix) return suffix[1].toLowerCase() === "on";
+  const enable = message.match(new RegExp(`\\b(enable|disable)\\s+(?:the\\s+)?${label}\\b`, "i"));
+  if (enable) return enable[1].toLowerCase() === "enable";
+  const bare = message.match(new RegExp(`\\b${label}\\s+(on|off)\\b`, "i"));
+  return bare ? bare[1].toLowerCase() === "on" : undefined;
+}
+
+function standaloneAutoPermissionRequest(message: string): boolean | undefined {
+  const enabled = autoPermissionRequest(message);
+  if (enabled === undefined) return undefined;
+  const label = "(?:auto[ -](?:permissions?|approve|approval)|automatic\\s+(?:permissions?|approval))";
+  const action = `(?:(?:turn|switch|set)\\s+(?:on|off)\\s+(?:the\\s+)?${label}|(?:turn|switch|set)\\s+(?:the\\s+)?${label}\\s+(?:to\\s+)?(?:on|off)|(?:enable|disable)\\s+(?:the\\s+)?${label}|${label}\\s+(?:on|off))`;
+  return new RegExp(`^(?:(?:please|can\\s+you|could\\s+you)\\s+)?${action}[.!?]*$`, "i").test(message.trim()) ? enabled : undefined;
 }

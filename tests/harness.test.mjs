@@ -43,10 +43,43 @@ test("the main agent tool can turn auto permissions on and off", async () => {
     text: 'I’ll enable automatic sub-agent-plan approval.\nSOLAR_TOOL: set-auto-permissions {"enabled":true}\nSOLAR_STATE: DISCOVER',
     sessionId: "main-agent-session"
   });
-  const response = await harness.converse("Turn auto permissions on.");
+  const response = await harness.converse("Turn auto permissions on and say hello.");
   assert.equal(harness.getAutoPermissions().enabled, true);
   assert.match(response.reply, /Auto permissions are now on/);
   assert.doesNotMatch(response.reply, /SOLAR_TOOL/);
+});
+
+test("standalone auto-permission requests apply immediately without a model response", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async () => { throw new Error("standalone setting should not need a model turn"); };
+  for (const [request, enabled] of [
+    ["turn on auto permissions", true],
+    ["turn off auto permissions", false],
+    ["Turn auto permissions on.", true],
+    ["Please enable automatic approval.", true],
+    ["Can you disable auto-approve?", false],
+    ["auto permissions on", true],
+    ["auto permissions off", false]
+  ]) {
+    const response = await harness.converse(request);
+    assert.equal(harness.getAutoPermissions().enabled, enabled, request);
+    assert.equal(response.readyToDelegate, false, request);
+    assert.match(response.reply, new RegExp(`Auto permissions are now ${enabled ? "on" : "off"}`), request);
+  }
+});
+
+test("a setting inside a larger request still lets Solar complete the task", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  let modelCalls = 0;
+  harness.provider.run = async () => {
+    modelCalls++;
+    return { text: "I handled the task.\nSOLAR_STATE: DISCOVER", sessionId: "mixed-setting-session" };
+  };
+  const response = await harness.converse("Say hello and turn on auto permissions.");
+  assert.equal(modelCalls, 1);
+  assert.equal(harness.getAutoPermissions().enabled, true);
+  assert.match(response.reply, /I handled the task/);
+  assert.match(response.reply, /Auto permissions are now on/);
 });
 
 test("only the user's explicit request enables sub-agent delegation", async () => {
