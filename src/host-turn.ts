@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const HOST_TOOLS = ["browser", "web_search_headless", "workspace_command", "set-auto-permissions", "adjust-sub-effort-level"] as const;
+const HOST_TOOLS = ["browser", "web_search_headless", "workspace_command", "runtime_operations", "set-auto-permissions", "adjust-sub-effort-level"] as const;
 
 /** Codex CLI can require a tool request as its final structured response. */
 export async function writeHostTurnSchema(cwd: string, requireTool: boolean): Promise<string> {

@@ -158,6 +158,7 @@ test("structured CLI turns require a host tool and parse its result", async () =
     const required = JSON.parse(await readFile(requiredPath, "utf8"));
     assert.deepEqual(required.properties.kind.enum, ["tool"]);
     assert.match(required.properties.tool.enum.join(" "), /browser/);
+    assert.ok(required.properties.tool.enum.includes("runtime_operations"));
     assert.ok(!required.properties.tool.enum.includes("none"));
     const tool = decodeHostTurn(JSON.stringify({ kind: "tool", tool: "browser", input: '{"action":"open","url":"http://localhost:8000"}', reply: "" }));
     assert.deepEqual(parseHostToolCall(tool)?.input, { action: "open", url: "http://localhost:8000" });
@@ -462,20 +463,48 @@ test("Solar answers a question about earlier web research from successful tool c
     return { action: "search", query: input.query, engine: "bing", url: "https://www.bing.com/search", title: "Search", results: [{ title: "Samsung", url: "https://www.samsung.com", snippet: "Galaxy S26" }] };
   };
   harness.provider.run = async () => ({ text: 'SOLAR_TOOL: web_search_headless {"action":"search","query":"Galaxy S26"}', sessionId: "history-session" });
-  harness.provider.resume = async () => ({ text: "Search complete.\nSOLAR_STATE: DISCOVER", sessionId: "history-session" });
+  let resumes = 0;
+  harness.provider.resume = async (_sessionId, prompt) => {
+    resumes++;
+    if (resumes === 1) return { text: "Search complete.\nSOLAR_STATE: DISCOVER", sessionId: "history-session" };
+    if (resumes === 2) return { text: 'SOLAR_TOOL: runtime_operations {"tool":"web_search_headless"}', sessionId: "history-session" };
+    assert.match(prompt, /"status":"succeeded"/);
+    assert.match(prompt, /"query":"Galaxy S26"/);
+    return { text: "The runtime records a successful Galaxy S26 web search. I cannot establish when the page was created.\nSOLAR_STATE: DISCOVER", sessionId: "history-session" };
+  };
   await harness.converse("Search Google for Galaxy S26");
   const result = await harness.converse("Just to confirm, did you search the web before creating the page?");
-  assert.match(result.reply, /I completed a web search for "Galaxy S26"/);
-  assert.match(result.reply, /can't verify.*whether it preceded page creation/);
+  assert.match(result.reply, /runtime records a successful Galaxy S26 web search/);
   assert.equal(searches, 1);
 });
 
 test("Solar does not invent an earlier search when asked to confirm one", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
-  harness.provider.run = async () => { throw new Error("Historical question must not call the model"); };
+  harness.provider.run = async prompt => {
+    assert.match(prompt, /runtime_operations/);
+    return { text: 'SOLAR_TOOL: web_search_headless {"action":"search","query":"before creating the page"}', sessionId: "empty-history" };
+  };
+  harness.provider.resume = async (_sessionId, prompt) => {
+    assert.match(prompt, /runtime_operations result: \[\]/);
+    return { text: "I have no recorded successful web search in this session.\nSOLAR_STATE: DISCOVER", sessionId: "empty-history" };
+  };
   harness.webSearchHeadless.execute = async () => { throw new Error("Historical question must not start a search"); };
   const result = await harness.converse("Just to confirm, did you search the web before creating the page?");
-  assert.match(result.reply, /don't have a recorded successful web search/);
+  assert.match(result.reply, /no recorded successful web search/);
+});
+
+test("runtime operations record failed calls and clear on reset", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.webSearchHeadless.execute = async () => { throw new Error("Search timed out"); };
+  await assert.rejects(harness.tools.call("web_search_headless", { action: "search", query: "Galaxy S26" }), /Search timed out/);
+  const operations = await harness.tools.call("runtime_operations", {});
+  assert.equal(operations.length, 1);
+  assert.equal(operations[0].tool, "web_search_headless");
+  assert.equal(operations[0].status, "failed");
+  assert.equal(operations[0].error, "Search timed out");
+  assert.equal((await harness.tools.call("runtime_operations", {})).length, 1);
+  harness.resetConversation();
+  assert.deepEqual(await harness.tools.call("runtime_operations", {}), []);
 });
 
 test("a request to search the repository stays in the workspace", async () => {

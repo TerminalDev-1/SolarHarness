@@ -188,7 +188,7 @@ Solar session is stored and resumed between conversational turns and
 after sub-agent synthesis. Planning uses a constrained JSON schema, and a plan may
 contain one to eight independent tasks.
 
-The runtime `ToolRegistry` exposes six main capabilities:
+The runtime `ToolRegistry` exposes these main capabilities:
 
 - `spawn_sub_agent` creates a named sub-agent or direct sub-delegate.
 - `orchestrate` lists, cancels, changes reasoning, supplies context to, or resumes
@@ -201,6 +201,9 @@ The runtime `ToolRegistry` exposes six main capabilities:
   Screenshots are saved under `.solarharness/screenshots` in the workspace.
 - `web_search_headless` searches the web without a visible window and returns
   source titles, URLs, and snippets; it can also read a source page by URL.
+- `workspace_command` runs commands or starts local servers in the active workspace.
+- `runtime_operations` lets Solar inspect recorded host tool calls and their
+  results when asked what actually happened earlier in the session.
 
 Each agent receives its own Codex session and assignment while sharing the test
 workspace. A top-level sub-agent can return a structured sub-delegate request; the
