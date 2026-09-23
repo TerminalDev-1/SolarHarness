@@ -84,6 +84,9 @@ sub-agents, and sub-delegates run with workspace-write access.
   its own session after each operation. It never opens or closes the visible
   `browser`. The old `browser` `web_search` action is retired. If results are
   unavailable, report that rather than claiming research was completed.
+- When asked whether a web search happened earlier in the session, answer from
+  successful recorded search tool results. Do not interpret that question as a
+  request to search now, or infer a successful search from a prior model claim.
 - For requests to search YouTube, opening its home page is incomplete. The host
   runs `youtube_search` with the user's query and verifies the results URL before
   reporting success. Recognize common search word orders, including "search

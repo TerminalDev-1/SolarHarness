@@ -454,6 +454,30 @@ test("Solar does not claim web research succeeded when search is blocked", async
   assert.doesNotMatch(result.reply, /found the answer/);
 });
 
+test("Solar answers a question about earlier web research from successful tool calls", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  let searches = 0;
+  harness.webSearchHeadless.execute = async input => {
+    searches++;
+    return { action: "search", query: input.query, engine: "bing", url: "https://www.bing.com/search", title: "Search", results: [{ title: "Samsung", url: "https://www.samsung.com", snippet: "Galaxy S26" }] };
+  };
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: web_search_headless {"action":"search","query":"Galaxy S26"}', sessionId: "history-session" });
+  harness.provider.resume = async () => ({ text: "Search complete.\nSOLAR_STATE: DISCOVER", sessionId: "history-session" });
+  await harness.converse("Search Google for Galaxy S26");
+  const result = await harness.converse("Just to confirm, did you search the web before creating the page?");
+  assert.match(result.reply, /I completed a web search for "Galaxy S26"/);
+  assert.match(result.reply, /can't verify.*whether it preceded page creation/);
+  assert.equal(searches, 1);
+});
+
+test("Solar does not invent an earlier search when asked to confirm one", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async () => { throw new Error("Historical question must not call the model"); };
+  harness.webSearchHeadless.execute = async () => { throw new Error("Historical question must not start a search"); };
+  const result = await harness.converse("Just to confirm, did you search the web before creating the page?");
+  assert.match(result.reply, /don't have a recorded successful web search/);
+});
+
 test("a request to search the repository stays in the workspace", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   harness.provider.run = async prompt => {

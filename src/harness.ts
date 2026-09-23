@@ -20,6 +20,7 @@ export class SolarHarness {
   readonly workspace: SolarWorkspaceTool;
   private mainSessionId?: string;
   private readonly mainTranscript: string[] = [];
+  private readonly successfulWebSearches: string[] = [];
   private autoPermissions = false;
 
   constructor(private readonly options: HarnessOptions) {
@@ -38,6 +39,13 @@ export class SolarHarness {
   }
 
   async converse(message: string, onActivity?: (message: string) => void): Promise<{ reply: string; readyToDelegate: boolean }> {
+    if (asksAboutPreviousWebSearch(message)) {
+      const reply = this.successfulWebSearches.length
+        ? `I completed a web search for ${this.successfulWebSearches.map(query => `"${query}"`).join(", ")} earlier in this session.${/\bbefore\b/i.test(message) ? " I can't verify from the search log whether it preceded page creation." : ""}`
+        : "I don't have a recorded successful web search earlier in this session, so I can't confirm that I searched before creating the page.";
+      this.mainTranscript.push(`User: ${message}`, `Solar: ${reply}`);
+      return { reply, readyToDelegate: false };
+    }
     const standaloneAutoPermissions = standaloneAutoPermissionRequest(message);
     if (standaloneAutoPermissions !== undefined) {
       const state = await this.tools.call<SetAutoPermissionsInput, AutoPermissionsState>("set-auto-permissions", { enabled: standaloneAutoPermissions });
@@ -166,6 +174,7 @@ export class SolarHarness {
           onActivity?.(input.action === "read" ? `Web search: reading ${input.url}` : `Web search: searching for ${input.query}`);
           result = await this.tools.call<WebSearchHeadlessInput, WebSearchHeadlessResult>("web_search_headless", input);
           if (result.action === "search" && result.results?.length) {
+            this.successfulWebSearches.push(result.query ?? input.query ?? "the requested topic");
             lastSearchResult = result;
             if (webQuery && result.query?.toLowerCase() === webQuery.toLowerCase()) webSearchComplete = true;
           }
@@ -188,6 +197,7 @@ export class SolarHarness {
             onActivity?.(`Web search: searching for ${webQuery}`);
             const search = await this.tools.call<WebSearchHeadlessInput, WebSearchHeadlessResult>("web_search_headless", { action: "search", query: webQuery });
             lastSearchResult = search;
+            if (search.results?.length) this.successfulWebSearches.push(search.query ?? webQuery);
             webSearchComplete = Boolean(search.results?.length);
             result = search;
           }
@@ -273,6 +283,7 @@ export class SolarHarness {
     void this.workspace.close();
     this.mainSessionId = undefined;
     this.mainTranscript.length = 0;
+    this.successfulWebSearches.length = 0;
     this.manager.reset();
   }
 
@@ -368,6 +379,11 @@ function needsHostAction(message: string, browserActions: string[], youtubeQuery
 
 function browserCloseRequested(message: string): boolean {
   return /\b(?:close|shut(?:\s+down)?|quit|exit)\s+(?:(?:the|that|this)\s+)?(?:browser|browser\s+window)\b/i.test(message);
+}
+
+function asksAboutPreviousWebSearch(message: string): boolean {
+  return /\b(?:did|have|had)\s+you\s+(?:actually\s+|already\s+|really\s+)?(?:search(?:ed)?|look(?:ed)?\s+up|research(?:ed)?)\s+(?:the\s+)?(?:web|internet|online|google|bing)\b/i.test(message)
+    && !/\b(?:search|look\s+up|research)\s+(?:it\s+)?(?:now|again)\b/i.test(message);
 }
 
 function youtubeSearchQuery(message: string): string | undefined {
