@@ -5,18 +5,16 @@
 
 **First committed:** 20 September 2026.
 
-SolarHarness is a terminal-native multi-agent coding workspace. You describe an
-outcome to Solar, its read-only coordinator; Solar explains its approach,
-proposes named workers, and launches them after review or under an optional
-auto-approve mode. Workers can create named Light-pinned sub-workers for
-independent scopes. Implementation is performed by workspace-write Codex agents,
-never by the coordinator itself.
+SolarHarness is a terminal-native coding workspace. You decide whether Solar
+handles a task directly or delegates it to named workers. Delegation plans are
+reviewed before launch unless auto-approve is enabled. Workers can create named
+Light-pinned sub-workers for independent scopes.
 
 ## What it can do
 
-- Turn a natural-language request into an implementation-ready worker plan.
-- Choose the smallest useful worker set automatically—from one worker up to a
-  hard maximum of eight—based on genuinely parallel scopes in the request.
+- Handle ordinary coding requests directly in the active workspace.
+- When you request delegation, turn the task into an implementation-ready worker
+  plan with one to eight workers based on genuinely parallel scopes.
 - Honor an explicit request for one to eight agents, including when the same
   message also asks Solar to browse a page.
 - Create multiple directories and their contents in parallel inside `test`. For
@@ -27,9 +25,11 @@ never by the coordinator itself.
   their reports. Solar controls the full tree; each worker controls its children.
 - Let every worker create nested directories and files recursively, run relevant
   commands, validate its own assignment, and return a concise report.
-- Keep the coordinator read-only while workers receive workspace-write access.
-- Let Solar browse, interact with web pages, and save full-page screenshots in
-  an isolated Playwright Chromium session.
+- Give Solar and workers workspace-write access for implementation; keep
+  delegation planning read-only.
+- Let Solar browse in a visible Playwright window with a clear control notice,
+  and save full-page screenshots. Playwright tries its managed Chromium first,
+  then Microsoft Edge when Chromium cannot launch.
 - Present every proposed worker separately so tasks can be accepted or rejected,
   or allow `/auto-approve on` to launch future plans without pausing.
 - Retain coordinator context across user turns, planning, worker execution, and
@@ -75,7 +75,7 @@ only the workers launched for the current approved plan.
 
 - Node.js 20 or newer.
 - An authenticated Codex CLI or Codex desktop installation.
-- Playwright's bundled Chromium, Microsoft Edge, or Google Chrome for browser use.
+- Playwright and its managed Chromium browser, or Microsoft Edge as a fallback.
 
 SolarHarness first honors `SOLAR_CODEX_PATH`, then checks `PATH`, the Windows Codex
 desktop installation, and the standard global npm installation. If discovery
@@ -88,7 +88,9 @@ npm install
 npm run dev
 ```
 
-If no supported browser is installed, run `npx playwright install chromium`.
+If Playwright is missing globally, run `npm install -g playwright`. Install its
+browser executable with `playwright install chromium` if needed. The project also
+installs Playwright locally through `npm install`.
 
 `chat` is the default command, so `npm run dev` opens the interface directly.
 For a compiled production run:
@@ -107,10 +109,10 @@ npm run dev -- chat --model gpt-6-luna --reasoning max
 
 ## Delegation workflow
 
-1. Describe the outcome naturally.
+1. Ask Solar to delegate a task, or use `/delegate` after describing it.
 2. Solar keeps talking with you in the same coordinator session and asks a
    question only when a missing answer would materially affect the work.
-3. Once the request is actionable, Solar proposes up to eight independent tasks.
+3. Solar proposes up to eight independent tasks.
 4. Review the plan before launch:
 
    - `Up` / `Down` selects a task.
@@ -140,7 +142,7 @@ npm run dev -- chat --model gpt-6-luna --reasoning max
 | `/agent <id-or-name> reasoning <level>` | Solar authorizes a worker or sub-worker's next-exchange effort. |
 | `/agent <id-or-name> context <message>` | Sends additional context to a worker or sub-worker; a completed agent resumes its session. |
 | `/agent <id-or-name> cancel` | Cancels an agent and any direct sub-workers it owns. |
-| `/delegate` | Manually asks Solar to prepare a plan from the current brief. Natural actionable requests delegate automatically. |
+| `/delegate` | Asks Solar to prepare a worker plan from the current brief. You can also request delegation in natural language. |
 | `/quit` or `/exit` | Closes SolarHarness. |
 
 Solar also has the registered `adjust-sub-effort-level` coordinator tool. This
@@ -155,8 +157,8 @@ the explicit `/new` workspace-deletion confirmation.
 
 ## Session and workspace safety
 
-- The coordinator runs through Codex's read-only sandbox and cannot implement the
-  request, modify files, or bypass plan approval.
+- Solar can implement directly with workspace-write access. Delegation planning
+  remains read-only, and worker plans still follow the chosen approval setting.
 - Approved workers run with workspace-write access rooted in the visible `test`
   workspace.
 - Rejected tasks never launch.
@@ -193,9 +195,8 @@ harness runs those named children at Light reasoning, sends their reports back t
 the parent session for integration, and keeps the complete tree visible to
 Solar. No third delegation level is allowed.
 
-The architectural rule is deliberately strict: **Solar delegates; workers do
-the actual work.** See [`AGENTS.md`](./AGENTS.md) for the role boundary and runtime
-contract.
+The user chooses direct Solar work or delegation. See [`AGENTS.md`](./AGENTS.md)
+for the role and runtime contract.
 
 ## Claude Code-style activity indicator
 

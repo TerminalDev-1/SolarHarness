@@ -46,6 +46,17 @@ test("the coordinator tool can turn auto permissions on and off", async () => {
   assert.doesNotMatch(response.reply, /SOLAR_TOOL/);
 });
 
+test("only the user's explicit request enables worker delegation", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async () => ({ text: "I finished the change.\nSOLAR_STATE: READY", sessionId: "direct-session" });
+  harness.provider.resume = async () => ({ text: "I can prepare workers.\nSOLAR_STATE: READY", sessionId: "direct-session" });
+
+  assert.equal((await harness.converse("Fix the parser directly.")).readyToDelegate, false);
+  assert.equal((await harness.converse("Assign 2 agents to review it.")).readyToDelegate, true);
+  assert.equal((await harness.converse("Do not delegate the follow-up.")).readyToDelegate, false);
+  assert.equal((await harness.converse("I decide when I want to delegate.")).readyToDelegate, false);
+});
+
 test("the coordinator feeds browser results back into the same model session", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const calls = [];

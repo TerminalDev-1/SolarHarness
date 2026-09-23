@@ -222,7 +222,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a goal or ask Solar to browse a web page. Controls: /new · /auto-approve <on|off> · /theme <light|dark> · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
+        addMessage({ role: "solar", text: "Describe a task for Solar to handle directly, or ask to delegate it. Controls: /delegate · /new · /auto-approve <on|off> · /theme <light|dark> · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
       } else if (line === "/auto-approve") {
@@ -248,7 +248,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         if (REASONING_EFFORTS.includes(effort)) changeEffort(effort);
         else addMessage({ role: "error", text: "Usage: /effort <light|medium|high|xhigh|max>" });
       } else if (line === "/agents") {
-        addMessage({ role: "solar", text: agents.length ? "Worker activity is shown below." : "No workers are assigned. Describe an actionable goal and Solar will propose them automatically." });
+        addMessage({ role: "solar", text: agents.length ? "Worker activity is shown below." : "No workers are assigned. Ask Solar to delegate when you want workers." });
       } else if (line.startsWith("/agent ")) {
         await controlAgent(line);
       } else if (line === "/delegate") {
@@ -258,7 +258,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
           await preparePlan(brief.join("\n"), brief.join("\n"));
         }
       } else {
-        const nextBrief = [...brief, line];
+        const nextBrief = [line];
         setBrief(nextBrief);
         const response = await harness.converse(line, reportActivity);
         setAutoApprove(harness.getAutoPermissions().enabled);

@@ -29,7 +29,7 @@ export class CodexCliProvider {
       `User request: ${task}`,
       context ? `Shared context: ${context}` : ""
     ].filter(Boolean).join("\n\n");
-    const output = await this.run(prompt, options, ["--output-schema", schemaPath]);
+    const output = await this.run(prompt, { ...options, role: "planner" }, ["--output-schema", schemaPath]);
     const parsed = JSON.parse(output.text) as DelegationPlan;
     if (!Array.isArray(parsed.tasks) || parsed.tasks.length === 0 || parsed.tasks.length > 8 || (requestedCount && parsed.tasks.length !== requestedCount)) {
       throw new Error("Codex returned an invalid delegation plan (expected one to eight tasks).");
@@ -38,7 +38,7 @@ export class CodexCliProvider {
   }
 
   async run(prompt: string, options: CodexRunOptions, extraArgs: string[] = []): Promise<CodexRunResult> {
-    const sandbox = options.role === "worker" || options.role === "sub-worker" ? "workspace-write" : "read-only";
+    const sandbox = options.role === "planner" ? "read-only" : "workspace-write";
     const args = [
       "exec", "--json", "--sandbox", sandbox,
       "--model", options.model,
@@ -96,6 +96,7 @@ export class CodexCliProvider {
 
   async resume(sessionId: string, prompt: string, options: CodexRunOptions): Promise<CodexRunResult> {
     const args = ["exec", "resume", "--json", "--model", options.model,
+      "-c", 'sandbox_mode="workspace-write"',
       "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`, "-c", "agents.enabled=false", sessionId, prompt];
     return this.runWithArgs(args, options);
   }

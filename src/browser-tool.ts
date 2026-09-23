@@ -1,4 +1,5 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
@@ -15,7 +16,7 @@ export type BrowserInput = {
 
 export type BrowserResult = { url: string; title: string; snapshot: string; screenshotPath?: string };
 
-/** One isolated, non-persistent Chromium context for the coordinator session. */
+/** One visible, isolated Playwright browser context for the coordinator session. */
 export class CoordinatorBrowser {
   private browser?: Browser;
   private context?: BrowserContext;
@@ -85,22 +86,45 @@ export class CoordinatorBrowser {
 
   private async getPage(): Promise<Page> {
     if (this.page && !this.page.isClosed()) return this.page;
-    const attempts = [
-      { name: "bundled Chromium", options: { headless: true } },
-      { name: "Microsoft Edge", options: { headless: true, channel: "msedge" as const } },
-      { name: "Google Chrome", options: { headless: true, channel: "chrome" as const } }
-    ];
+    const executablePath = chromium.executablePath();
     const failures: string[] = [];
-    for (const attempt of attempts) {
+    if (existsSync(executablePath)) {
       try {
-        this.browser = await chromium.launch(attempt.options);
-        break;
+        this.browser = await chromium.launch({ executablePath, headless: false });
       } catch (error) {
-        failures.push(`${attempt.name}: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+        failures.push(`Playwright Chromium at ${executablePath}: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+      }
+    } else {
+      failures.push(`Playwright Chromium is missing at ${executablePath}`);
+    }
+    if (!this.browser) {
+      try {
+        this.browser = await chromium.launch({ channel: "msedge", headless: false });
+      } catch (error) {
+        failures.push(`Microsoft Edge through Playwright: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
       }
     }
-    if (!this.browser) throw new Error(`No Chromium-compatible browser could launch. Run "npx playwright install chromium". ${failures.join("; ")}`);
+    if (!this.browser) throw new Error(`Could not launch a visible Playwright browser. Install Chromium with "playwright install chromium". ${failures.join("; ")}`);
     this.context = await this.browser.newContext({ acceptDownloads: false });
+    await this.context.addInitScript(() => {
+      const showNotice = () => {
+        if (!document.body || document.getElementById("solar-harness-browser-notice")) return;
+        const notice = document.createElement("div");
+        notice.id = "solar-harness-browser-notice";
+        notice.textContent = "Solar Harness is controlling the browser";
+        notice.setAttribute("role", "status");
+        Object.assign(notice.style, {
+          position: "fixed", top: "8px", right: "8px", zIndex: "2147483647",
+          background: "#1f2937", color: "#fff", padding: "8px 12px",
+          border: "2px solid #f59e0b", borderRadius: "8px",
+          font: "600 13px system-ui, sans-serif", boxShadow: "0 2px 12px #0008",
+          pointerEvents: "none"
+        });
+        document.body.appendChild(notice);
+      };
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", showNotice, { once: true });
+      else showNotice();
+    });
     this.page = await this.context.newPage();
     this.page.setDefaultTimeout(10_000);
     return this.page;

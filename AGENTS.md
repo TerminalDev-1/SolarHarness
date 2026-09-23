@@ -3,21 +3,22 @@
 ## Roles
 
 - Solar is the main coordinator. It owns conversation continuity, clarification,
-  planning, delegation approval, worker orchestration, and report synthesis.
+  direct implementation when the user chooses it, planning, delegation approval,
+  worker orchestration, and report synthesis.
 - Named workers inspect the workspace, edit files, run commands, validate changes,
   and report results to Solar.
 - A worker may request named sub-workers for independent parts of its assignment.
   Sub-workers report to their parent worker. Solar can inspect and control the
   complete tree; a worker can control only its own direct sub-workers.
 
-## Non-negotiable boundary
+## User-selected work mode
 
-Never let the main coordinator do the actual work. The main coordinator must
-delegate implementation to workers; only workers and sub-workers perform implementation.
-The coordinator remains read-only and must not edit files, run implementation
-commands, or bypass delegation approval. The browser tool may save requested
-screenshot artifacts under `.solarharness/screenshots`; that does not grant the
-coordinator source-editing access.
+The user decides whether Solar works directly or delegates. Ordinary requests
+are handled by Solar in the active workspace, including implementation and
+validation. Solar proposes workers only when the user explicitly asks for
+agents, workers, or delegation, or invokes `/delegate`. Delegated plans still
+follow the review or auto-approval flow. Planning runs read-only; direct Solar
+work and workers run with workspace-write access.
 
 ## Runtime behavior
 
@@ -44,12 +45,13 @@ coordinator source-editing access.
   future worker plans from natural-language conversation. It changes the same
   harness-level state as `/auto-approve on|off` and never bypasses `/new`.
 - `browser` lets Solar inspect and interact with web pages through a separate,
-  non-persistent Playwright Chromium context. Launch tries bundled Chromium,
-  then installed Microsoft Edge and Google Chrome. Browser actions return the
+  non-persistent, visible Playwright browser context. Launch first resolves the
+  Playwright Chromium executable, then falls back to Microsoft Edge through
+  Playwright if that executable fails. It displays a "Solar Harness is controlling
+  the browser" notice inside the page. Browser actions return the
   page URL, title, and accessibility snapshot to the same coordinator session;
   `screenshot` also saves a PNG under `.solarharness/screenshots` in the
-  workspace and returns its path. Solar may browse for research but must still
-  delegate project implementation to workers. The browser context closes when
+  workspace and returns its path. The browser context closes when
   the coordinator session resets.
 - Worker plans require user review by default. `/auto-approve on` is the user's
   standing approval for subsequent plans to launch immediately; `/auto-approve
