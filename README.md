@@ -5,10 +5,11 @@
 
 **First committed:** 20 September 2026.
 
-SolarHarness is a terminal-native coding workspace. You decide whether Solar
-handles a task directly or delegates it to named sub-agents. Delegation plans are
-reviewed before launch unless auto-approve is enabled. Sub-agents can create named
-Light-pinned sub-delegates for independent scopes.
+SolarHarness is a terminal-native coding workspace. Solar handles ordinary tasks
+itself without asking about delegation. Sub-agents are used only when you ask
+Solar to delegate. Delegation plans are reviewed before launch unless
+auto-approve is enabled. Sub-agents can create named Light-pinned sub-delegates
+for independent scopes.
 
 ## What it can do
 
@@ -25,14 +26,14 @@ Light-pinned sub-delegates for independent scopes.
   their reports. Solar controls the full tree; each sub-agent controls its children.
 - Let every sub-agent create nested directories and files recursively, run relevant
   commands, validate its own assignment, and return a concise report.
-- Give the main agent, sub-agents, and sub-delegates workspace-write access for
+- Give Solar, sub-agents, and sub-delegates workspace-write access for
   implementation; keep delegation planning read-only.
 - Let Solar browse in a windowed Playwright browser with a blue control tint and
   notice, and save full-page screenshots. The window remains open after a task;
   Playwright tries managed Chromium first, then Microsoft Edge if needed.
 - Present every proposed sub-agent separately so tasks can be accepted or rejected,
   or allow `/auto-approve on` to launch future plans without pausing.
-- Retain main agent context across user turns, planning, sub-agent execution, and
+- Retain Solar's context across user turns, planning, sub-agent execution, and
   final report synthesis.
 - Start a genuinely clean session with `/new`, including clearing old sub-agent
   records and deleting all contents of the `test` workspace.
@@ -110,7 +111,7 @@ npm run dev -- chat --model gpt-6-luna --reasoning max
 ## Delegation workflow
 
 1. Ask Solar to delegate a task, or use `/delegate` after describing it.
-2. Solar keeps talking with you in the same main agent session and asks a
+2. Solar keeps talking with you in the same session and asks a
    question only when a missing answer would materially affect the work.
 3. Solar proposes up to eight independent tasks.
 4. Review the plan before launch:
@@ -145,12 +146,12 @@ npm run dev -- chat --model gpt-6-luna --reasoning max
 | `/delegate` | Asks Solar to prepare a sub-agent plan from the current brief. You can also request delegation in natural language. |
 | `/quit` or `/exit` | Closes SolarHarness. |
 
-Solar also has the registered `adjust-sub-effort-level` main agent tool. This
+Solar also has the registered `adjust-sub-effort-level` tool. This
 means you can say something like “set Forge to max effort” instead of
 typing the explicit `/agent` form. The harness validates the sub-agent ID and effort
 before applying the adjustment.
 
-The main agent also has a registered `set-auto-permissions` tool, so a natural
+Solar also has a registered `set-auto-permissions` tool, so a natural
 request such as “turn auto permissions on” updates the same state as
 `/auto-approve on`. This only pre-approves future sub-agent plans; it cannot bypass
 the explicit `/new` workspace-deletion confirmation.
@@ -165,7 +166,7 @@ the explicit `/new` workspace-deletion confirmation.
 - `/new` defaults to **No**, explains both context and folder deletion, and shows
   the exact workspace path before anything destructive happens.
 - Confirming `/new` aborts active sub-agents, clears their records, resets the
-  main agent transcript and Codex session ID, deletes every entry inside the
+  Solar transcript and Codex session ID, deletes every entry inside the
   validated `test` directory, recreates it when necessary, and starts there.
 - Generated `.solarharness` schemas and `test/agent-*` experiment output are
   excluded from source control.
@@ -173,7 +174,7 @@ the explicit `/new` workspace-deletion confirmation.
 ## Architecture
 
 SolarHarness invokes `codex exec --json` and consumes its JSONL event stream. The
-main agent session is stored and resumed between conversational turns and
+Solar session is stored and resumed between conversational turns and
 after sub-agent synthesis. Planning uses a constrained JSON schema, and a plan may
 contain one to eight independent tasks.
 

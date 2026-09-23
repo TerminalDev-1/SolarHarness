@@ -8,6 +8,7 @@ import { actionStatus, activityDetail, initialActivity } from "../dist/activity.
 import { SolarBrowser } from "../dist/browser-tool.js";
 import { CodexCliProvider, requestedSubAgentCount } from "../dist/codex-provider.js";
 import { SolarHarness } from "../dist/harness.js";
+import { SOLAR_SYSTEM_PROMPT } from "../dist/system-prompt.js";
 
 test("resetIntoTestWorkspace clears contents but keeps the test directory", async () => {
   const root = await mkdtemp(join(tmpdir(), "solar-harness-reset-"));
@@ -49,13 +50,34 @@ test("the main agent tool can turn auto permissions on and off", async () => {
 
 test("only the user's explicit request enables sub-agent delegation", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
-  harness.provider.run = async () => ({ text: "I finished the change.\nSOLAR_STATE: READY", sessionId: "direct-session" });
-  harness.provider.resume = async () => ({ text: "I can prepare sub-agents.\nSOLAR_STATE: READY", sessionId: "direct-session" });
+  const prompts = [];
+  harness.provider.run = async prompt => {
+    prompts.push(prompt);
+    return { text: "I finished the change.\nSOLAR_STATE: READY", sessionId: "direct-session" };
+  };
+  harness.provider.resume = async (_sessionId, prompt) => {
+    prompts.push(prompt);
+    return { text: "I can prepare sub-agents.\nSOLAR_STATE: READY", sessionId: "direct-session" };
+  };
 
   assert.equal((await harness.converse("Fix the parser directly.")).readyToDelegate, false);
+  assert.match(prompts[0], /You are Solar, the main agent/);
+  assert.match(prompts[0], /Do not ask whether the user wants delegation/);
+  assert.match(prompts[0], /Work alone/);
   assert.equal((await harness.converse("Assign 2 agents to review it.")).readyToDelegate, true);
+  assert.match(prompts[1], /honoring any requested agent count/);
+  assert.equal((await harness.converse("I want 2 agents to review another file.")).readyToDelegate, true);
   assert.equal((await harness.converse("Do not delegate the follow-up.")).readyToDelegate, false);
   assert.equal((await harness.converse("I decide when I want to delegate.")).readyToDelegate, false);
+  await harness.tools.call("set-auto-permissions", { enabled: true });
+  assert.equal((await harness.converse("Fix another parser bug.")).readyToDelegate, false);
+});
+
+test("Solar's policy requires direct work until the user explicitly requests delegation", () => {
+  assert.match(SOLAR_SYSTEM_PROMPT, /^You are Solar,/);
+  assert.match(SOLAR_SYSTEM_PROMPT, /Work alone by default/);
+  assert.match(SOLAR_SYSTEM_PROMPT, /Do not ask whether the user wants delegation or how many agents/);
+  assert.match(SOLAR_SYSTEM_PROMPT, /choose the smallest useful number/);
 });
 
 test("a control-only main agent turn still returns a visible reply", async () => {
@@ -242,6 +264,8 @@ test("an explicit agent count constrains the sub-agent plan", async () => {
   const root = await mkdtemp(join(tmpdir(), "solar-plan-count-"));
   try {
     assert.equal(requestedSubAgentCount("assign 8 agents to this task"), 8);
+    assert.equal(requestedSubAgentCount("I want 2 agents to review this"), 2);
+    assert.equal(requestedSubAgentCount("Delegate to 3 sub-agents"), 3);
     const provider = new CodexCliProvider();
     const tasks = Array.from({ length: 8 }, (_, index) => ({ name: `Agent${index + 1}`, title: `Task ${index + 1}`, instructions: "Work", context: "" }));
     provider.run = async () => ({ text: JSON.stringify({ summary: "Eight sub-agents", tasks }) });

@@ -191,7 +191,7 @@ export class AgentManager {
           "Your reasoning is pinned to Light unless Solar explicitly authorizes another level."
         ];
     return [
-      `You are ${record.name}, a ${role} launched by Solar Harness. You are not the Solar Harness Agent.`,
+      `You are ${record.name}, a ${role} launched by Solar Harness. You are not Solar.`,
       "Main agent-only constraints do not apply to you. Use your workspace tools to inspect, create, edit, and validate files inside the current workspace.",
       ...delegation,
       `Your writable working directory is: ${this.options.cwd}`,

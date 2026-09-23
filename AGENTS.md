@@ -2,32 +2,34 @@
 
 ## Roles
 
-- The Solar Harness Agent is the main agent. It owns conversation continuity,
+- Solar is the main agent. It owns conversation continuity,
   clarification, direct implementation, delegation approval, orchestration, and
   report synthesis.
 - Named sub-agents inspect the workspace, edit files, run commands, validate
-  changes, and report results to the main agent.
+  changes, and report results to Solar.
 - A sub-agent may request named sub-delegates for independent parts of its
-  assignment. Sub-delegates report to their parent sub-agent. The main agent can
+  assignment. Sub-delegates report to their parent sub-agent. Solar can
   inspect and control the complete tree; a sub-agent controls only its direct
   sub-delegates.
 
 ## User-selected work mode
 
-The user decides whether the main agent works directly or delegates. Ordinary
-requests are handled directly in the active workspace, including implementation
-and validation. The main agent proposes sub-agents only when the user explicitly
-asks for agents or delegation, or invokes `/delegate`. Plans still follow the
-review or auto-approval flow. Planning runs read-only; the main agent,
+Solar handles ordinary requests alone in the active workspace, including
+implementation and validation. Solar must not ask whether to delegate or how many
+agents to use for an ordinary request. Only an explicit user request for agents
+or delegation, or `/delegate`, starts a sub-agent plan. When the user specifies
+an agent count, honor it; otherwise Solar chooses the smallest useful number
+and asks about the count only if its absence materially changes the work. Plans
+still follow the review or auto-approval flow. Planning runs read-only; Solar,
 sub-agents, and sub-delegates run with workspace-write access.
 
 ## Runtime behavior
 
-- The main agent retains one Codex session across turns and sub-agent synthesis.
+- Solar retains one Codex session across turns and sub-agent synthesis.
 - Solar creates and runs inside the project `test` workspace by default.
 - `/new` asks for confirmation with No selected by default and explicitly warns
   about both kinds of deletion. Only selecting Yes and pressing Enter discards
-  the main agent session and transcript, stops and clears agent records,
+  Solar's session and transcript, stops and clears agent records,
   deletes every entry inside the `test` workspace, recreates it if needed, and
   activates the empty folder for the fresh session.
 - Up to eight agent processes may run concurrently across the full tree.
@@ -50,10 +52,10 @@ sub-agents, and sub-delegates run with workspace-write access.
   Playwright Chromium executable, then falls back to Microsoft Edge through
   Playwright if that executable fails. It displays a "Solar Harness is controlling
   the browser" notice inside the page. Browser actions return the URL, title,
-  and accessibility snapshot to the same main agent session;
+  and accessibility snapshot to the same Solar session;
   `screenshot` also saves a PNG under `.solarharness/screenshots` in the
   workspace and returns its path. The browser context closes when
-  the main agent session resets. The browser stays open after a task and closes
+  Solar's session resets. The browser stays open after a task and closes
   only when the user asks, the session resets, or the app exits. Launch it in a
   compact windowed frame with a blue page tint and control notice.
 - For requests to search YouTube, opening its home page is incomplete. The host
@@ -69,10 +71,10 @@ sub-agents, and sub-delegates run with workspace-write access.
 ## Model defaults
 
 The default is GPT-6 Luna with Light reasoning. Light is translated to the
-Codex CLI's `low` reasoning setting. The main agent and sub-agents inherit the
+Codex CLI's `low` reasoning setting. Solar and sub-agents inherit the
 selected default. Every new sub-delegate starts pinned to Light regardless of
 its parent's setting. A sub-agent cannot raise its sub-delegate above Light;
-only an explicit main-agent adjustment can authorize that increase.
+only an explicit adjustment by Solar can authorize that increase.
 
 ## Documentation contract
 

@@ -19,7 +19,7 @@ export class CodexCliProvider {
     const schemaPath = await this.writePlanSchema(options.cwd, requestedCount);
     const prompt = [
       SOLAR_SYSTEM_PROMPT,
-      "Act as the Solar Harness Agent preparing a delegation plan. Do not implement the request during planning.",
+      "Act as Solar preparing a delegation plan. Do not implement the request during planning.",
       "Return only the requested delegation plan. Do not inspect the workspace, invoke tools, create subagents, or claim that any task has already been completed.",
       "Break the request into the smallest useful set of independent, implementation-ready sub-agent tasks. Choose the sub-agent count dynamically: use one when sufficient, add more only for genuinely parallel scopes, and never treat eight as a target. Use no more than eight tasks.",
       requestedCount ? `The user explicitly requested ${requestedCount} agents. Return exactly ${requestedCount} distinct sub-agent tasks and give each a useful, non-overlapping assignment.` : "",
@@ -232,6 +232,6 @@ function commandActivity(item: CodexEvent["item"]): string | undefined {
 }
 
 export function requestedSubAgentCount(request: string): number | undefined {
-  const match = request.match(/\b(?:assign|use|launch)\s+([1-8])\s+(?:agents|sub-agents|workers)\b/i);
+  const match = request.match(/\b(?:assign|use|launch|spawn|want|like|to)\s+([1-8])\s+(?:agents|sub-agents|workers)\b/i);
   return match ? Number(match[1]) : undefined;
 }

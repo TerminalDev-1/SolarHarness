@@ -206,7 +206,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       setBrief([]);
       setPendingPlan(null);
       setPendingEffort(null);
-      setConversation([{ role: "solar", text: `Started a completely fresh Solar Harness Agent session. The test workspace was cleared and is now empty: ${nextWorkspace}` }]);
+      setConversation([{ role: "solar", text: `Started a completely fresh Solar session. The test workspace was cleared and is now empty: ${nextWorkspace}` }]);
     } catch (error) {
       addMessage({ role: "error", text: `Unable to start the test workspace: ${error instanceof Error ? error.message : String(error)}` });
     }
@@ -221,7 +221,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     if (line === "/quit" || line === "/exit") { exit(); return; }
 
     addMessage({ role: "user", text: line });
-    setActivityLog(["Sending your request to the Solar Harness Agent"]);
+    setActivityLog(["Sending your request to Solar"]);
     setCurrentActivity(initialActivity(line));
     setBusy(true);
     setPhase(line === "/delegate" ? "planning" : line.startsWith("/agent ") ? "updating" : "thinking");
@@ -399,7 +399,7 @@ function NewSessionConfirmation({ pending, workspace }: { pending: PendingNew; w
   return (
     <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.warning} paddingX={1}>
       <Text bold color={theme.warning}>Start a completely fresh session?</Text>
-      <Text color={theme.secondary}>This discards the Solar Harness Agent conversation, stops all sub-agents, and clears their records.</Text>
+      <Text color={theme.secondary}>This discards the Solar conversation, stops all sub-agents, and clears their records.</Text>
       <Text color={theme.error}>Every file and folder inside this test workspace will also be deleted:</Text>
       <Text color={theme.primary}>{workspace}</Text>
       <Text color={theme.subtle}>The empty test folder is kept and becomes the new session workspace. This cannot be undone by Solar Harness.</Text>
