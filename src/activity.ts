@@ -21,6 +21,8 @@ export function activityDetail(event: string): string | undefined {
   if (sourceRead) return `reading ${sourceRead[1]}`;
   const search = event.match(/^Browser: searching YouTube for (.+)$/i);
   if (search) return `searching YouTube for ${search[1]}`;
+  const visibleSearch = event.match(/^Browser: search (.+)$/i);
+  if (visibleSearch) return `searching in the browser for ${visibleSearch[1]}`;
   const open = event.match(/^Browser: open (\S+)/i);
   if (open) {
     try {

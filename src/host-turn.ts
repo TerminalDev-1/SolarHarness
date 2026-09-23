@@ -14,7 +14,7 @@ export async function writeHostTurnSchema(cwd: string, requireTool: boolean): Pr
     required: ["kind", "tool", "input", "reply"],
     properties: {
       kind: { type: "string", enum: requireTool ? ["tool"] : ["tool", "answer"] },
-      tool: { type: "string", enum: [...HOST_TOOLS, "none"] },
+      tool: { type: "string", enum: requireTool ? [...HOST_TOOLS] : [...HOST_TOOLS, "none"] },
       input: { type: "string" },
       reply: { type: "string" }
     }

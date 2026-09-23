@@ -61,7 +61,8 @@ sub-agents, and sub-delegates run with workspace-write access.
   asks it to continue the task before returning a failure to the user.
 - `browser` is the visible interactive Playwright tool for website and web app
   testing, including local HTML, Next.js, and Three.js apps. It opens pages,
-  moves a visible blue Solar cursor, clicks selectors or viewport coordinates,
+  searches Google or Bing with a visible results page, moves a visible blue
+  Solar cursor, clicks selectors, named buttons or links, or viewport coordinates,
   fills fields, presses keys, scrolls, navigates, and captures screenshots.
   Its context persists across tasks until the user closes it, resets the session,
   or exits the app. Launch first resolves the Playwright Chromium executable,
@@ -71,6 +72,8 @@ sub-agents, and sub-delegates run with workspace-write access.
   and accessibility snapshot to the same Solar session; `screenshot` also saves
   a PNG under `.solarharness/screenshots` in the workspace and returns its path.
   Launch it in a compact windowed frame with a blue page tint and control notice.
+  Search and page navigation handle supported Google and Bing consent prompts;
+  if results remain blocked, report the failure instead of claiming a search.
   For a game test, starting the game alone is incomplete: Solar must use another
   browser mouse or key action and inspect the resulting page. A user pressing a
   key in the visible window does not count as a Solar tool action.

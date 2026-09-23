@@ -158,6 +158,7 @@ test("structured CLI turns require a host tool and parse its result", async () =
     const required = JSON.parse(await readFile(requiredPath, "utf8"));
     assert.deepEqual(required.properties.kind.enum, ["tool"]);
     assert.match(required.properties.tool.enum.join(" "), /browser/);
+    assert.ok(!required.properties.tool.enum.includes("none"));
     const tool = decodeHostTurn(JSON.stringify({ kind: "tool", tool: "browser", input: '{"action":"open","url":"http://localhost:8000"}', reply: "" }));
     assert.deepEqual(parseHostToolCall(tool)?.input, { action: "open", url: "http://localhost:8000" });
     const answer = decodeHostTurn(JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "Game tested.\nSOLAR_STATE: DISCOVER" }));
@@ -165,6 +166,32 @@ test("structured CLI turns require a host tool and parse its result", async () =
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("invalid tool=none response from a required browser turn is retried", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const calls = [];
+  harness.browser.execute = async input => {
+    calls.push(input);
+    return { url: "https://www.google.com/search?q=mrbeast", title: "MrBeast results", snapshot: '- heading "MrBeast"' };
+  };
+  harness.provider.run = async () => ({
+    text: JSON.stringify({ kind: "tool", tool: "none", input: "", reply: 'SOLAR_TOOL: browser {"action":"open","url":"https://www.google.com/search?q=mrbeast"}' }),
+    sessionId: "invalid-tool-session"
+  });
+  let resumes = 0;
+  harness.provider.resume = async (_sessionId, prompt) => {
+    resumes++;
+    if (resumes === 1) {
+      assert.match(prompt, /invalid host tool name/);
+      return { text: JSON.stringify({ kind: "tool", tool: "browser", input: '{"action":"open","url":"https://www.google.com/search?q=mrbeast"}', reply: "" }), sessionId: "invalid-tool-session" };
+    }
+    return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "I opened MrBeast search results." }), sessionId: "invalid-tool-session" };
+  };
+  const result = await harness.converse("open the browser and search mrbeast");
+  assert.equal(resumes, 2);
+  assert.deepEqual(calls, [{ action: "open", url: "https://www.google.com/search?q=mrbeast" }]);
+  assert.match(result.reply, /MrBeast search results/);
 });
 
 test("browser turns pass the required output schema to the real CLI boundary", async () => {
@@ -260,6 +287,7 @@ test("activity text describes browser actions rather than generic thinking", () 
   assert.equal(initialActivity("Open YouTube and search MrBeast"), "opening YouTube");
   assert.equal(activityDetail("Browser: open https://www.youtube.com"), "opening YouTube");
   assert.equal(activityDetail("Browser: searching YouTube for MrBeast"), "searching YouTube for MrBeast");
+  assert.equal(activityDetail("Browser: search MrBeast"), "searching in the browser for MrBeast");
   assert.equal(activityDetail("Browser: move 300,200"), "moving Solar's cursor to 300, 200");
   assert.equal(activityDetail("Browser: press ArrowRight"), "pressing ArrowRight in the browser");
   assert.equal(actionStatus("thinking", initialActivity("Open YouTube and search MrBeast")), "Thinking — opening YouTube");
@@ -484,6 +512,27 @@ test("YouTube search uses the requested query in the browser URL", async () => {
   const result = await browser.execute({ action: "youtube_search", value: "MrBeast official" });
   assert.equal(result.url, "https://www.youtube.com/results?search_query=MrBeast%20official");
   assert.match(result.snapshot, /Search results/);
+});
+
+test("visible browser search uses the requested query and named button clicks", async () => {
+  const browser = new SolarBrowser();
+  let url = "about:blank";
+  let clicks = 0;
+  const button = { count: async () => 1, scrollIntoViewIfNeeded: async () => {}, boundingBox: async () => null, click: async () => { clicks++; } };
+  browser.page = {
+    isClosed: () => false,
+    url: () => url,
+    goto: async next => { url = next; },
+    title: async () => "MrBeast results",
+    getByRole: () => ({ first: () => ({ ...button, isVisible: async () => false }) }),
+    locator: () => ({ ariaSnapshot: async () => '- heading "MrBeast results"' })
+  };
+  browser.getPage = async () => browser.page;
+  const result = await browser.execute({ action: "search", query: "MrBeast" });
+  assert.equal(result.url, "https://www.google.com/search?q=MrBeast");
+  assert.match(result.snapshot, /MrBeast results/);
+  await browser.execute({ action: "click", element: "Reject all" });
+  assert.equal(clicks, 1);
 });
 
 test("YouTube search rejects consent before returning the results", async () => {

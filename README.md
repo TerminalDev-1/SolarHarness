@@ -32,7 +32,8 @@ for independent scopes.
   implementation; keep delegation planning read-only.
 - Let Solar test local HTML, Next.js, and Three.js apps in a windowed Playwright
   browser with a blue control tint, notice, and visible Solar cursor. It can
-  move its cursor, click page elements or coordinates, press keys, and
+  search visibly, handle supported consent prompts, move its cursor, click page
+  elements or coordinates, press keys, and
   save full-page screenshots. The window remains open after a task; Playwright
   tries managed Chromium first, then Microsoft Edge if needed.
 - Search and read sources through the separate `web_search_headless` tool. It

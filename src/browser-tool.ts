@@ -5,9 +5,12 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
 export type BrowserInput = {
-  action: "open" | "youtube_search" | "snapshot" | "screenshot" | "move" | "click" | "fill" | "press" | "scroll" | "back" | "forward" | "close";
+  action: "open" | "search" | "youtube_search" | "snapshot" | "screenshot" | "move" | "click" | "fill" | "press" | "scroll" | "back" | "forward" | "close";
   url?: string;
   selector?: string;
+  element?: string;
+  query?: string;
+  engine?: "google" | "bing";
   x?: number;
   y?: number;
   value?: string;
@@ -42,6 +45,23 @@ export class SolarBrowser {
       if (!(["http:", "https:"] as string[]).includes(url.protocol)) throw new Error("Only http and https URLs are supported.");
       const page = await this.getPage();
       await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await this.dismissSearchConsent(page);
+      return this.describe(page);
+    }
+    if (input.action === "search") {
+      const query = input.query?.trim();
+      if (!query) throw new Error("browser search requires a nonempty query.");
+      if (input.engine && input.engine !== "google" && input.engine !== "bing") throw new Error("browser search engine must be google or bing.");
+      const page = await this.getPage();
+      const engine = input.engine ?? "google";
+      await page.goto(`https://www.${engine}.com/search?q=${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await this.dismissSearchConsent(page);
+      if (!isSearchResultsPage(page.url(), query)) {
+        if (input.engine) throw new Error(`${engine} did not show search results for ${query} at ${page.url()}.`);
+        await page.goto(`https://www.bing.com/search?q=${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        await this.dismissSearchConsent(page);
+      }
+      if (!isSearchResultsPage(page.url(), query)) throw new Error(`No visible search results for ${query} at ${page.url()}.`);
       return this.describe(page);
     }
     if (!this.active || !this.page) throw new Error("Open a page before using the browser.");
@@ -68,8 +88,8 @@ export class SolarBrowser {
         await this.moveCursor(page, input.x!, input.y!);
         break;
       case "click":
-        if (input.selector) {
-          const target = page.locator(input.selector);
+        if (input.selector || input.element) {
+          const target = input.selector ? page.locator(input.selector) : await this.namedElement(page, input.element!);
           await target.scrollIntoViewIfNeeded({ timeout: 10_000 });
           const bounds = await target.boundingBox();
           if (bounds) await this.moveCursor(page, bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
@@ -206,6 +226,29 @@ export class SolarBrowser {
     }, { x, y });
   }
 
+  private async namedElement(page: Page, name: string) {
+    const button = page.getByRole("button", { name, exact: true }).first();
+    if (await button.count()) return button;
+    const link = page.getByRole("link", { name, exact: true }).first();
+    if (await link.count()) return link;
+    throw new Error(`No visible button or link named "${name}" was found.`);
+  }
+
+  private async dismissSearchConsent(page: Page): Promise<void> {
+    const host = new URL(page.url()).hostname;
+    if (/(^|\.)(?:google\.com|consent\.google\.com)$/i.test(host)) {
+      const reject = page.getByRole("button", { name: /^(?:Reject all|Decline all)$/i }).first();
+      if (await reject.isVisible()) {
+        await reject.click({ timeout: 8_000 });
+        await reject.waitFor({ state: "hidden", timeout: 8_000 });
+      }
+    }
+    if (/(^|\.)bing\.com$/i.test(host)) {
+      const reject = page.getByRole("link", { name: /^Reject$/i }).first();
+      if (await reject.isVisible()) await reject.click({ timeout: 8_000 });
+    }
+  }
+
   private async dismissYouTubeConsent(page: Page): Promise<void> {
     const reject = page.getByRole("button", { name: /^(?:Reject all|Reject the use of cookies|Decline all|No thanks)/i }).first();
     try { await reject.waitFor({ state: "visible", timeout: 2_500 }); }
@@ -218,4 +261,13 @@ export class SolarBrowser {
     await reject.click({ timeout: 8_000 });
     await reject.waitFor({ state: "hidden", timeout: 8_000 });
   }
+}
+
+function isSearchResultsPage(url: string, query: string): boolean {
+  try {
+    const page = new URL(url);
+    return /(^|\.)(?:google|bing)\.com$/i.test(page.hostname)
+      && page.pathname === "/search"
+      && page.searchParams.get("q")?.toLowerCase() === query.toLowerCase();
+  } catch { return false; }
 }
