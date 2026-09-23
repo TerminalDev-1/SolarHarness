@@ -140,6 +140,28 @@ test("a YouTube search completes after opening the home page and always replies"
   assert.equal(result.readyToDelegate, false);
 });
 
+test("YouTube searches preserve the requested phrase across common word orders", async () => {
+  for (const [request, query] of [
+    ["Search YouTube for cat videos", "cat videos"],
+    ["Search for lo-fi hip hop on YouTube", "lo-fi hip hop"],
+    ["Open YouTube and search NASA Artemis", "NASA Artemis"],
+    ["On YouTube, search for Mr. Beast", "Mr. Beast"],
+    ["Search YouTube for C++ tutorials and open the first result", "C++ tutorials"]
+  ]) {
+    const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+    const actions = [];
+    harness.browser.execute = async input => {
+      actions.push(input);
+      const value = input.value ?? "";
+      return { url: input.action === "open" ? "https://www.youtube.com/" : `https://www.youtube.com/results?search_query=${encodeURIComponent(value)}`, title: "YouTube", snapshot: "Search results" };
+    };
+    harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"open","url":"https://www.youtube.com"}', sessionId: "search-session" });
+    harness.provider.resume = async () => ({ text: "Search complete.\nSOLAR_STATE: DISCOVER", sessionId: "search-session" });
+    await harness.converse(request);
+    assert.deepEqual(actions.slice(0, 2), [{ action: "open", url: "https://www.youtube.com" }, { action: "youtube_search", value: query }], request);
+  }
+});
+
 test("the browser stays open when the model asks to close it without user consent", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const actions = [];
@@ -180,7 +202,8 @@ test("YouTube search uses the requested query in the browser URL", async () => {
     url: () => url,
     goto: async next => { url = next; },
     title: async () => "YouTube",
-    getByText: () => ({ first: () => ({ waitFor: async () => { throw new Error("No consent dialog"); } }) }),
+    getByRole: () => ({ first: () => ({ waitFor: async () => { throw new Error("No consent dialog"); } }) }),
+    getByText: () => ({ first: () => ({ isVisible: async () => false }) }),
     locator: () => ({ ariaSnapshot: async () => "Search results" })
   };
   const result = await browser.execute({ action: "youtube_search", value: "MrBeast official" });
@@ -198,15 +221,14 @@ test("YouTube search rejects consent before returning the results", async () => 
     url: () => url,
     goto: async next => { url = next; },
     title: async () => "MrBeast - YouTube",
-    getByText: () => ({ first: () => ({
+    getByRole: () => ({ first: () => ({
       waitFor: async ({ state }) => {
         if (state === "visible" && !consentVisible) throw new Error("No dialog");
         if (state === "hidden" && consentVisible) throw new Error("Dialog still visible");
-      }
+      },
+      click: async () => { rejectionCount++; consentVisible = false; }
     }) }),
-    locator: selector => selector === "body"
-      ? { ariaSnapshot: async () => "MrBeast results" }
-      : { first: () => ({ count: async () => 1, evaluate: async () => { rejectionCount++; consentVisible = false; } }) }
+    locator: () => ({ ariaSnapshot: async () => "MrBeast results" })
   };
   const result = await browser.execute({ action: "youtube_search", value: "MrBeast" });
   assert.equal(rejectionCount, 1);

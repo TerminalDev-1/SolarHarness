@@ -160,12 +160,15 @@ export class SolarBrowser {
   }
 
   private async dismissYouTubeConsent(page: Page): Promise<void> {
-    const consent = page.getByText("Before you continue to YouTube").first();
-    try { await consent.waitFor({ state: "visible", timeout: 2_500 }); }
-    catch { return; }
-    const reject = page.locator('button[aria-label^="Reject the use of cookies"]').first();
-    if (!await reject.count()) throw new Error("YouTube opened a consent dialog that needs your attention.");
-    await reject.evaluate(button => (button as HTMLButtonElement).click());
-    await consent.waitFor({ state: "hidden", timeout: 8_000 });
+    const reject = page.getByRole("button", { name: /^(?:Reject all|Reject the use of cookies|Decline all|No thanks)/i }).first();
+    try { await reject.waitFor({ state: "visible", timeout: 2_500 }); }
+    catch {
+      if (await page.getByText("Before you continue to YouTube").first().isVisible()) {
+        throw new Error("YouTube opened a consent dialog that needs your attention.");
+      }
+      return;
+    }
+    await reject.click({ timeout: 8_000 });
+    await reject.waitFor({ state: "hidden", timeout: 8_000 });
   }
 }

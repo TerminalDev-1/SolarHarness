@@ -60,8 +60,10 @@ sub-agents, and sub-delegates run with workspace-write access.
   compact windowed frame with a blue page tint and control notice.
 - For requests to search YouTube, opening its home page is incomplete. The host
   runs `youtube_search` with the user's query and verifies the results URL before
-  reporting success. If YouTube shows a consent dialog, reject optional cookies
-  and wait for the dialog to close so the results are visible. Browser turns must
+  reporting success. Recognize common search word orders, including "search
+  YouTube for" and "search for ... on YouTube". If YouTube shows a consent dialog,
+  use its visible rejection button and wait for the dialog to close so the
+  results are visible. Browser turns must
   return a nonempty user-facing response,
   including when the model emits only a control line or the browser action fails.
 - Sub-agent plans require user review by default. `/auto-approve on` is the user's

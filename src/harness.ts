@@ -246,8 +246,17 @@ function browserCloseRequested(message: string): boolean {
 
 function youtubeSearchQuery(message: string): string | undefined {
   if (!/\byoutube\b/i.test(message)) return undefined;
-  const match = message.match(/\bsearch(?:\s+for)?\s+(.+?)(?=\s+on\s+youtube\b|\s+and\s+(?:open|click|play|watch)\b|[.!?]|$)/i);
-  return match?.[1]?.trim() || undefined;
+  const stop = "(?=\\s+and\\s+(?:open|click|play|watch)\\b|[.!?]\\s+(?:then|also|next|after|please)\\b|[.!?]$|$)";
+  const patterns = [
+    new RegExp(`\\bsearch\\s+(?:on\\s+)?youtube\\s+(?:for\\s+)?(.+?)${stop}`, "i"),
+    /\bsearch(?:\s+for)?\s+(.+?)\s+on\s+youtube\b/i,
+    new RegExp(`\\byoutube\\b[^.!?\\n]*?\\bsearch(?:\\s+for)?\\s+(.+?)${stop}`, "i")
+  ];
+  for (const pattern of patterns) {
+    const query = message.match(pattern)?.[1]?.trim();
+    if (query) return query;
+  }
+  return undefined;
 }
 
 function isYoutubeUrl(url: string): boolean {
