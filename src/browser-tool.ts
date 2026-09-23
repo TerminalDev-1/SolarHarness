@@ -5,14 +5,13 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
 export type BrowserInput = {
-  action: "open" | "youtube_search" | "web_search" | "snapshot" | "screenshot" | "click" | "fill" | "press" | "scroll" | "back" | "forward" | "close";
+  action: "open" | "youtube_search" | "snapshot" | "screenshot" | "click" | "fill" | "press" | "scroll" | "back" | "forward" | "close";
   url?: string;
   selector?: string;
   value?: string;
   key?: string;
   direction?: "up" | "down";
   fullPage?: boolean;
-  engine?: "google" | "bing";
 };
 
 export type BrowserResult = { url: string; title: string; snapshot: string; screenshotPath?: string };
@@ -41,23 +40,6 @@ export class SolarBrowser {
       if (!(["http:", "https:"] as string[]).includes(url.protocol)) throw new Error("Only http and https URLs are supported.");
       const page = await this.getPage();
       await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 30_000 });
-      return this.describe(page);
-    }
-    if (input.action === "web_search") {
-      const query = input.value?.trim();
-      if (!query) throw new Error("web_search requires a search query in value.");
-      const page = await this.getPage();
-      const engine = input.engine ?? "google";
-      if (engine !== "google" && engine !== "bing") throw new Error("web_search engine must be google or bing.");
-      const searchUrl = engine === "google" ? "https://www.google.com/search" : "https://www.bing.com/search";
-      await page.goto(`${searchUrl}?q=${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-      if (engine === "google") {
-        await this.dismissGoogleConsent(page);
-        if (new URL(page.url()).pathname.startsWith("/sorry") || /unusual traffic from your computer network/i.test(await page.locator("body").innerText())) {
-          await page.goto(`https://www.bing.com/search?q=${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-        }
-      }
-      if (/(^|\.)bing\.com$/i.test(new URL(page.url()).hostname)) await this.dismissBingConsent(page);
       return this.describe(page);
     }
     if (!this.active || !this.page) throw new Error("Open a page before using the browser.");
@@ -186,23 +168,6 @@ export class SolarBrowser {
       }
       return;
     }
-    await reject.click({ timeout: 8_000 });
-    await reject.waitFor({ state: "hidden", timeout: 8_000 });
-  }
-
-  private async dismissGoogleConsent(page: Page): Promise<void> {
-    if (!/(^|\.)consent\.google\.com$/i.test(new URL(page.url()).hostname)) return;
-    const reject = page.getByRole("button", { name: /^(?:Reject all|Decline all)/i }).first();
-    try { await reject.waitFor({ state: "visible", timeout: 5_000 }); }
-    catch { throw new Error("Google opened a consent form that needs your attention."); }
-    await reject.click({ timeout: 8_000 });
-    await page.waitForURL(url => !/(^|\.)consent\.google\.com$/i.test(url.hostname), { timeout: 10_000 });
-  }
-
-  private async dismissBingConsent(page: Page): Promise<void> {
-    const reject = page.getByRole("link", { name: /^Reject$/i }).first();
-    try { await reject.waitFor({ state: "visible", timeout: 5_000 }); }
-    catch { return; }
     await reject.click({ timeout: 8_000 });
     await reject.waitFor({ state: "hidden", timeout: 8_000 });
   }

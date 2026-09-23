@@ -47,24 +47,24 @@ sub-agents, and sub-delegates run with workspace-write access.
 - `set-auto-permissions` lets Solar enable or disable automatic approval of
   future sub-agent plans from natural-language conversation. It changes the same
   harness-level state as `/auto-approve on|off` and never bypasses `/new`.
-- `browser` lets Solar inspect and interact with web pages through a separate,
-  non-persistent, visible Playwright browser context. Launch first resolves the
-  Playwright Chromium executable, then falls back to Microsoft Edge through
+- `browser` is the visible interactive Playwright tool for website and web app
+  testing, including local HTML, Next.js, and Three.js apps. It opens pages,
+  clicks, fills fields, presses keys, scrolls, navigates, and captures screenshots.
+  Its context persists across tasks until the user closes it, resets the session,
+  or exits the app. Launch first resolves the Playwright Chromium executable,
+  then falls back to Microsoft Edge through
   Playwright if that executable fails. It displays a "Solar Harness is controlling
   the browser" notice inside the page. Browser actions return the URL, title,
-  and accessibility snapshot to the same Solar session;
-  `screenshot` also saves a PNG under `.solarharness/screenshots` in the
-  workspace and returns its path. The browser context closes when
-  Solar's session resets. The browser stays open after a task and closes
-  only when the user asks, the session resets, or the app exits. Launch it in a
-  compact windowed frame with a blue page tint and control notice.
-- `web_search` searches Google from any current page and falls back to Bing if
-  Google presents an automation-verification page. Solar can then open and
-  inspect source pages in the same visible browser session. Reject a visible
-  Bing cookie prompt before returning results. A completed task
-  leaves the browser open for the next turn; only an explicit close request,
-  session reset, or app exit closes it. If search results are unavailable, report
-  that rather than claiming research was completed.
+  and accessibility snapshot to the same Solar session; `screenshot` also saves
+  a PNG under `.solarharness/screenshots` in the workspace and returns its path.
+  Launch it in a compact windowed frame with a blue page tint and control notice.
+- `web_search_headless` handles ordinary web research in a separate, short-lived
+  headless Playwright session. `search` returns titles, source URLs, and snippets;
+  `read` returns page text for a source URL. It tries Google first, falls back to
+  Bing if Google blocks automation, rejects supported consent prompts, and closes
+  its own session after each operation. It never opens or closes the visible
+  `browser`. The old `browser` `web_search` action is retired. If results are
+  unavailable, report that rather than claiming research was completed.
 - For requests to search YouTube, opening its home page is incomplete. The host
   runs `youtube_search` with the user's query and verifies the results URL before
   reporting success. Recognize common search word orders, including "search

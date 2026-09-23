@@ -15,8 +15,10 @@ export function initialActivity(request: string): string {
 }
 
 export function activityDetail(event: string): string | undefined {
-  const webSearch = event.match(/^Browser: searching web for (.+)$/i);
-  if (webSearch) return `searching the web for ${webSearch[1]}`;
+  const headlessSearch = event.match(/^Web search: searching for (.+)$/i);
+  if (headlessSearch) return `searching the web for ${headlessSearch[1]}`;
+  const sourceRead = event.match(/^Web search: reading (.+)$/i);
+  if (sourceRead) return `reading ${sourceRead[1]}`;
   const search = event.match(/^Browser: searching YouTube for (.+)$/i);
   if (search) return `searching YouTube for ${search[1]}`;
   const open = event.match(/^Browser: open (\S+)/i);

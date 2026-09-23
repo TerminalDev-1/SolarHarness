@@ -1,5 +1,6 @@
 import type { AgentRecord, AgentTask, ReasoningEffort } from "./types.js";
 import type { BrowserInput, BrowserResult } from "./browser-tool.js";
+import type { WebSearchHeadlessInput, WebSearchHeadlessResult } from "./web-search-headless.js";
 
 export type ToolDefinition<TInput, TResult> = {
   name: string;
@@ -38,6 +39,7 @@ export function registerHarnessTools(dependencies: {
   setReasoning: (agentId: string, reasoning: ReasoningEffort) => AgentRecord;
   setAutoPermissions: (enabled: boolean) => AutoPermissionsState;
   browser: (input: BrowserInput) => Promise<BrowserResult>;
+  webSearchHeadless: (input: WebSearchHeadlessInput) => Promise<WebSearchHeadlessResult>;
 }): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register<SpawnSubAgentInput, AgentRecord>({
@@ -72,8 +74,13 @@ export function registerHarnessTools(dependencies: {
   });
   registry.register<BrowserInput, BrowserResult>({
     name: "browser",
-    description: "Browse web pages in a visible Playwright session: open, search the web or YouTube, snapshot, screenshot, click, fill, press, scroll, back, forward, or close.",
+    description: "Interact with a visible Playwright browser for web app testing and page tasks: open, snapshot, screenshot, click, fill, press, scroll, back, forward, YouTube search, or close.",
     execute: dependencies.browser
+  });
+  registry.register<WebSearchHeadlessInput, WebSearchHeadlessResult>({
+    name: "web_search_headless",
+    description: "Search Google headlessly with Bing fallback, returning source titles, URLs, and snippets; read source pages headlessly by URL.",
+    execute: dependencies.webSearchHeadless
   });
   return registry;
 }

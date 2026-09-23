@@ -28,11 +28,12 @@ for independent scopes.
   commands, validate its own assignment, and return a concise report.
 - Give Solar, sub-agents, and sub-delegates workspace-write access for
   implementation; keep delegation planning read-only.
-- Let Solar browse in a windowed Playwright browser with a blue control tint and
-  notice, and save full-page screenshots. The window remains open after a task;
-  Playwright tries managed Chromium first, then Microsoft Edge if needed.
-- Search the web through Google, with Bing as a fallback when Google blocks
-  automation, then open and inspect sources in the same visible browser session.
+- Let Solar test local HTML, Next.js, and Three.js apps in a windowed Playwright
+  browser with a blue control tint and notice. It can interact with pages and
+  save full-page screenshots. The window remains open after a task; Playwright
+  tries managed Chromium first, then Microsoft Edge if needed.
+- Search and read sources through the separate `web_search_headless` tool. It
+  tries Google first and falls back to Bing when Google blocks automation.
 - Present every proposed sub-agent separately so tasks can be accepted or rejected,
   or allow `/auto-approve on` to launch future plans without pausing.
 - Retain Solar's context across user turns, planning, sub-agent execution, and
@@ -180,17 +181,19 @@ Solar session is stored and resumed between conversational turns and
 after sub-agent synthesis. Planning uses a constrained JSON schema, and a plan may
 contain one to eight independent tasks.
 
-The runtime `ToolRegistry` exposes five main capabilities:
+The runtime `ToolRegistry` exposes six main capabilities:
 
 - `spawn_sub_agent` creates a named sub-agent or direct sub-delegate.
 - `orchestrate` lists, cancels, changes reasoning, supplies context to, or resumes
   any agent Solar owns.
 - `adjust-sub-effort-level` changes one existing agent's next-exchange effort.
 - `set-auto-permissions` enables or disables automatic sub-agent-plan approval.
-- `browser` opens and inspects web pages, searches the web or YouTube, clicks, fills fields,
+- `browser` opens and inspects visible web apps and pages, searches YouTube, clicks, fills fields,
   presses keys, scrolls, navigates history, saves screenshots, and closes its session.
   Solar receives URL, title, and an accessibility snapshot after each action.
   Screenshots are saved under `.solarharness/screenshots` in the workspace.
+- `web_search_headless` searches the web without a visible window and returns
+  source titles, URLs, and snippets; it can also read a source page by URL.
 
 Each agent receives its own Codex session and assignment while sharing the test
 workspace. A top-level sub-agent can return a structured sub-delegate request; the

@@ -9,6 +9,7 @@ import { SolarBrowser } from "../dist/browser-tool.js";
 import { CodexCliProvider, requestedSubAgentCount } from "../dist/codex-provider.js";
 import { SolarHarness } from "../dist/harness.js";
 import { SOLAR_SYSTEM_PROMPT } from "../dist/system-prompt.js";
+import { SolarWebSearchHeadless } from "../dist/web-search-headless.js";
 
 test("resetIntoTestWorkspace clears contents but keeps the test directory", async () => {
   const root = await mkdtemp(join(tmpdir(), "solar-harness-reset-"));
@@ -162,7 +163,7 @@ test("YouTube searches preserve the requested phrase across common word orders",
   }
 });
 
-test("Solar can search the web for product research and keeps the browser available", async () => {
+test("ordinary web research uses the headless tool without opening the visible browser", async () => {
   for (const [request, query] of [
     ["Search Google for Galaxy S26 base specifications", "Galaxy S26 base specifications"],
     ["Search for Galaxy S26 base on the web", "Galaxy S26 base"],
@@ -172,49 +173,51 @@ test("Solar can search the web for product research and keeps the browser availa
   ]) {
     const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
     const actions = [];
-    let closes = 0;
-    harness.browser.close = async () => { closes++; };
-    harness.browser.execute = async input => {
+    harness.browser.execute = async () => { throw new Error("Visible browser should not open for research"); };
+    harness.webSearchHeadless.execute = async input => {
       actions.push(input);
-      return { url: input.action === "open" ? "https://www.google.com/" : `https://www.bing.com/search?q=${encodeURIComponent(input.value)}`, title: "Search results", snapshot: "Galaxy S26 from Samsung" };
+      return { action: "search", query: input.query, engine: "bing", url: `https://www.bing.com/search?q=${encodeURIComponent(input.query)}`, title: "Search results", results: [{ title: "Galaxy S26 | Samsung", url: "https://www.samsung.com/galaxy-s26", snippet: "Galaxy S26" }] };
     };
-    harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"open","url":"https://www.google.com"}', sessionId: "research-session" });
+    harness.provider.run = async prompt => {
+      assert.match(prompt, /web_search_headless/);
+      return { text: `SOLAR_TOOL: web_search_headless ${JSON.stringify({ action: "search", query })}`, sessionId: "research-session" };
+    };
     harness.provider.resume = async () => ({ text: "SOLAR_STATE: DISCOVER", sessionId: "research-session" });
     const result = await harness.converse(request);
-    assert.deepEqual(actions, [{ action: "open", url: "https://www.google.com" }, { action: "web_search", value: query }], request);
+    assert.deepEqual(actions, [{ action: "search", query }], request);
     assert.match(result.reply, /searched the web/);
     assert.equal(result.readyToDelegate, false);
-    assert.equal(closes, 0);
   }
 });
 
-test("web_search falls back from Google's verification page to Bing", async () => {
+test("a visible browser call is redirected to headless search for ordinary research", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  let visibleCalls = 0;
+  let visibleCloses = 0;
+  harness.browser.execute = async () => { visibleCalls++; throw new Error("Visible browser launched"); };
+  harness.browser.close = async () => { visibleCloses++; };
+  harness.webSearchHeadless.execute = async input => ({ action: "search", query: input.query, engine: "bing", url: "https://www.bing.com/search?q=Galaxy%20S26", title: "Search", results: [{ title: "Galaxy S26", url: "https://www.samsung.com/galaxy-s26", snippet: "Phone" }] });
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"open","url":"https://www.google.com"}', sessionId: "redirect-session" });
+  harness.provider.resume = async () => ({ text: "SOLAR_STATE: DISCOVER", sessionId: "redirect-session" });
+  const result = await harness.converse("Search Google for Galaxy S26");
+  assert.match(result.reply, /searched the web/);
+  assert.equal(visibleCalls, 0);
+  assert.equal(visibleCloses, 0);
+  assert.ok(harness.tools.list().some(tool => tool.name === "web_search_headless"));
+  assert.ok(harness.tools.list().some(tool => tool.name === "browser"));
+});
+
+test("headless search validates inputs before launching", async () => {
+  const search = new SolarWebSearchHeadless();
+  await assert.rejects(search.execute({ action: "search", query: "" }), /requires query/);
+  await assert.rejects(search.execute({ action: "read", url: "file:///etc/passwd" }), /Only http and https/);
+  await assert.rejects(search.execute({ action: "search", query: "S26", engine: "other" }), /engine must be google or bing/);
+});
+
+test("visible browser no longer exposes the retired web_search action", async () => {
   const browser = new SolarBrowser();
-  let url = "https://example.com/";
-  const visits = [];
-  let consentVisible = true;
-  let rejections = 0;
-  const reject = {
-    waitFor: async ({ state }) => {
-      if (state === "hidden" && consentVisible) throw new Error("Consent still open");
-    },
-    click: async () => { consentVisible = false; rejections++; }
-  };
-  browser.page = {
-    isClosed: () => false,
-    url: () => url,
-    goto: async next => { url = next; visits.push(next); },
-    title: async () => "Search results",
-    getByRole: () => ({ first: () => reject }),
-    locator: selector => selector === "body" ? { innerText: async () => url.includes("google.com") ? "unusual traffic from your computer network" : "Results", ariaSnapshot: async () => "Search results" } : undefined
-  };
-  const result = await browser.execute({ action: "web_search", value: "Galaxy S26 base" });
-  assert.deepEqual(visits, ["https://www.google.com/search?q=Galaxy%20S26%20base", "https://www.bing.com/search?q=Galaxy%20S26%20base"]);
-  assert.match(result.url, /bing\.com\/search/);
-  assert.equal(rejections, 1);
-  assert.equal(browser.active, true);
-  const followUp = await browser.execute({ action: "snapshot" });
-  assert.equal(followUp.url, result.url);
+  browser.page = { isClosed: () => false };
+  await assert.rejects(browser.execute({ action: "web_search", value: "Galaxy S26" }), /Unknown browser action/);
 });
 
 test("Solar can open a source after searching and report what it found", async () => {
@@ -222,30 +225,34 @@ test("Solar can open a source after searching and report what it found", async (
   const actions = [];
   harness.browser.execute = async input => {
     actions.push(input);
-    return input.action === "web_search"
-      ? { url: "https://www.bing.com/search?q=Galaxy%20S26", title: "Search", snapshot: '- link "Samsung Galaxy S26"' }
-      : { url: "https://www.samsung.com/galaxy-s26", title: "Galaxy S26", snapshot: '- heading "Galaxy S26"' };
+    return { url: "https://www.samsung.com/galaxy-s26", title: "Galaxy S26", snapshot: '- heading "Galaxy S26"' };
   };
-  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"web_search","value":"Galaxy S26"}', sessionId: "source-session" });
+  harness.webSearchHeadless.execute = async input => {
+    actions.push(input);
+    return input.action === "read"
+      ? { action: "read", url: input.url, title: "Galaxy S26", text: "Samsung lists Galaxy S26." }
+      : { action: "search", query: input.query, engine: "bing", url: "https://www.bing.com/search?q=Galaxy%20S26", title: "Search", results: [{ title: "Samsung Galaxy S26", url: "https://www.samsung.com/galaxy-s26", snippet: "Galaxy S26" }] };
+  };
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: web_search_headless {"action":"search","query":"Galaxy S26"}', sessionId: "source-session" });
   let resumes = 0;
   harness.provider.resume = async () => ({
-    text: ++resumes === 1 ? 'SOLAR_TOOL: browser {"action":"open","url":"https://www.samsung.com/galaxy-s26"}'
+    text: ++resumes === 1 ? 'SOLAR_TOOL: web_search_headless {"action":"read","url":"https://www.samsung.com/galaxy-s26"}'
       : "Yes, Samsung lists the Galaxy S26 at https://www.samsung.com/galaxy-s26.\nSOLAR_STATE: DISCOVER",
     sessionId: "source-session"
   });
   const result = await harness.converse("Search Google for Galaxy S26");
-  assert.deepEqual(actions, [{ action: "web_search", value: "Galaxy S26" }, { action: "open", url: "https://www.samsung.com/galaxy-s26" }]);
+  assert.deepEqual(actions, [{ action: "search", query: "Galaxy S26" }, { action: "read", url: "https://www.samsung.com/galaxy-s26" }]);
   assert.match(result.reply, /Samsung lists the Galaxy S26/);
   assert.equal(result.readyToDelegate, false);
 });
 
 test("Solar does not claim web research succeeded when search is blocked", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
-  harness.browser.execute = async () => ({ url: "https://www.google.com/sorry/index", title: "Verification", snapshot: "Unusual traffic" });
-  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"web_search","value":"Galaxy S26"}', sessionId: "blocked-session" });
+  harness.webSearchHeadless.execute = async () => { throw new Error("Google verification and Bing unavailable"); };
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: web_search_headless {"action":"search","query":"Galaxy S26"}', sessionId: "blocked-session" });
   harness.provider.resume = async () => ({ text: "I found the answer.\nSOLAR_STATE: DISCOVER", sessionId: "blocked-session" });
   const result = await harness.converse("Search Google for Galaxy S26");
-  assert.match(result.reply, /couldn't complete the web search/);
+  assert.match(result.reply, /couldn't complete the headless web search/);
   assert.doesNotMatch(result.reply, /found the answer/);
 });
 
