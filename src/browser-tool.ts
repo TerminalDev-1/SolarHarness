@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
 export type BrowserInput = {
-  action: "open" | "snapshot" | "screenshot" | "click" | "fill" | "press" | "scroll" | "back" | "forward" | "close";
+  action: "open" | "youtube_search" | "snapshot" | "screenshot" | "click" | "fill" | "press" | "scroll" | "back" | "forward" | "close";
   url?: string;
   selector?: string;
   value?: string;
@@ -45,6 +45,13 @@ export class CoordinatorBrowser {
     if (!this.active || !this.page) throw new Error("Open a page before using the browser.");
     const page = this.page;
     switch (input.action) {
+      case "youtube_search": {
+        const query = input.value?.trim();
+        if (!query) throw new Error("youtube_search requires a search query in value.");
+        if (!/(^|\.)youtube\.com$/i.test(new URL(page.url()).hostname)) throw new Error("Open YouTube before searching it.");
+        await page.goto(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        break;
+      }
       case "snapshot": break;
       case "screenshot": {
         const directory = join(this.workspace, ".solarharness", "screenshots");

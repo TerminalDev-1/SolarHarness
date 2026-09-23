@@ -57,6 +57,13 @@ test("only the user's explicit request enables worker delegation", async () => {
   assert.equal((await harness.converse("I decide when I want to delegate.")).readyToDelegate, false);
 });
 
+test("a control-only coordinator turn still returns a visible reply", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async () => ({ text: "SOLAR_STATE: DISCOVER", sessionId: "empty-session" });
+  const result = await harness.converse("Say hello.");
+  assert.match(result.reply, /couldn't get a complete response/i);
+});
+
 test("the coordinator feeds browser results back into the same model session", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const calls = [];
@@ -79,6 +86,42 @@ test("the coordinator feeds browser results back into the same model session", a
   assert.equal(result.readyToDelegate, false);
   assert.ok(harness.tools.list().some(tool => tool.name === "browser"));
   await assert.rejects(new CoordinatorBrowser().execute({ action: "open", url: "file:///etc/passwd" }), /Only http and https/);
+});
+
+test("a YouTube search completes after opening the home page and always replies", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const actions = [];
+  harness.browser.execute = async input => {
+    actions.push(input);
+    return input.action === "open"
+      ? { url: "https://www.youtube.com/", title: "YouTube", snapshot: '- searchbox "Search"' }
+      : { url: "https://www.youtube.com/results?search_query=mrbeast", title: "mrbeast - YouTube", snapshot: '- heading "Search results"' };
+  };
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"open","url":"https://www.youtube.com"}', sessionId: "youtube-session" });
+  harness.provider.resume = async () => ({ text: "SOLAR_STATE: DISCOVER", sessionId: "youtube-session" });
+
+  const result = await harness.converse("uh open the browser and go onto Youtube and search mrbeast");
+  assert.deepEqual(actions, [
+    { action: "open", url: "https://www.youtube.com" },
+    { action: "youtube_search", value: "mrbeast" }
+  ]);
+  assert.match(result.reply, /searched YouTube for "mrbeast"/);
+  assert.equal(result.readyToDelegate, false);
+});
+
+test("YouTube search uses the requested query in the browser URL", async () => {
+  const browser = new CoordinatorBrowser();
+  let url = "https://www.youtube.com/";
+  browser.page = {
+    isClosed: () => false,
+    url: () => url,
+    goto: async next => { url = next; },
+    title: async () => "YouTube",
+    locator: () => ({ ariaSnapshot: async () => "Search results" })
+  };
+  const result = await browser.execute({ action: "youtube_search", value: "MrBeast official" });
+  assert.equal(result.url, "https://www.youtube.com/results?search_query=MrBeast%20official");
+  assert.match(result.snapshot, /Search results/);
 });
 
 test("an explicit click request continues past the first page snapshot", async () => {

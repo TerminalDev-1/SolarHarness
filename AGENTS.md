@@ -53,6 +53,10 @@ work and workers run with workspace-write access.
   `screenshot` also saves a PNG under `.solarharness/screenshots` in the
   workspace and returns its path. The browser context closes when
   the coordinator session resets.
+- For requests to search YouTube, opening its home page is incomplete. The host
+  runs `youtube_search` with the user's query and verifies the results URL before
+  reporting success. Browser turns must return a nonempty user-facing response,
+  including when the model emits only a control line or the browser action fails.
 - Worker plans require user review by default. `/auto-approve on` is the user's
   standing approval for subsequent plans to launch immediately; `/auto-approve
   off` restores per-plan review.

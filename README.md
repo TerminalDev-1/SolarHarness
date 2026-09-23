@@ -184,8 +184,8 @@ The runtime `ToolRegistry` exposes five main capabilities:
   any agent Solar owns.
 - `adjust-sub-effort-level` changes one existing agent's next-exchange effort.
 - `set-auto-permissions` enables or disables automatic worker-plan approval.
-- `browser` opens and inspects web pages, clicks, fills fields, presses keys,
-  scrolls, navigates history, saves screenshots, and closes its isolated session.
+- `browser` opens and inspects web pages, searches YouTube, clicks, fills fields,
+  presses keys, scrolls, navigates history, saves screenshots, and closes its session.
   Solar receives URL, title, and an accessibility snapshot after each action.
   Screenshots are saved under `.solarharness/screenshots` in the workspace.
 
