@@ -162,6 +162,104 @@ test("YouTube searches preserve the requested phrase across common word orders",
   }
 });
 
+test("Solar can search the web for product research and keeps the browser available", async () => {
+  for (const [request, query] of [
+    ["Search Google for Galaxy S26 base specifications", "Galaxy S26 base specifications"],
+    ["Search for Galaxy S26 base on the web", "Galaxy S26 base"],
+    ["Search for Galaxy S26 base", "Galaxy S26 base"],
+    ["Look up Galaxy S26 base online", "Galaxy S26 base"],
+    ["Does the S26 base exist?", "Does the S26 base exist"]
+  ]) {
+    const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+    const actions = [];
+    let closes = 0;
+    harness.browser.close = async () => { closes++; };
+    harness.browser.execute = async input => {
+      actions.push(input);
+      return { url: input.action === "open" ? "https://www.google.com/" : `https://www.bing.com/search?q=${encodeURIComponent(input.value)}`, title: "Search results", snapshot: "Galaxy S26 from Samsung" };
+    };
+    harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"open","url":"https://www.google.com"}', sessionId: "research-session" });
+    harness.provider.resume = async () => ({ text: "SOLAR_STATE: DISCOVER", sessionId: "research-session" });
+    const result = await harness.converse(request);
+    assert.deepEqual(actions, [{ action: "open", url: "https://www.google.com" }, { action: "web_search", value: query }], request);
+    assert.match(result.reply, /searched the web/);
+    assert.equal(result.readyToDelegate, false);
+    assert.equal(closes, 0);
+  }
+});
+
+test("web_search falls back from Google's verification page to Bing", async () => {
+  const browser = new SolarBrowser();
+  let url = "https://example.com/";
+  const visits = [];
+  let consentVisible = true;
+  let rejections = 0;
+  const reject = {
+    waitFor: async ({ state }) => {
+      if (state === "hidden" && consentVisible) throw new Error("Consent still open");
+    },
+    click: async () => { consentVisible = false; rejections++; }
+  };
+  browser.page = {
+    isClosed: () => false,
+    url: () => url,
+    goto: async next => { url = next; visits.push(next); },
+    title: async () => "Search results",
+    getByRole: () => ({ first: () => reject }),
+    locator: selector => selector === "body" ? { innerText: async () => url.includes("google.com") ? "unusual traffic from your computer network" : "Results", ariaSnapshot: async () => "Search results" } : undefined
+  };
+  const result = await browser.execute({ action: "web_search", value: "Galaxy S26 base" });
+  assert.deepEqual(visits, ["https://www.google.com/search?q=Galaxy%20S26%20base", "https://www.bing.com/search?q=Galaxy%20S26%20base"]);
+  assert.match(result.url, /bing\.com\/search/);
+  assert.equal(rejections, 1);
+  assert.equal(browser.active, true);
+  const followUp = await browser.execute({ action: "snapshot" });
+  assert.equal(followUp.url, result.url);
+});
+
+test("Solar can open a source after searching and report what it found", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const actions = [];
+  harness.browser.execute = async input => {
+    actions.push(input);
+    return input.action === "web_search"
+      ? { url: "https://www.bing.com/search?q=Galaxy%20S26", title: "Search", snapshot: '- link "Samsung Galaxy S26"' }
+      : { url: "https://www.samsung.com/galaxy-s26", title: "Galaxy S26", snapshot: '- heading "Galaxy S26"' };
+  };
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"web_search","value":"Galaxy S26"}', sessionId: "source-session" });
+  let resumes = 0;
+  harness.provider.resume = async () => ({
+    text: ++resumes === 1 ? 'SOLAR_TOOL: browser {"action":"open","url":"https://www.samsung.com/galaxy-s26"}'
+      : "Yes, Samsung lists the Galaxy S26 at https://www.samsung.com/galaxy-s26.\nSOLAR_STATE: DISCOVER",
+    sessionId: "source-session"
+  });
+  const result = await harness.converse("Search Google for Galaxy S26");
+  assert.deepEqual(actions, [{ action: "web_search", value: "Galaxy S26" }, { action: "open", url: "https://www.samsung.com/galaxy-s26" }]);
+  assert.match(result.reply, /Samsung lists the Galaxy S26/);
+  assert.equal(result.readyToDelegate, false);
+});
+
+test("Solar does not claim web research succeeded when search is blocked", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.browser.execute = async () => ({ url: "https://www.google.com/sorry/index", title: "Verification", snapshot: "Unusual traffic" });
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"web_search","value":"Galaxy S26"}', sessionId: "blocked-session" });
+  harness.provider.resume = async () => ({ text: "I found the answer.\nSOLAR_STATE: DISCOVER", sessionId: "blocked-session" });
+  const result = await harness.converse("Search Google for Galaxy S26");
+  assert.match(result.reply, /couldn't complete the web search/);
+  assert.doesNotMatch(result.reply, /found the answer/);
+});
+
+test("a request to search the repository stays in the workspace", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async prompt => {
+    assert.match(prompt, /Carry out the user's request yourself/);
+    return { text: "I checked the repository.\nSOLAR_STATE: DISCOVER", sessionId: "workspace-session" };
+  };
+  harness.browser.execute = async () => { throw new Error("Unexpected browser action"); };
+  const result = await harness.converse("Search for the parser in the repository.");
+  assert.equal(result.reply, "I checked the repository.");
+});
+
 test("the browser stays open when the model asks to close it without user consent", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const actions = [];

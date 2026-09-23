@@ -6,6 +6,7 @@ export function actionStatus(phase: "thinking" | "browsing" | "command", detail:
 export function initialActivity(request: string): string {
   if (/\bclose\s+(?:the\s+)?browser\b/i.test(request)) return "closing the browser";
   if (/\byoutube\b/i.test(request)) return "opening YouTube";
+  if (/\b(?:search\s+(?:google|bing|the\s+web)|look\s+up|research)\b/i.test(request)) return "searching the web";
   const url = request.match(/https?:\/\/[^\s]+/i)?.[0];
   if (url) {
     try { return `opening ${new URL(url).hostname}`; } catch { /* Use the request below. */ }
@@ -14,6 +15,8 @@ export function initialActivity(request: string): string {
 }
 
 export function activityDetail(event: string): string | undefined {
+  const webSearch = event.match(/^Browser: searching web for (.+)$/i);
+  if (webSearch) return `searching the web for ${webSearch[1]}`;
   const search = event.match(/^Browser: searching YouTube for (.+)$/i);
   if (search) return `searching YouTube for ${search[1]}`;
   const open = event.match(/^Browser: open (\S+)/i);

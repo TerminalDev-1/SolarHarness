@@ -31,6 +31,8 @@ for independent scopes.
 - Let Solar browse in a windowed Playwright browser with a blue control tint and
   notice, and save full-page screenshots. The window remains open after a task;
   Playwright tries managed Chromium first, then Microsoft Edge if needed.
+- Search the web through Google, with Bing as a fallback when Google blocks
+  automation, then open and inspect sources in the same visible browser session.
 - Present every proposed sub-agent separately so tasks can be accepted or rejected,
   or allow `/auto-approve on` to launch future plans without pausing.
 - Retain Solar's context across user turns, planning, sub-agent execution, and
@@ -185,7 +187,7 @@ The runtime `ToolRegistry` exposes five main capabilities:
   any agent Solar owns.
 - `adjust-sub-effort-level` changes one existing agent's next-exchange effort.
 - `set-auto-permissions` enables or disables automatic sub-agent-plan approval.
-- `browser` opens and inspects web pages, searches YouTube, clicks, fills fields,
+- `browser` opens and inspects web pages, searches the web or YouTube, clicks, fills fields,
   presses keys, scrolls, navigates history, saves screenshots, and closes its session.
   Solar receives URL, title, and an accessibility snapshot after each action.
   Screenshots are saved under `.solarharness/screenshots` in the workspace.

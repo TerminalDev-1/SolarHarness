@@ -58,6 +58,13 @@ sub-agents, and sub-delegates run with workspace-write access.
   Solar's session resets. The browser stays open after a task and closes
   only when the user asks, the session resets, or the app exits. Launch it in a
   compact windowed frame with a blue page tint and control notice.
+- `web_search` searches Google from any current page and falls back to Bing if
+  Google presents an automation-verification page. Solar can then open and
+  inspect source pages in the same visible browser session. Reject a visible
+  Bing cookie prompt before returning results. A completed task
+  leaves the browser open for the next turn; only an explicit close request,
+  session reset, or app exit closes it. If search results are unavailable, report
+  that rather than claiming research was completed.
 - For requests to search YouTube, opening its home page is incomplete. The host
   runs `youtube_search` with the user's query and verifies the results URL before
   reporting success. Recognize common search word orders, including "search

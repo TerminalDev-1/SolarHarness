@@ -72,7 +72,7 @@ export function registerHarnessTools(dependencies: {
   });
   registry.register<BrowserInput, BrowserResult>({
     name: "browser",
-    description: "Browse web pages in a visible Playwright session: open, search YouTube, snapshot, screenshot, click, fill, press, scroll, back, forward, or close.",
+    description: "Browse web pages in a visible Playwright session: open, search the web or YouTube, snapshot, screenshot, click, fill, press, scroll, back, forward, or close.",
     execute: dependencies.browser
   });
   return registry;
