@@ -14,7 +14,7 @@ export const terminal = {
 `));
   },
   solar(message: string): void { console.log(green(`Solar › ${message}`)); },
-  worker(id: string, message: string): void { console.log(dimGreen(`  [${id}] ${message}`)); },
+  subAgent(id: string, message: string): void { console.log(dimGreen(`  [${id}] ${message}`)); },
   error(message: string): void { console.error(`\u001B[38;5;196mSolar › ${message}\u001B[0m`); },
   prompt(): string { return green("solar › "); }
 };

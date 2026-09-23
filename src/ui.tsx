@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import { SolarHarness } from "./harness.js";
+import { actionStatus, activityDetail, initialActivity } from "./activity.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type ReasoningEffort } from "./types.js";
 
 type UiPhase = "idle" | "thinking" | "browsing" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating";
@@ -75,6 +76,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [themeName, setThemeName] = useState<ThemeName>("dark");
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
+  const [currentActivity, setCurrentActivity] = useState("working on your request");
   const [spinner, setSpinner] = useState(0);
   const [elapsed, setElapsed] = useState(0);
 
@@ -92,12 +94,13 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     stdout.write("\x1b]110\x07\x1b]111\x07");
   }, [harness, stdout]);
 
-  const activeWorkers = agents.filter(agent => agent.status === "running").length;
-  const phaseInfo = phaseCopy(phase, activeWorkers);
+  const activeSubAgents = agents.filter(agent => agent.status === "running").length;
+  const phaseInfo = phaseCopy(phase, activeSubAgents, currentActivity);
 
-  const updateWorkers = (nextAgents: AgentRecord[]): void => {
+  const updateSubAgents = (nextAgents: AgentRecord[]): void => {
     setAgents(nextAgents);
     const executing = nextAgents.filter(agent => agent.status === "running");
+    if (executing.length) setCurrentActivity(executing.at(-1)!.latestActivity);
     setPhase(executing.some(agent => agent.latestActivity.startsWith("Running command:")) ? "command" : executing.length ? "working" : "synthesizing");
   };
 
@@ -106,6 +109,8 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     const clean = message.replace(/\s+/g, " ").trim();
     if (clean) {
       setActivityLog(current => [...current.slice(-5), clean]);
+      const detail = activityDetail(clean);
+      if (detail) setCurrentActivity(detail);
       if (clean.startsWith("Running command:")) setPhase("command");
       if (clean.startsWith("Browser:")) setPhase("browsing");
     }
@@ -115,10 +120,10 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     setPendingPlan(null);
     setBusy(true);
     setPhase("delegating");
-    setActivityLog([`Launching ${plan.tasks.length} named worker${plan.tasks.length === 1 ? "" : "s"} at ${currentReasoning} reasoning`]);
-    addMessage({ role: "solar", text: `Okay — I’m launching ${plan.tasks.length} named worker${plan.tasks.length === 1 ? "" : "s"} at ${currentReasoning} reasoning: ${plan.tasks.map(task => `${task.name} (${task.title})`).join(", ")}. They can create Light-pinned sub-workers when that makes the work genuinely more parallel.` });
+    setActivityLog([`Launching ${plan.tasks.length} named sub-agent${plan.tasks.length === 1 ? "" : "s"} at ${currentReasoning} reasoning`]);
+    addMessage({ role: "solar", text: `Okay — I’m launching ${plan.tasks.length} named sub-agent${plan.tasks.length === 1 ? "" : "s"} at ${currentReasoning} reasoning: ${plan.tasks.map(task => `${task.name} (${task.title})`).join(", ")}. They can create Light-pinned sub-delegates when that makes the work genuinely more parallel.` });
     try {
-      const result = await harness.executePlan(plan, request, context, updateWorkers, reportActivity);
+      const result = await harness.executePlan(plan, request, context, updateSubAgents, reportActivity);
       addMessage({ role: "solar", text: result });
       setBrief([]);
     } catch (error) {
@@ -133,7 +138,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     setPhase("planning");
     const plan = await harness.plan(request, context, reportActivity);
     if (harness.getAutoPermissions().enabled) {
-      addMessage({ role: "solar", text: `Auto-approve is on, so I’m accepting the ${plan.tasks.length}-worker plan without pausing for review.` });
+      addMessage({ role: "solar", text: `Auto-approve is on, so I’m accepting the ${plan.tasks.length}-sub-agent plan without pausing for review.` });
       await executeApprovedPlan(plan, request, context);
     } else {
       setPendingPlan({ plan, request, context, selected: plan.tasks.map(() => true), cursor: 0 });
@@ -143,7 +148,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const rejectPlan = (): void => {
     setPendingPlan(null);
     setBrief([]);
-    addMessage({ role: "solar", text: "Delegation rejected. No workers were launched and no workspace changes were made." });
+    addMessage({ role: "solar", text: "Delegation rejected. No sub-agents were launched and no workspace changes were made." });
   };
 
   const approvePlan = async (): Promise<void> => {
@@ -168,7 +173,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     } else if (action === "cancel") {
       const next = await harness.tools.call("orchestrate", { action: "cancel", agentId: id }) as AgentRecord[];
       setAgents(next);
-      addMessage({ role: "solar", text: `Cancelled ${id} and any sub-workers it owns.` });
+      addMessage({ role: "solar", text: `Cancelled ${id} and any sub-delegates it owns.` });
     } else {
       addMessage({ role: "error", text: "Usage: /agent <id-or-name> reasoning <light|medium|high|xhigh|max> | context <message> | cancel" });
     }
@@ -178,7 +183,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     harness.setReasoning(effort);
     setCurrentReasoning(effort);
     setPendingEffort(null);
-    addMessage({ role: "solar", text: `Reasoning effort is now ${effort}. This applies to Solar and newly launched top-level workers; new sub-workers remain pinned to Light until Solar explicitly authorizes a change.` });
+    addMessage({ role: "solar", text: `Reasoning effort is now ${effort}. This applies to Solar and newly launched top-level sub-agents; new sub-delegates remain pinned to Light until Solar explicitly authorizes a change.` });
   };
 
   const changeTheme = (nextTheme: ThemeName): void => {
@@ -201,7 +206,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       setBrief([]);
       setPendingPlan(null);
       setPendingEffort(null);
-      setConversation([{ role: "solar", text: `Started a completely fresh coordinator session. The test workspace was cleared and is now empty: ${nextWorkspace}` }]);
+      setConversation([{ role: "solar", text: `Started a completely fresh Solar Harness Agent session. The test workspace was cleared and is now empty: ${nextWorkspace}` }]);
     } catch (error) {
       addMessage({ role: "error", text: `Unable to start the test workspace: ${error instanceof Error ? error.message : String(error)}` });
     }
@@ -216,7 +221,8 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     if (line === "/quit" || line === "/exit") { exit(); return; }
 
     addMessage({ role: "user", text: line });
-    setActivityLog(["Sending your request to the coordinator"]);
+    setActivityLog(["Sending your request to the Solar Harness Agent"]);
+    setCurrentActivity(initialActivity(line));
     setBusy(true);
     setPhase(line === "/delegate" ? "planning" : line.startsWith("/agent ") ? "updating" : "thinking");
 
@@ -233,7 +239,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
           const enabled = setting === "on";
           harness.setAutoPermissions(enabled);
           setAutoApprove(enabled);
-          addMessage({ role: "solar", text: `Auto-approve is now ${setting}. ${enabled ? "Future worker plans will launch immediately without the review screen." : "Future worker plans will wait for your review before launch."}` });
+          addMessage({ role: "solar", text: `Auto-approve is now ${setting}. ${enabled ? "Future sub-agent plans will launch immediately without the review screen." : "Future sub-agent plans will wait for your review before launch."}` });
         } else addMessage({ role: "error", text: "Usage: /auto-approve <on|off>" });
       } else if (line === "/theme") {
         addMessage({ role: "solar", text: `Current theme: ${themeName}. Usage: /theme <light|dark>` });
@@ -248,7 +254,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         if (REASONING_EFFORTS.includes(effort)) changeEffort(effort);
         else addMessage({ role: "error", text: "Usage: /effort <light|medium|high|xhigh|max>" });
       } else if (line === "/agents") {
-        addMessage({ role: "solar", text: agents.length ? "Worker activity is shown below." : "No workers are assigned. Ask Solar to delegate when you want workers." });
+        addMessage({ role: "solar", text: agents.length ? "Sub-agent activity is shown below." : "No sub-agents are assigned. Ask Solar to delegate when you want sub-agents." });
       } else if (line.startsWith("/agent ")) {
         await controlAgent(line);
       } else if (line === "/delegate") {
@@ -338,7 +344,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         {conversation.map((message, index) => <Message key={index} message={message} />)}
       </Box>
 
-      {agents.length > 0 && <Workers agents={agents} />}
+      {agents.length > 0 && <SubAgents agents={agents} />}
 
       {agents.length > 0 && <TerminalActivity agents={agents} spinner={spinner} />}
 
@@ -364,7 +370,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       <Box borderStyle="round" borderColor={busy ? theme.subtle : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.prompt} paddingX={1} marginTop={1}>
         <Text color={busy ? theme.subtle : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.prompt}>{busy ? "· " : pendingPlan || pendingEffort || pendingNew ? "? " : "> "}</Text>
         <Text color={input && !pendingPlan && !pendingEffort && !pendingNew ? theme.primary : theme.secondary}>
-          {pendingPlan ? "Review the proposed workers above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Working…" : "Describe what you want to accomplish")}
+          {pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Working…" : "Describe what you want to accomplish")}
         </Text>
         {!busy && !pendingPlan && !pendingEffort && !pendingNew && <Text inverse> </Text>}
       </Box>
@@ -393,7 +399,7 @@ function NewSessionConfirmation({ pending, workspace }: { pending: PendingNew; w
   return (
     <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.warning} paddingX={1}>
       <Text bold color={theme.warning}>Start a completely fresh session?</Text>
-      <Text color={theme.secondary}>This discards the coordinator conversation, stops all workers, and clears their records.</Text>
+      <Text color={theme.secondary}>This discards the Solar Harness Agent conversation, stops all sub-agents, and clears their records.</Text>
       <Text color={theme.error}>Every file and folder inside this test workspace will also be deleted:</Text>
       <Text color={theme.primary}>{workspace}</Text>
       <Text color={theme.subtle}>The empty test folder is kept and becomes the new session workspace. This cannot be undone by Solar Harness.</Text>
@@ -465,15 +471,15 @@ function PlanApproval({ pending }: { pending: PendingPlan }): React.JSX.Element 
   );
 }
 
-function Workers({ agents }: { agents: AgentRecord[] }): React.JSX.Element {
+function SubAgents({ agents }: { agents: AgentRecord[] }): React.JSX.Element {
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={2} borderStyle="single" borderLeft borderRight={false} borderTop={false} borderBottom={false} borderColor={theme.subtle}>
-      <Text color={theme.secondary}>AGENT TREE</Text>
+      <Text color={theme.secondary}>SUB-AGENTS AND SUB-DELEGATES</Text>
       {agents.map(agent => {
         const color = agent.status === "completed" ? theme.success : agent.status === "failed" ? theme.error : agent.status === "running" ? theme.accent : theme.secondary;
         const marker = agent.status === "completed" ? "✓" : agent.status === "failed" ? "×" : agent.status === "running" ? "●" : agent.status === "waiting" ? "◇" : "○";
         const branch = agent.depth === 1 ? "  └─ " : "";
-        return <Text key={agent.id}><Text color={color}>{branch}{marker} {agent.name}</Text><Text color={theme.subtle}> [{agent.id}]</Text><Text color={theme.secondary}> · {agent.reasoning}{agent.reasoningPinned ? " pinned" : ""} · {agent.latestActivity}</Text></Text>;
+        return <Text key={agent.id}><Text color={color}>{branch}{marker} {agent.name}</Text><Text color={theme.subtle}> [{agent.id}]</Text><Text color={theme.secondary}> · {agent.depth === 0 ? "sub-agent" : "sub-delegate"} · {agent.reasoning}{agent.reasoningPinned ? " pinned" : ""} · {agent.latestActivity}</Text></Text>;
       })}
     </Box>
   );
@@ -508,15 +514,15 @@ function Footer({ workspace, model, reasoning, themeName, autoApprove }: { works
   );
 }
 
-function phaseCopy(phase: UiPhase, activeWorkers: number): { activity: string; color: string } {
-  if (phase === "thinking") return { activity: "Thinking…", color: theme.accentStrong };
-  if (phase === "browsing") return { activity: "Browsing the web…", color: theme.pulse };
-  if (phase === "planning") return { activity: "Preparing the delegation…", color: theme.warning };
-  if (phase === "delegating") return { activity: "Assigning specialist work…", color: theme.accent };
-  if (phase === "working") return { activity: `${activeWorkers} worker${activeWorkers === 1 ? "" : "s"} running…`, color: theme.accent };
-  if (phase === "command") return { activity: `${activeWorkers} agent${activeWorkers === 1 ? "" : "s"} using the terminal…`, color: theme.pulse };
-  if (phase === "synthesizing") return { activity: "Reviewing worker reports…", color: theme.accentStrong };
-  if (phase === "updating") return { activity: "Updating worker context…", color: theme.warning };
+function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): { activity: string; color: string } {
+  if (phase === "thinking") return { activity: actionStatus(phase, detail), color: theme.accentStrong };
+  if (phase === "browsing") return { activity: actionStatus(phase, detail), color: theme.pulse };
+  if (phase === "planning") return { activity: `Planning — ${detail}`, color: theme.warning };
+  if (phase === "delegating") return { activity: `Launching sub-agents — ${detail}`, color: theme.accent };
+  if (phase === "working") return { activity: `${activeSubAgents} sub-agent${activeSubAgents === 1 ? "" : "s"} — ${detail}`, color: theme.accent };
+  if (phase === "command") return { activity: actionStatus(phase, detail), color: theme.pulse };
+  if (phase === "synthesizing") return { activity: `Reviewing — ${detail}`, color: theme.accentStrong };
+  if (phase === "updating") return { activity: `Updating — ${detail}`, color: theme.warning };
   return { activity: "Ready", color: theme.success };
 }
 

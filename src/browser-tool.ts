@@ -16,8 +16,8 @@ export type BrowserInput = {
 
 export type BrowserResult = { url: string; title: string; snapshot: string; screenshotPath?: string };
 
-/** One visible, isolated Playwright browser context for the coordinator session. */
-export class CoordinatorBrowser {
+/** One visible, isolated Playwright browser context for the main agent session. */
+export class SolarBrowser {
   private browser?: Browser;
   private context?: BrowserContext;
   private page?: Page;
@@ -50,6 +50,7 @@ export class CoordinatorBrowser {
         if (!query) throw new Error("youtube_search requires a search query in value.");
         if (!/(^|\.)youtube\.com$/i.test(new URL(page.url()).hostname)) throw new Error("Open YouTube before searching it.");
         await page.goto(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        await this.dismissYouTubeConsent(page);
         break;
       }
       case "snapshot": break;
@@ -97,7 +98,7 @@ export class CoordinatorBrowser {
     const failures: string[] = [];
     if (existsSync(executablePath)) {
       try {
-        this.browser = await chromium.launch({ executablePath, headless: false });
+        this.browser = await chromium.launch({ executablePath, headless: false, args: ["--window-size=980,700", "--window-position=80,80"] });
       } catch (error) {
         failures.push(`Playwright Chromium at ${executablePath}: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
       }
@@ -106,24 +107,37 @@ export class CoordinatorBrowser {
     }
     if (!this.browser) {
       try {
-        this.browser = await chromium.launch({ channel: "msedge", headless: false });
+        this.browser = await chromium.launch({ channel: "msedge", headless: false, args: ["--window-size=980,700", "--window-position=80,80"] });
       } catch (error) {
         failures.push(`Microsoft Edge through Playwright: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
       }
     }
     if (!this.browser) throw new Error(`Could not launch a visible Playwright browser. Install Chromium with "playwright install chromium". ${failures.join("; ")}`);
-    this.context = await this.browser.newContext({ acceptDownloads: false });
+    this.context = await this.browser.newContext({ acceptDownloads: false, viewport: { width: 900, height: 560 } });
     await this.context.addInitScript(() => {
       const showNotice = () => {
-        if (!document.body || document.getElementById("solar-harness-browser-notice")) return;
+        if (!document.body) return;
+        if (!document.getElementById("solar-harness-browser-tint")) {
+          const tint = document.createElement("div");
+          tint.id = "solar-harness-browser-tint";
+          tint.setAttribute("aria-hidden", "true");
+          Object.assign(tint.style, {
+            position: "fixed", inset: "0", zIndex: "2147483646",
+            background: "rgba(37, 99, 235, 0.09)",
+            boxShadow: "inset 0 0 0 7px rgba(37, 99, 235, 0.75)",
+            pointerEvents: "none"
+          });
+          document.body.appendChild(tint);
+        }
+        if (document.getElementById("solar-harness-browser-notice")) return;
         const notice = document.createElement("div");
         notice.id = "solar-harness-browser-notice";
         notice.textContent = "Solar Harness is controlling the browser";
         notice.setAttribute("role", "status");
         Object.assign(notice.style, {
           position: "fixed", top: "8px", right: "8px", zIndex: "2147483647",
-          background: "#1f2937", color: "#fff", padding: "8px 12px",
-          border: "2px solid #f59e0b", borderRadius: "8px",
+          background: "#1d4ed8", color: "#fff", padding: "8px 12px",
+          border: "2px solid #93c5fd", borderRadius: "8px",
           font: "600 13px system-ui, sans-serif", boxShadow: "0 2px 12px #0008",
           pointerEvents: "none"
         });
@@ -143,5 +157,15 @@ export class CoordinatorBrowser {
       page.locator("body").ariaSnapshot({ timeout: 10_000 })
     ]);
     return { url: page.url(), title, snapshot: snapshot.slice(0, 20_000) };
+  }
+
+  private async dismissYouTubeConsent(page: Page): Promise<void> {
+    const consent = page.getByText("Before you continue to YouTube").first();
+    try { await consent.waitFor({ state: "visible", timeout: 2_500 }); }
+    catch { return; }
+    const reject = page.locator('button[aria-label^="Reject the use of cookies"]').first();
+    if (!await reject.count()) throw new Error("YouTube opened a consent dialog that needs your attention.");
+    await reject.evaluate(button => (button as HTMLButtonElement).click());
+    await consent.waitFor({ state: "hidden", timeout: 8_000 });
   }
 }

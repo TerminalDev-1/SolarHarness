@@ -10,7 +10,7 @@ const program = new Command();
 
 program
   .name("solar-harness")
-  .description("Solar Harness Preview — a terminal-native Codex worker orchestrator");
+  .description("Solar Harness Preview — a terminal-native Codex agent harness");
 
 program
   .command("chat", { isDefault: true })

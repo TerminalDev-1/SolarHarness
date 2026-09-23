@@ -42,12 +42,12 @@ export function registerHarnessTools(dependencies: {
   const registry = new ToolRegistry();
   registry.register<SpawnSubAgentInput, AgentRecord>({
     name: "spawn_sub_agent",
-    description: "Create a named context-aware worker or sub-worker. The scheduler enforces eight concurrent agent processes.",
+    description: "Create a named sub-agent or sub-delegate. The scheduler enforces eight concurrent agent processes.",
     execute: dependencies.spawn
   });
   registry.register<OrchestrateInput, AgentRecord[]>({
     name: "orchestrate",
-    description: "Inspect, cancel, change reasoning, or inject context into any worker or sub-worker managed by this harness.",
+    description: "Inspect, cancel, change reasoning, or inject context into any sub-agent or sub-delegate managed by this harness.",
     execute: async input => {
       if (input.action === "set_reasoning") {
         if (!input.agentId || !input.reasoning) throw new Error("set_reasoning requires agentId and reasoning.");
@@ -59,12 +59,12 @@ export function registerHarnessTools(dependencies: {
   });
   registry.register<AdjustSubEffortLevelInput, AgentRecord>({
     name: "adjust-sub-effort-level",
-    description: "Change the reasoning effort used for a specific worker or sub-worker's next exchange.",
+    description: "Change the reasoning effort used for a specific sub-agent or sub-delegate's next exchange.",
     execute: async input => dependencies.setReasoning(input.agentId, input.effortLevel)
   });
   registry.register<SetAutoPermissionsInput, AutoPermissionsState>({
     name: "set-auto-permissions",
-    description: "Enable or disable automatic approval of future worker delegation plans. This does not bypass the destructive /new confirmation.",
+    description: "Enable or disable automatic approval of future sub-agent plans. This does not bypass the destructive /new confirmation.",
     execute: async input => {
       if (typeof input.enabled !== "boolean") throw new Error("set-auto-permissions requires a boolean enabled value.");
       return dependencies.setAutoPermissions(input.enabled);

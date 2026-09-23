@@ -39,7 +39,7 @@ export interface CodexRunOptions {
   model: string;
   reasoning: ReasoningEffort;
   cwd: string;
-  role?: "coordinator" | "planner" | "worker" | "sub-worker";
+  role?: "main-agent" | "planner" | "sub-agent" | "sub-delegate";
   onEvent?: (message: string) => void;
   signal?: AbortSignal;
 }

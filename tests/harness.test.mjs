@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { AgentManager } from "../dist/agent-manager.js";
-import { CoordinatorBrowser } from "../dist/browser-tool.js";
-import { CodexCliProvider, requestedWorkerCount } from "../dist/codex-provider.js";
+import { actionStatus, activityDetail, initialActivity } from "../dist/activity.js";
+import { SolarBrowser } from "../dist/browser-tool.js";
+import { CodexCliProvider, requestedSubAgentCount } from "../dist/codex-provider.js";
 import { SolarHarness } from "../dist/harness.js";
 
 test("resetIntoTestWorkspace clears contents but keeps the test directory", async () => {
@@ -14,7 +15,7 @@ test("resetIntoTestWorkspace clears contents but keeps the test directory", asyn
   try {
     await mkdir(join(workspace, "nested"), { recursive: true });
     await writeFile(join(workspace, "top.txt"), "old session");
-    await writeFile(join(workspace, "nested", "child.txt"), "old worker");
+    await writeFile(join(workspace, "nested", "child.txt"), "old sub-agent");
 
     const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: root });
     assert.equal(await harness.resetIntoTestWorkspace(), workspace);
@@ -24,7 +25,7 @@ test("resetIntoTestWorkspace clears contents but keeps the test directory", asyn
   }
 });
 
-test("the coordinator tool can turn auto permissions on and off", async () => {
+test("the main agent tool can turn auto permissions on and off", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   assert.equal(harness.getAutoPermissions().enabled, false);
   assert.ok(harness.tools.list().some(tool => tool.name === "set-auto-permissions"));
@@ -37,8 +38,8 @@ test("the coordinator tool can turn auto permissions on and off", async () => {
   await assert.rejects(harness.tools.call("set-auto-permissions", { enabled: "yes" }), /boolean enabled value/);
 
   harness.provider.run = async () => ({
-    text: 'I’ll enable automatic worker-plan approval.\nSOLAR_TOOL: set-auto-permissions {"enabled":true}\nSOLAR_STATE: DISCOVER',
-    sessionId: "coordinator-session"
+    text: 'I’ll enable automatic sub-agent-plan approval.\nSOLAR_TOOL: set-auto-permissions {"enabled":true}\nSOLAR_STATE: DISCOVER',
+    sessionId: "main-agent-session"
   });
   const response = await harness.converse("Turn auto permissions on.");
   assert.equal(harness.getAutoPermissions().enabled, true);
@@ -46,10 +47,10 @@ test("the coordinator tool can turn auto permissions on and off", async () => {
   assert.doesNotMatch(response.reply, /SOLAR_TOOL/);
 });
 
-test("only the user's explicit request enables worker delegation", async () => {
+test("only the user's explicit request enables sub-agent delegation", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   harness.provider.run = async () => ({ text: "I finished the change.\nSOLAR_STATE: READY", sessionId: "direct-session" });
-  harness.provider.resume = async () => ({ text: "I can prepare workers.\nSOLAR_STATE: READY", sessionId: "direct-session" });
+  harness.provider.resume = async () => ({ text: "I can prepare sub-agents.\nSOLAR_STATE: READY", sessionId: "direct-session" });
 
   assert.equal((await harness.converse("Fix the parser directly.")).readyToDelegate, false);
   assert.equal((await harness.converse("Assign 2 agents to review it.")).readyToDelegate, true);
@@ -57,14 +58,22 @@ test("only the user's explicit request enables worker delegation", async () => {
   assert.equal((await harness.converse("I decide when I want to delegate.")).readyToDelegate, false);
 });
 
-test("a control-only coordinator turn still returns a visible reply", async () => {
+test("a control-only main agent turn still returns a visible reply", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   harness.provider.run = async () => ({ text: "SOLAR_STATE: DISCOVER", sessionId: "empty-session" });
   const result = await harness.converse("Say hello.");
   assert.match(result.reply, /couldn't get a complete response/i);
 });
 
-test("the coordinator feeds browser results back into the same model session", async () => {
+test("activity text describes browser actions rather than generic thinking", () => {
+  assert.equal(initialActivity("Open YouTube and search MrBeast"), "opening YouTube");
+  assert.equal(activityDetail("Browser: open https://www.youtube.com"), "opening YouTube");
+  assert.equal(activityDetail("Browser: searching YouTube for MrBeast"), "searching YouTube for MrBeast");
+  assert.equal(actionStatus("thinking", initialActivity("Open YouTube and search MrBeast")), "Thinking — opening YouTube");
+  assert.equal(actionStatus("browsing", activityDetail("Browser: searching YouTube for MrBeast")), "Thinking — searching YouTube for MrBeast");
+});
+
+test("the main agent feeds browser results back into the same model session", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const calls = [];
   harness.browser.execute = async input => {
@@ -85,7 +94,7 @@ test("the coordinator feeds browser results back into the same model session", a
   assert.equal(result.reply, "The page says Example.");
   assert.equal(result.readyToDelegate, false);
   assert.ok(harness.tools.list().some(tool => tool.name === "browser"));
-  await assert.rejects(new CoordinatorBrowser().execute({ action: "open", url: "file:///etc/passwd" }), /Only http and https/);
+  await assert.rejects(new SolarBrowser().execute({ action: "open", url: "file:///etc/passwd" }), /Only http and https/);
 });
 
 test("a YouTube search completes after opening the home page and always replies", async () => {
@@ -109,19 +118,77 @@ test("a YouTube search completes after opening the home page and always replies"
   assert.equal(result.readyToDelegate, false);
 });
 
+test("the browser stays open when the model asks to close it without user consent", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const actions = [];
+  harness.browser.execute = async input => {
+    actions.push(input.action);
+    return { url: "https://www.youtube.com/results?search_query=mrbeast", title: "YouTube", snapshot: "MrBeast results" };
+  };
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"open","url":"https://www.youtube.com/results?search_query=mrbeast"}', sessionId: "browser-session" });
+  let resumes = 0;
+  harness.provider.resume = async () => ({
+    text: ++resumes === 1 ? 'SOLAR_TOOL: browser {"action":"close"}' : "The results are open.\nSOLAR_STATE: DISCOVER",
+    sessionId: "browser-session"
+  });
+  const result = await harness.converse("Open YouTube and search MrBeast.");
+  assert.deepEqual(actions, ["open", "snapshot"]);
+  assert.match(result.reply, /results are open/);
+});
+
+test("an explicit user request can close the browser", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const actions = [];
+  harness.browser.execute = async input => {
+    actions.push(input.action);
+    return { url: "", title: "Browser closed", snapshot: "Browser closed" };
+  };
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"close"}', sessionId: "browser-session" });
+  harness.provider.resume = async () => ({ text: "The browser is closed.\nSOLAR_STATE: DISCOVER", sessionId: "browser-session" });
+  const result = await harness.converse("Close the browser.");
+  assert.deepEqual(actions, ["close"]);
+  assert.match(result.reply, /browser is closed/);
+});
+
 test("YouTube search uses the requested query in the browser URL", async () => {
-  const browser = new CoordinatorBrowser();
+  const browser = new SolarBrowser();
   let url = "https://www.youtube.com/";
   browser.page = {
     isClosed: () => false,
     url: () => url,
     goto: async next => { url = next; },
     title: async () => "YouTube",
+    getByText: () => ({ first: () => ({ waitFor: async () => { throw new Error("No consent dialog"); } }) }),
     locator: () => ({ ariaSnapshot: async () => "Search results" })
   };
   const result = await browser.execute({ action: "youtube_search", value: "MrBeast official" });
   assert.equal(result.url, "https://www.youtube.com/results?search_query=MrBeast%20official");
   assert.match(result.snapshot, /Search results/);
+});
+
+test("YouTube search rejects consent before returning the results", async () => {
+  const browser = new SolarBrowser();
+  let url = "https://www.youtube.com/";
+  let consentVisible = true;
+  let rejectionCount = 0;
+  browser.page = {
+    isClosed: () => false,
+    url: () => url,
+    goto: async next => { url = next; },
+    title: async () => "MrBeast - YouTube",
+    getByText: () => ({ first: () => ({
+      waitFor: async ({ state }) => {
+        if (state === "visible" && !consentVisible) throw new Error("No dialog");
+        if (state === "hidden" && consentVisible) throw new Error("Dialog still visible");
+      }
+    }) }),
+    locator: selector => selector === "body"
+      ? { ariaSnapshot: async () => "MrBeast results" }
+      : { first: () => ({ count: async () => 1, evaluate: async () => { rejectionCount++; consentVisible = false; } }) }
+  };
+  const result = await browser.execute({ action: "youtube_search", value: "MrBeast" });
+  assert.equal(rejectionCount, 1);
+  assert.match(result.snapshot, /MrBeast results/);
 });
 
 test("an explicit click request continues past the first page snapshot", async () => {
@@ -171,14 +238,14 @@ test("a browser screenshot request completes and still applies auto permissions"
   assert.equal(result.readyToDelegate, true);
 });
 
-test("an explicit agent count constrains the worker plan", async () => {
+test("an explicit agent count constrains the sub-agent plan", async () => {
   const root = await mkdtemp(join(tmpdir(), "solar-plan-count-"));
   try {
-    assert.equal(requestedWorkerCount("assign 8 agents to this task"), 8);
+    assert.equal(requestedSubAgentCount("assign 8 agents to this task"), 8);
     const provider = new CodexCliProvider();
     const tasks = Array.from({ length: 8 }, (_, index) => ({ name: `Agent${index + 1}`, title: `Task ${index + 1}`, instructions: "Work", context: "" }));
-    provider.run = async () => ({ text: JSON.stringify({ summary: "Eight workers", tasks }) });
-    const plan = await provider.createPlan("Assign 8 agents to this task", "", { model: "gpt-6-luna", reasoning: "light", cwd: root, role: "coordinator" });
+    provider.run = async () => ({ text: JSON.stringify({ summary: "Eight sub-agents", tasks }) });
+    const plan = await provider.createPlan("Assign 8 agents to this task", "", { model: "gpt-6-luna", reasoning: "light", cwd: root, role: "main-agent" });
     const schema = JSON.parse(await readFile(join(root, ".solarharness", "schemas", "delegation-plan.json"), "utf8"));
     assert.equal(plan.tasks.length, 8);
     assert.equal(schema.properties.tasks.minItems, 8);
@@ -188,10 +255,12 @@ test("an explicit agent count constrains the worker plan", async () => {
   }
 });
 
-test("named workers can create Light-pinned named sub-workers", async () => {
+test("named sub-agents can create Light-pinned named sub-delegates", async () => {
+  const roles = [];
   const provider = {
     async run(_prompt, options) {
-      if (options.role === "worker") {
+      roles.push(options.role);
+      if (options.role === "sub-agent") {
         return {
           text: 'SOLAR_SUBDELEGATE: {"tasks":[{"name":"Pixel","title":"Child task","instructions":"Do child work","context":""}]}',
           sessionId: "parent-session"
@@ -212,18 +281,20 @@ test("named workers can create Light-pinned named sub-workers", async () => {
   assert.equal(child.name, "Pixel");
   assert.equal(child.reasoning, "light");
   assert.equal(child.reasoningPinned, true);
+  assert.deepEqual(roles, ["sub-agent", "sub-delegate"]);
   assert.equal(parent.status, "completed");
   assert.match(parent.report, /integrated/);
 
   manager.setReasoning("Pixel", "high");
   assert.equal(child.reasoning, "high");
   assert.equal(child.reasoningPinned, false);
+  await assert.rejects(manager.spawn({ name: "Third", title: "Too deep", instructions: "Stop", context: "", reasoning: "light", parentId: child.id }), /Sub-delegates cannot create another delegation level/);
 });
 
-test("a worker cannot raise its own sub-worker above Light", async () => {
+test("a sub-agent cannot raise its own sub-delegate above Light", async () => {
   const provider = {
     async run(_prompt, options) {
-      if (options.role === "worker") {
+      if (options.role === "sub-agent") {
         return {
           text: 'SOLAR_SUBDELEGATE: {"tasks":[{"name":"Beam","title":"Child task","instructions":"Do child work","context":""}]}',
           sessionId: "parent-session"
@@ -243,5 +314,5 @@ test("a worker cannot raise its own sub-worker above Light", async () => {
 
   await manager.orchestrate({ action: "inject_context", agentId: child.id, context: "Run one more validation." }, parent.id);
   assert.equal(child.status, "completed");
-  assert.throws(() => manager.setReasoning(child.id, "light", "unrelated-worker"), /only their own direct sub-workers/i);
+  assert.throws(() => manager.setReasoning(child.id, "light", "unrelated-sub-agent"), /only their own direct sub-delegates/i);
 });

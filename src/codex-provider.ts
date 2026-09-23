@@ -15,17 +15,17 @@ export class CodexCliProvider {
   private readonly codexExecutable = resolveCodexExecutable();
 
   async createPlan(task: string, context: string | undefined, options: CodexRunOptions): Promise<DelegationPlan> {
-    const requestedCount = requestedWorkerCount(task);
+    const requestedCount = requestedSubAgentCount(task);
     const schemaPath = await this.writePlanSchema(options.cwd, requestedCount);
     const prompt = [
       SOLAR_SYSTEM_PROMPT,
-      "Act strictly as the Solar Harness Preview coordinator. Do not implement the request.",
+      "Act as the Solar Harness Agent preparing a delegation plan. Do not implement the request during planning.",
       "Return only the requested delegation plan. Do not inspect the workspace, invoke tools, create subagents, or claim that any task has already been completed.",
-      "Break the request into the smallest useful set of independent, implementation-ready worker tasks. Choose the worker count dynamically from the task: use one worker when one is sufficient, add workers only for genuinely parallel scopes, group related review work, and never treat eight as a target. Use no more than eight tasks.",
-      requestedCount ? `The user explicitly requested ${requestedCount} agents. Return exactly ${requestedCount} distinct worker tasks and give each a useful, non-overlapping assignment.` : "",
-      "Every task runs concurrently. Never make one task depend on another task's output; combine sequential create-and-verify steps into the same worker task.",
+      "Break the request into the smallest useful set of independent, implementation-ready sub-agent tasks. Choose the sub-agent count dynamically: use one when sufficient, add more only for genuinely parallel scopes, and never treat eight as a target. Use no more than eight tasks.",
+      requestedCount ? `The user explicitly requested ${requestedCount} agents. Return exactly ${requestedCount} distinct sub-agent tasks and give each a useful, non-overlapping assignment.` : "",
+      "Every task runs concurrently. Never make one task depend on another task's output; combine sequential create-and-verify steps into the same sub-agent task.",
       "Every task must be concrete, scoped, and useful to another coding agent.",
-      "Give every worker a short, distinctive, single-token human name. Names must be unique within the plan and should be easy to type and recognize.",
+      "Give every sub-agent a short, distinctive, single-token human name. Names must be unique within the plan and should be easy to type and recognize.",
       `User request: ${task}`,
       context ? `Shared context: ${context}` : ""
     ].filter(Boolean).join("\n\n");
@@ -231,7 +231,7 @@ function commandActivity(item: CodexEvent["item"]): string | undefined {
   return item.status === "completed" ? `Command completed: ${command}` : `Running command: ${command}`;
 }
 
-export function requestedWorkerCount(request: string): number | undefined {
-  const match = request.match(/\b(?:assign|use|launch)\s+([1-8])\s+(?:agents|workers)\b/i);
+export function requestedSubAgentCount(request: string): number | undefined {
+  const match = request.match(/\b(?:assign|use|launch)\s+([1-8])\s+(?:agents|sub-agents|workers)\b/i);
   return match ? Number(match[1]) : undefined;
 }

@@ -2,72 +2,77 @@
 
 ## Roles
 
-- Solar is the main coordinator. It owns conversation continuity, clarification,
-  direct implementation when the user chooses it, planning, delegation approval,
-  worker orchestration, and report synthesis.
-- Named workers inspect the workspace, edit files, run commands, validate changes,
-  and report results to Solar.
-- A worker may request named sub-workers for independent parts of its assignment.
-  Sub-workers report to their parent worker. Solar can inspect and control the
-  complete tree; a worker can control only its own direct sub-workers.
+- The Solar Harness Agent is the main agent. It owns conversation continuity,
+  clarification, direct implementation, delegation approval, orchestration, and
+  report synthesis.
+- Named sub-agents inspect the workspace, edit files, run commands, validate
+  changes, and report results to the main agent.
+- A sub-agent may request named sub-delegates for independent parts of its
+  assignment. Sub-delegates report to their parent sub-agent. The main agent can
+  inspect and control the complete tree; a sub-agent controls only its direct
+  sub-delegates.
 
 ## User-selected work mode
 
-The user decides whether Solar works directly or delegates. Ordinary requests
-are handled by Solar in the active workspace, including implementation and
-validation. Solar proposes workers only when the user explicitly asks for
-agents, workers, or delegation, or invokes `/delegate`. Delegated plans still
-follow the review or auto-approval flow. Planning runs read-only; direct Solar
-work and workers run with workspace-write access.
+The user decides whether the main agent works directly or delegates. Ordinary
+requests are handled directly in the active workspace, including implementation
+and validation. The main agent proposes sub-agents only when the user explicitly
+asks for agents or delegation, or invokes `/delegate`. Plans still follow the
+review or auto-approval flow. Planning runs read-only; the main agent,
+sub-agents, and sub-delegates run with workspace-write access.
 
 ## Runtime behavior
 
-- The coordinator retains one Codex session across turns and worker synthesis.
+- The main agent retains one Codex session across turns and sub-agent synthesis.
 - Solar creates and runs inside the project `test` workspace by default.
 - `/new` asks for confirmation with No selected by default and explicitly warns
   about both kinds of deletion. Only selecting Yes and pressing Enter discards
-  the coordinator session and transcript, stops and clears worker records,
+  the main agent session and transcript, stops and clears agent records,
   deletes every entry inside the `test` workspace, recreates it if needed, and
   activates the empty folder for the fresh session.
-- Up to eight worker processes may run concurrently across the full agent tree.
-  Coordinator plans may contain up to eight top-level workers. A top-level worker
-  may request up to eight direct sub-workers, subject to the global concurrency
-  limit. Sub-workers cannot create another delegation level.
+- Up to eight agent processes may run concurrently across the full tree.
+  Plans may contain up to eight sub-agents. A sub-agent may request up to eight
+  direct sub-delegates, subject to the global concurrency limit. Sub-delegates
+  cannot create another delegation level.
 - When the user explicitly asks to assign a number of agents from one through
-  eight, the plan must contain that many distinct top-level worker assignments.
+  eight, the plan must contain that many distinct sub-agent assignments.
   A browser action in the same request does not suppress this delegation plan.
-- `spawn_sub_agent` launches a named worker or a named sub-worker.
+- `spawn_sub_agent` launches a named sub-agent or sub-delegate.
 - `orchestrate` lists, cancels, changes reasoning, resumes, or supplies context
-  to workers and sub-workers.
+  to sub-agents and sub-delegates.
 - `adjust-sub-effort-level` changes one existing agent's next-exchange effort
   to Light, Medium, High, XHigh, or Max.
 - `set-auto-permissions` lets Solar enable or disable automatic approval of
-  future worker plans from natural-language conversation. It changes the same
+  future sub-agent plans from natural-language conversation. It changes the same
   harness-level state as `/auto-approve on|off` and never bypasses `/new`.
 - `browser` lets Solar inspect and interact with web pages through a separate,
   non-persistent, visible Playwright browser context. Launch first resolves the
   Playwright Chromium executable, then falls back to Microsoft Edge through
   Playwright if that executable fails. It displays a "Solar Harness is controlling
-  the browser" notice inside the page. Browser actions return the
-  page URL, title, and accessibility snapshot to the same coordinator session;
+  the browser" notice inside the page. Browser actions return the URL, title,
+  and accessibility snapshot to the same main agent session;
   `screenshot` also saves a PNG under `.solarharness/screenshots` in the
   workspace and returns its path. The browser context closes when
-  the coordinator session resets.
+  the main agent session resets. The browser stays open after a task and closes
+  only when the user asks, the session resets, or the app exits. Launch it in a
+  compact windowed frame with a blue page tint and control notice.
 - For requests to search YouTube, opening its home page is incomplete. The host
   runs `youtube_search` with the user's query and verifies the results URL before
-  reporting success. Browser turns must return a nonempty user-facing response,
+  reporting success. If YouTube shows a consent dialog, reject optional cookies
+  and wait for the dialog to close so the results are visible. Browser turns must
+  return a nonempty user-facing response,
   including when the model emits only a control line or the browser action fails.
-- Worker plans require user review by default. `/auto-approve on` is the user's
+- Sub-agent plans require user review by default. `/auto-approve on` is the user's
   standing approval for subsequent plans to launch immediately; `/auto-approve
   off` restores per-plan review.
 
 ## Model defaults
 
 The default is GPT-6 Luna with Light reasoning. Light is translated to the
-Codex CLI's `low` reasoning setting. Solar and top-level workers inherit the
-selected default. Every new sub-worker always starts pinned to Light regardless
-of its parent's setting. A worker cannot raise its sub-worker above Light; only
-an explicit Solar/coordinator adjustment can authorize that increase.
+Codex CLI's `low` reasoning setting. The main agent and sub-agents inherit the
+selected default. Every new sub-delegate starts pinned to Light regardless of
+its parent's setting. A sub-agent cannot raise its sub-delegate above Light;
+only an explicit main-agent adjustment can authorize that increase.
 
 ## Documentation contract
 
@@ -95,6 +100,9 @@ without copying an emoji-rendered spinner.
 Codex command events are surfaced as compact terminal lines beneath the activity
 indicator. Command activity may change the status copy, but it must reuse the
 same text-safe spinner and fixed terracotta/orange color treatment.
+The main activity copy names the current action, such as opening YouTube,
+searching for a query, or running a command. Do not show a generic Thinking label
+when a concrete action is known.
 
 ## Public publishing authorization
 

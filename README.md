@@ -6,38 +6,38 @@
 **First committed:** 20 September 2026.
 
 SolarHarness is a terminal-native coding workspace. You decide whether Solar
-handles a task directly or delegates it to named workers. Delegation plans are
-reviewed before launch unless auto-approve is enabled. Workers can create named
-Light-pinned sub-workers for independent scopes.
+handles a task directly or delegates it to named sub-agents. Delegation plans are
+reviewed before launch unless auto-approve is enabled. Sub-agents can create named
+Light-pinned sub-delegates for independent scopes.
 
 ## What it can do
 
 - Handle ordinary coding requests directly in the active workspace.
-- When you request delegation, turn the task into an implementation-ready worker
-  plan with one to eight workers based on genuinely parallel scopes.
+- When you request delegation, turn the task into an implementation-ready sub-agent
+  plan with one to eight sub-agents based on genuinely parallel scopes.
 - Honor an explicit request for one to eight agents, including when the same
   message also asks Solar to browse a page.
 - Create multiple directories and their contents in parallel inside `test`. For
-  example, eight approved workers can create `test/agent-1` through
+  example, eight approved sub-agents can create `test/agent-1` through
   `test/agent-8` during the same run.
-- Give workers memorable names instead of presenting only generated IDs.
-- Let a worker delegate independent scopes to direct sub-workers, then integrate
-  their reports. Solar controls the full tree; each worker controls its children.
-- Let every worker create nested directories and files recursively, run relevant
+- Give sub-agents memorable names instead of presenting only generated IDs.
+- Let a sub-agent delegate independent scopes to direct sub-delegates, then integrate
+  their reports. Solar controls the full tree; each sub-agent controls its children.
+- Let every sub-agent create nested directories and files recursively, run relevant
   commands, validate its own assignment, and return a concise report.
-- Give Solar and workers workspace-write access for implementation; keep
-  delegation planning read-only.
-- Let Solar browse in a visible Playwright window with a clear control notice,
-  and save full-page screenshots. Playwright tries its managed Chromium first,
-  then Microsoft Edge when Chromium cannot launch.
-- Present every proposed worker separately so tasks can be accepted or rejected,
+- Give the main agent, sub-agents, and sub-delegates workspace-write access for
+  implementation; keep delegation planning read-only.
+- Let Solar browse in a windowed Playwright browser with a blue control tint and
+  notice, and save full-page screenshots. The window remains open after a task;
+  Playwright tries managed Chromium first, then Microsoft Edge if needed.
+- Present every proposed sub-agent separately so tasks can be accepted or rejected,
   or allow `/auto-approve on` to launch future plans without pausing.
-- Retain coordinator context across user turns, planning, worker execution, and
+- Retain main agent context across user turns, planning, sub-agent execution, and
   final report synthesis.
-- Start a genuinely clean session with `/new`, including clearing old worker
+- Start a genuinely clean session with `/new`, including clearing old sub-agent
   records and deleting all contents of the `test` workspace.
 - Change Solar's default reasoning effort at runtime from Light through Max.
-- Adjust a particular worker's next-exchange effort through a command or a
+- Adjust a particular sub-agent's next-exchange effort through a command or a
   natural-language request to Solar.
 - Display the nested agent tree, reasoning pins, live state, elapsed time, recent
   commands, and a Claude Code-like activity pulse while work is running.
@@ -50,7 +50,7 @@ Light-pinned sub-workers for independent scopes.
 
 SolarHarness creates and uses the project's `test` directory by default. Its
 absolute path appears in the header, and a compact workspace label appears in the
-footer. Workers may create separate top-level or nested directories there during
+footer. Sub-agents may create separate top-level or nested directories there during
 the same delegation run.
 
 For example, a request such as:
@@ -60,16 +60,16 @@ Create eight independent agent directories. In each directory, create five test
 files and verify their contents.
 ```
 
-can be split into eight concurrent worker assignments because it has eight clear,
+can be split into eight concurrent sub-agent assignments because it has eight clear,
 non-overlapping scopes. Eight is a ceiling, not a default: ordinary review work
-is grouped into fewer assignments when additional workers add no value. Each
-worker can own a different directory, allowing directory trees to be created at
+is grouped into fewer assignments when additional sub-agents add no value. Each
+sub-agent can own a different directory, allowing directory trees to be created at
 once instead of sequentially.
 
-Workers are separate Codex sessions but share the same `test` workspace. Give
-parallel workers non-overlapping directory or file ownership when possible. Solar
+Sub-agents are separate Codex sessions but share the same `test` workspace. Give
+parallel sub-agents non-overlapping directory or file ownership when possible. Solar
 includes shared context in each assignment, and the final response synthesizes
-only the workers launched for the current approved plan.
+only the sub-agents launched for the current approved plan.
 
 ## Requirements
 
@@ -110,7 +110,7 @@ npm run dev -- chat --model gpt-6-luna --reasoning max
 ## Delegation workflow
 
 1. Ask Solar to delegate a task, or use `/delegate` after describing it.
-2. Solar keeps talking with you in the same coordinator session and asks a
+2. Solar keeps talking with you in the same main agent session and asks a
    question only when a missing answer would materially affect the work.
 3. Solar proposes up to eight independent tasks.
 4. Review the plan before launch:
@@ -119,9 +119,9 @@ npm run dev -- chat --model gpt-6-luna --reasoning max
    - `Space` toggles the selected task between accepted and rejected.
    - `A` accepts every proposed task.
    - `Enter` launches the accepted tasks concurrently.
-   - `Esc` rejects the plan without launching workers.
+   - `Esc` rejects the plan without launching sub-agents.
 
-5. A worker may create direct sub-workers at Light reasoning. Solar displays the
+5. A sub-agent may create direct sub-delegates at Light reasoning. Solar displays the
    full agent tree and command activity.
 6. Solar synthesizes the reports when the current
    batch finishes.
@@ -135,37 +135,37 @@ npm run dev -- chat --model gpt-6-luna --reasoning max
 | `/auto-approve on` | Treats subsequent plans as pre-approved and launches them immediately. |
 | `/auto-approve off` | Restores the plan review screen. |
 | `/effort` | Opens the effort selector: Light, Medium, High, XHigh, or Max. |
-| `/effort <level>` | Changes Solar's effort and the default for newly launched top-level workers. New sub-workers still start pinned to Light. |
+| `/effort <level>` | Changes Solar's effort and the default for newly launched top-level sub-agents. New sub-delegates still start pinned to Light. |
 | `/theme light` | Applies a terminal-wide light foreground and background palette. |
 | `/theme dark` | Restores the dark terminal palette. |
-| `/agents` | Shows whether workers are currently assigned. |
-| `/agent <id-or-name> reasoning <level>` | Solar authorizes a worker or sub-worker's next-exchange effort. |
-| `/agent <id-or-name> context <message>` | Sends additional context to a worker or sub-worker; a completed agent resumes its session. |
-| `/agent <id-or-name> cancel` | Cancels an agent and any direct sub-workers it owns. |
-| `/delegate` | Asks Solar to prepare a worker plan from the current brief. You can also request delegation in natural language. |
+| `/agents` | Shows whether sub-agents are currently assigned. |
+| `/agent <id-or-name> reasoning <level>` | Solar authorizes a sub-agent or sub-delegate's next-exchange effort. |
+| `/agent <id-or-name> context <message>` | Sends additional context to a sub-agent or sub-delegate; a completed agent resumes its session. |
+| `/agent <id-or-name> cancel` | Cancels an agent and any direct sub-delegates it owns. |
+| `/delegate` | Asks Solar to prepare a sub-agent plan from the current brief. You can also request delegation in natural language. |
 | `/quit` or `/exit` | Closes SolarHarness. |
 
-Solar also has the registered `adjust-sub-effort-level` coordinator tool. This
+Solar also has the registered `adjust-sub-effort-level` main agent tool. This
 means you can say something like “set Forge to max effort” instead of
-typing the explicit `/agent` form. The harness validates the worker ID and effort
+typing the explicit `/agent` form. The harness validates the sub-agent ID and effort
 before applying the adjustment.
 
-The coordinator also has a registered `set-auto-permissions` tool, so a natural
+The main agent also has a registered `set-auto-permissions` tool, so a natural
 request such as “turn auto permissions on” updates the same state as
-`/auto-approve on`. This only pre-approves future worker plans; it cannot bypass
+`/auto-approve on`. This only pre-approves future sub-agent plans; it cannot bypass
 the explicit `/new` workspace-deletion confirmation.
 
 ## Session and workspace safety
 
 - Solar can implement directly with workspace-write access. Delegation planning
-  remains read-only, and worker plans still follow the chosen approval setting.
-- Approved workers run with workspace-write access rooted in the visible `test`
+  remains read-only, and sub-agent plans still follow the chosen approval setting.
+- Approved sub-agents run with workspace-write access rooted in the visible `test`
   workspace.
 - Rejected tasks never launch.
 - `/new` defaults to **No**, explains both context and folder deletion, and shows
   the exact workspace path before anything destructive happens.
-- Confirming `/new` aborts active workers, clears their records, resets the
-  coordinator transcript and Codex session ID, deletes every entry inside the
+- Confirming `/new` aborts active sub-agents, clears their records, resets the
+  main agent transcript and Codex session ID, deletes every entry inside the
   validated `test` directory, recreates it when necessary, and starts there.
 - Generated `.solarharness` schemas and `test/agent-*` experiment output are
   excluded from source control.
@@ -173,24 +173,24 @@ the explicit `/new` workspace-deletion confirmation.
 ## Architecture
 
 SolarHarness invokes `codex exec --json` and consumes its JSONL event stream. The
-main coordinator session is stored and resumed between conversational turns and
-after worker synthesis. Planning uses a constrained JSON schema, and a plan may
+main agent session is stored and resumed between conversational turns and
+after sub-agent synthesis. Planning uses a constrained JSON schema, and a plan may
 contain one to eight independent tasks.
 
 The runtime `ToolRegistry` exposes five main capabilities:
 
-- `spawn_sub_agent` creates a named worker or direct sub-worker.
+- `spawn_sub_agent` creates a named sub-agent or direct sub-delegate.
 - `orchestrate` lists, cancels, changes reasoning, supplies context to, or resumes
   any agent Solar owns.
 - `adjust-sub-effort-level` changes one existing agent's next-exchange effort.
-- `set-auto-permissions` enables or disables automatic worker-plan approval.
+- `set-auto-permissions` enables or disables automatic sub-agent-plan approval.
 - `browser` opens and inspects web pages, searches YouTube, clicks, fills fields,
   presses keys, scrolls, navigates history, saves screenshots, and closes its session.
   Solar receives URL, title, and an accessibility snapshot after each action.
   Screenshots are saved under `.solarharness/screenshots` in the workspace.
 
 Each agent receives its own Codex session and assignment while sharing the test
-workspace. A top-level worker can return a structured sub-worker request; the
+workspace. A top-level sub-agent can return a structured sub-delegate request; the
 harness runs those named children at Light reasoning, sends their reports back to
 the parent session for integration, and keeps the complete tree visible to
 Solar. No third delegation level is allowed.
@@ -201,7 +201,8 @@ for the role and runtime contract.
 ## Claude Code-style activity indicator
 
 SolarHarness uses a compact activity treatment inspired by Claude Code: a small
-animated symbol, a short status such as `Thinking…`, and elapsed time on one line.
+animated symbol, a concrete status such as `Thinking — opening YouTube`, and
+elapsed time on one line.
 It is an approximation designed for this Ink-based terminal UI rather than a copy
 of Claude Code's renderer.
 
@@ -221,5 +222,5 @@ green flashes across supported terminal themes.
 ## Preview status
 
 SolarHarness is not stable yet. Use it in disposable or version-controlled
-workspaces, review delegation plans carefully, give parallel workers clear file or
+workspaces, review delegation plans carefully, give parallel sub-agents clear file or
 directory ownership, and inspect changes before committing them.
