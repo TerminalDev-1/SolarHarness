@@ -244,6 +244,51 @@ test("workspace start keeps a local server running for browser testing until res
   }
 });
 
+test("workspace serve returns a working localhost URL for a standalone HTML page", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-harness-static-"));
+  const workspace = new SolarWorkspaceTool(root);
+  try {
+    await writeFile(join(root, "galaxy-s26.html"), "<!doctype html><title>Galaxy S26</title><h1>Galaxy S26</h1>");
+    const served = await workspace.execute({ action: "serve" });
+    assert.match(served.url, /^http:\/\/localhost:\d+\/$/);
+    assert.equal(served.started, true);
+    const response = await fetch(new URL("galaxy-s26.html", served.url));
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /Galaxy S26/);
+  } finally {
+    await workspace.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a refused local HTML connection prompts Solar to serve and reopen the page", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const actions = [];
+  harness.browser.execute = async input => {
+    actions.push(input);
+    if (input.url?.includes("127.0.0.1")) throw new Error("page.goto: net::ERR_CONNECTION_REFUSED");
+    return { url: input.url, title: "Galaxy S26", snapshot: '- heading "Galaxy S26"' };
+  };
+  harness.workspace.execute = async input => {
+    actions.push(input);
+    return { started: true, url: "http://localhost:8765/" };
+  };
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"open","url":"http://127.0.0.1:8765/galaxy-s26.html"}', sessionId: "local-recovery" });
+  let resumes = 0;
+  harness.provider.resume = async (_sessionId, prompt) => {
+    resumes++;
+    if (resumes === 1) {
+      assert.match(prompt, /action":"serve/);
+      return { text: 'SOLAR_TOOL: workspace_command {"action":"serve"}', sessionId: "local-recovery" };
+    }
+    if (resumes === 2) return { text: 'SOLAR_TOOL: browser {"action":"open","url":"http://localhost:8765/galaxy-s26.html"}', sessionId: "local-recovery" };
+    return { text: "The Galaxy S26 page opened and showed its heading.\nSOLAR_STATE: DISCOVER", sessionId: "local-recovery" };
+  };
+  const result = await harness.converse("Please test the web page in the browser at http://127.0.0.1:8765/galaxy-s26.html");
+  assert.match(result.reply, /page opened/);
+  assert.deepEqual(actions.map(action => action.action), ["open", "serve", "open"]);
+});
+
 test("Solar can inspect a local app, run it, and interact with the visible browser", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const hostCalls = [];

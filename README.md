@@ -201,7 +201,8 @@ The runtime `ToolRegistry` exposes these main capabilities:
   Screenshots are saved under `.solarharness/screenshots` in the workspace.
 - `web_search_headless` searches the web without a visible window and returns
   source titles, URLs, and snippets; it can also read a source page by URL.
-- `workspace_command` runs commands or starts local servers in the active workspace.
+- `workspace_command` runs commands, starts processes, or serves standalone HTML
+  and other static files from the active workspace at a ready `localhost` URL.
 - `runtime_operations` lets Solar inspect recorded host tool calls and their
   results when asked what actually happened earlier in the session.
 

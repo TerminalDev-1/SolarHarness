@@ -132,7 +132,7 @@ export function registerHarnessTools(dependencies: {
   });
   registry.register<WorkspaceCommandInput, WorkspaceCommandResult>({
     name: "workspace_command",
-    description: "Run a command in the active workspace and return its exit code, stdout, and stderr, or start a long-running local server. Use to inspect, create, run, and verify local projects.",
+    description: "Run a command, start a long-running process, or serve static files from the active workspace on localhost. The serve action returns its listening URL. Use to inspect, create, run, and verify local projects.",
     execute: dependencies.workspaceCommand
   });
   return registry;

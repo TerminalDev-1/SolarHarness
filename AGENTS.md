@@ -53,7 +53,11 @@ sub-agents, and sub-delegates run with workspace-write access.
 - `workspace_command` lets Solar inspect and modify the active workspace, run
   bounded commands with their exit code and output returned to its current
   session, or start a local server that stays available for browser testing
-  until the session resets. Solar can also use its Codex workspace tools.
+  until the session resets. Its `serve` action hosts static files from the active
+  workspace and returns a listening `localhost` URL; use it for standalone HTML
+  pages before opening them in the browser. If a local HTML browser navigation is
+  refused, Solar calls `serve` and retries the page using its returned URL.
+  Solar can also use its Codex workspace tools.
   Browser and web turns use the Codex CLI's output schema to require a
   structured host tool request before their needed actions are complete.
   Model-issued host tool requests are parsed as JSON and their results are fed

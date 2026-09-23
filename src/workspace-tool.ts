@@ -1,7 +1,10 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { createServer, type Server } from "node:http";
+import { readFile, stat } from "node:fs/promises";
+import { extname, relative, resolve, sep } from "node:path";
 
-export type WorkspaceCommandInput = { action: "run" | "start"; command: string };
-export type WorkspaceCommandResult = { command: string; exitCode?: number | null; stdout?: string; stderr?: string; pid?: number; started?: boolean };
+export type WorkspaceCommandInput = { action: "run" | "start" | "serve"; command?: string; port?: number };
+export type WorkspaceCommandResult = { command?: string; exitCode?: number | null; stdout?: string; stderr?: string; pid?: number; started?: boolean; url?: string };
 
 const OUTPUT_LIMIT = 32_000;
 const TIMEOUT_MS = 120_000;
@@ -9,14 +12,16 @@ const TIMEOUT_MS = 120_000;
 /** Host commands run in the active workspace; started servers remain alive until reset. */
 export class SolarWorkspaceTool {
   private readonly servers = new Set<ChildProcess>();
+  private readonly staticServers = new Set<Server>();
 
   constructor(private cwd: string) {}
 
   setWorkspace(cwd: string): void { this.cwd = cwd; }
 
   async execute(input: WorkspaceCommandInput): Promise<WorkspaceCommandResult> {
+    if (input?.action === "serve") return this.serve(input.port);
     if (!input || (input.action !== "run" && input.action !== "start") || typeof input.command !== "string" || !input.command.trim()) {
-      throw new Error("workspace_command requires action run or start and a nonempty command.");
+      throw new Error("workspace_command requires action run or start with a nonempty command, or action serve.");
     }
     if (input.action === "start") return this.start(input.command);
     return runWorkspaceCommand(this.cwd, input);
@@ -25,6 +30,9 @@ export class SolarWorkspaceTool {
   async close(): Promise<void> {
     const running = [...this.servers];
     this.servers.clear();
+    const staticServers = [...this.staticServers];
+    this.staticServers.clear();
+    await Promise.all(staticServers.map(server => new Promise<void>(resolve => server.close(() => resolve()))));
     await Promise.all(running.map(async child => {
       if (!child.pid || child.exitCode !== null) return;
       if (process.platform !== "win32") {
@@ -49,6 +57,33 @@ export class SolarWorkspaceTool {
     child.once("exit", () => this.servers.delete(child));
     child.unref();
     return { command, pid: child.pid, started: true };
+  }
+
+  private async serve(port = 0): Promise<WorkspaceCommandResult> {
+    if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("serve port must be an integer from 0 to 65535.");
+    const root = resolve(this.cwd);
+    const server = createServer(async (request, response) => {
+      try {
+        if (request.method !== "GET" && request.method !== "HEAD") { response.writeHead(405).end(); return; }
+        const pathname = decodeURIComponent(new URL(request.url ?? "/", "http://localhost").pathname);
+        const path = resolve(root, `.${pathname.endsWith("/") ? `${pathname}index.html` : pathname}`);
+        const location = relative(root, path);
+        if (location === ".." || location.startsWith(`..${sep}`)) { response.writeHead(403).end(); return; }
+        if (!(await stat(path)).isFile()) { response.writeHead(404).end(); return; }
+        const mime = ({ ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" } as Record<string, string>)[extname(path).toLowerCase()] ?? "application/octet-stream";
+        const body = await readFile(path);
+        response.writeHead(200, { "content-type": mime, "content-length": body.length });
+        response.end(request.method === "HEAD" ? undefined : body);
+      } catch { response.writeHead(404).end(); }
+    });
+    await new Promise<void>((resolveReady, reject) => {
+      server.once("error", reject);
+      server.listen(port, "localhost", () => { server.off("error", reject); resolveReady(); });
+    });
+    this.staticServers.add(server);
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Static server did not report a local port.");
+    return { started: true, url: `http://localhost:${address.port}/` };
   }
 }
 
