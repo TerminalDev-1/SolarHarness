@@ -50,6 +50,15 @@ sub-agents, and sub-delegates run with workspace-write access.
   Standalone requests such as "turn on auto permissions" apply immediately in
   the host and receive a confirmation even if the model is unavailable. When
   the setting is part of a larger request, Solar still completes that request.
+- `workspace_command` lets Solar inspect and modify the active workspace, run
+  bounded commands with their exit code and output returned to its current
+  session, or start a local server that stays available for browser testing
+  until the session resets. Solar can also use its Codex workspace tools.
+  Browser and web turns use the Codex CLI's output schema to require a
+  structured host tool request before their needed actions are complete.
+  Model-issued host tool requests are parsed as JSON and their results are fed
+  back into the same session. If Solar emits only a control line, the harness
+  asks it to continue the task before returning a failure to the user.
 - `browser` is the visible interactive Playwright tool for website and web app
   testing, including local HTML, Next.js, and Three.js apps. It opens pages,
   clicks, fills fields, presses keys, scrolls, navigates, and captures screenshots.

@@ -14,6 +14,8 @@ for independent scopes.
 ## What it can do
 
 - Handle ordinary coding requests directly in the active workspace.
+- Run workspace commands through a host tool that returns command output to Solar;
+  start a local app server in the background for visible browser testing.
 - When you request delegation, turn the task into an implementation-ready sub-agent
   plan with one to eight sub-agents based on genuinely parallel scopes.
 - Honor an explicit request for one to eight agents, including when the same

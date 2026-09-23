@@ -1,6 +1,7 @@
 import type { AgentRecord, AgentTask, ReasoningEffort } from "./types.js";
 import type { BrowserInput, BrowserResult } from "./browser-tool.js";
 import type { WebSearchHeadlessInput, WebSearchHeadlessResult } from "./web-search-headless.js";
+import type { WorkspaceCommandInput, WorkspaceCommandResult } from "./workspace-tool.js";
 
 export type ToolDefinition<TInput, TResult> = {
   name: string;
@@ -40,6 +41,7 @@ export function registerHarnessTools(dependencies: {
   setAutoPermissions: (enabled: boolean) => AutoPermissionsState;
   browser: (input: BrowserInput) => Promise<BrowserResult>;
   webSearchHeadless: (input: WebSearchHeadlessInput) => Promise<WebSearchHeadlessResult>;
+  workspaceCommand: (input: WorkspaceCommandInput) => Promise<WorkspaceCommandResult>;
 }): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register<SpawnSubAgentInput, AgentRecord>({
@@ -81,6 +83,11 @@ export function registerHarnessTools(dependencies: {
     name: "web_search_headless",
     description: "Search Google headlessly with Bing fallback, returning source titles, URLs, and snippets; read source pages headlessly by URL.",
     execute: dependencies.webSearchHeadless
+  });
+  registry.register<WorkspaceCommandInput, WorkspaceCommandResult>({
+    name: "workspace_command",
+    description: "Run a command in the active workspace and return its exit code, stdout, and stderr, or start a long-running local server. Use to inspect, create, run, and verify local projects.",
+    execute: dependencies.workspaceCommand
   });
   return registry;
 }

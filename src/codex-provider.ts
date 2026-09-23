@@ -94,10 +94,10 @@ export class CodexCliProvider {
     });
   }
 
-  async resume(sessionId: string, prompt: string, options: CodexRunOptions): Promise<CodexRunResult> {
+  async resume(sessionId: string, prompt: string, options: CodexRunOptions, extraArgs: string[] = []): Promise<CodexRunResult> {
     const args = ["exec", "resume", "--json", "--model", options.model,
       "-c", 'sandbox_mode="workspace-write"',
-      "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`, "-c", "agents.enabled=false", sessionId, prompt];
+      "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`, "-c", "agents.enabled=false", ...extraArgs, sessionId, prompt];
     return this.runWithArgs(args, options);
   }
 

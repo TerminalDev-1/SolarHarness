@@ -8,8 +8,11 @@ import { actionStatus, activityDetail, initialActivity } from "../dist/activity.
 import { SolarBrowser } from "../dist/browser-tool.js";
 import { CodexCliProvider, requestedSubAgentCount } from "../dist/codex-provider.js";
 import { SolarHarness } from "../dist/harness.js";
+import { parseHostToolCall } from "../dist/host-tool-call.js";
+import { decodeHostTurn, writeHostTurnSchema } from "../dist/host-turn.js";
 import { SOLAR_SYSTEM_PROMPT } from "../dist/system-prompt.js";
 import { SolarWebSearchHeadless } from "../dist/web-search-headless.js";
+import { SolarWorkspaceTool, runWorkspaceCommand } from "../dist/workspace-tool.js";
 
 test("resetIntoTestWorkspace clears contents but keeps the test directory", async () => {
   const root = await mkdtemp(join(tmpdir(), "solar-harness-reset-"));
@@ -43,6 +46,7 @@ test("the main agent tool can turn auto permissions on and off", async () => {
     text: 'I’ll enable automatic sub-agent-plan approval.\nSOLAR_TOOL: set-auto-permissions {"enabled":true}\nSOLAR_STATE: DISCOVER',
     sessionId: "main-agent-session"
   });
+  harness.provider.resume = async () => ({ text: "Hello.\nSOLAR_STATE: DISCOVER", sessionId: "main-agent-session" });
   const response = await harness.converse("Turn auto permissions on and say hello.");
   assert.equal(harness.getAutoPermissions().enabled, true);
   assert.match(response.reply, /Auto permissions are now on/);
@@ -114,10 +118,140 @@ test("Solar's policy requires direct work until the user explicitly requests del
   assert.match(SOLAR_SYSTEM_PROMPT, /choose the smallest useful number/);
 });
 
-test("a control-only main agent turn still returns a visible reply", async () => {
+test("a control-only main agent turn retries before reporting failure", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   harness.provider.run = async () => ({ text: "SOLAR_STATE: DISCOVER", sessionId: "empty-session" });
-  const result = await harness.converse("Say hello.");
+  let retries = 0;
+  harness.provider.resume = async (_sessionId, prompt) => {
+    retries++;
+    assert.match(prompt, /no user-facing answer/);
+    return { text: "Hello!\nSOLAR_STATE: DISCOVER", sessionId: "empty-session" };
+  };
+  assert.equal((await harness.converse("Say hello.")).reply, "Hello!");
+  assert.equal(retries, 1);
+});
+
+test("repeated control-only replies yield an honest visible failure", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async () => ({ text: "SOLAR_STATE: DISCOVER", sessionId: "empty-session" });
+  let retries = 0;
+  harness.provider.resume = async () => {
+    retries++;
+    return { text: "SOLAR_STATE: DISCOVER", sessionId: "empty-session" };
+  };
+  assert.match((await harness.converse("Say hello.")).reply, /couldn't get a complete response/i);
+  assert.equal(retries, 2);
+});
+
+test("host tool parser accepts JSON with nested values and rejects malformed calls", () => {
+  const call = parseHostToolCall('```\nSOLAR_TOOL: workspace_command {\n  "action": "run",\n  "command": "node -e \\\"console.log({a: 1})\\\""\n}\n```');
+  assert.equal(call?.name, "workspace_command");
+  assert.equal(call?.input.action, "run");
+  assert.match(call?.input.command, /console\.log/);
+  assert.throws(() => parseHostToolCall('SOLAR_TOOL: workspace_command {"action":'), /Incomplete JSON/);
+});
+
+test("structured CLI turns require a host tool and parse its result", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-harness-schema-"));
+  try {
+    const requiredPath = await writeHostTurnSchema(root, true);
+    const required = JSON.parse(await readFile(requiredPath, "utf8"));
+    assert.deepEqual(required.properties.kind.enum, ["tool"]);
+    assert.match(required.properties.tool.enum.join(" "), /browser/);
+    const tool = decodeHostTurn(JSON.stringify({ kind: "tool", tool: "browser", input: '{"action":"open","url":"http://localhost:8000"}', reply: "" }));
+    assert.deepEqual(parseHostToolCall(tool)?.input, { action: "open", url: "http://localhost:8000" });
+    const answer = decodeHostTurn(JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "Game tested.\nSOLAR_STATE: DISCOVER" }));
+    assert.equal(answer, "Game tested.\nSOLAR_STATE: DISCOVER");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("browser turns pass the required output schema to the real CLI boundary", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.browser.execute = async () => ({ url: "https://example.com/", title: "Example", snapshot: '- heading "Example"' });
+  harness.provider.run = async (_prompt, _options, args) => {
+    assert.ok(args.includes("--output-schema"));
+    assert.match(args.at(-1), /host-tool-required\.json$/);
+    return { text: JSON.stringify({ kind: "tool", tool: "browser", input: '{"action":"open","url":"https://example.com"}', reply: "" }), sessionId: "structured-session" };
+  };
+  harness.provider.resume = async (_sessionId, _prompt, _options, args) => {
+    assert.ok(args.includes("--output-schema"));
+    return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "I opened Example.\nSOLAR_STATE: DISCOVER" }), sessionId: "structured-session" };
+  };
+  assert.equal((await harness.converse("Open https://example.com in the browser")).reply, "I opened Example.");
+});
+
+test("workspace command returns output and exit code from the active workspace", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-harness-command-"));
+  try {
+    const result = await runWorkspaceCommand(root, { action: "run", command: 'node -e "process.stdout.write(process.cwd())"' });
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout.trim(), root);
+    await assert.rejects(runWorkspaceCommand(root, { action: "run", command: "" }), /nonempty command/);
+    await assert.rejects(runWorkspaceCommand(root, { action: "run", command: "python -m http.server 8000" }), /action start/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("workspace start keeps a local server running for browser testing until reset", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-harness-server-"));
+  const workspace = new SolarWorkspaceTool(root);
+  try {
+    await writeFile(join(root, "server.cjs"), 'const fs=require("fs");require("http").createServer((_req,res)=>res.end("ready")).listen(0,"127.0.0.1",function(){fs.writeFileSync("port.txt",String(this.address().port))});');
+    const started = await workspace.execute({ action: "start", command: "node server.cjs" });
+    assert.equal(started.started, true);
+    assert.ok(started.pid > 0);
+    let port;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      try { port = Number(await readFile(join(root, "port.txt"), "utf8")); break; }
+      catch { await new Promise(resolve => setTimeout(resolve, 100)); }
+    }
+    assert.ok(port, "server did not start");
+    assert.equal(await (await fetch(`http://127.0.0.1:${port}`)).text(), "ready");
+  } finally {
+    await workspace.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Solar can inspect a local app, run it, and interact with the visible browser", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const hostCalls = [];
+  harness.tools.register({ name: "workspace_command", description: "mock", execute: async input => {
+    hostCalls.push(["workspace_command", input]);
+    return { command: input.command, exitCode: 0, stdout: "App listening on http://localhost:3000", stderr: "" };
+  } });
+  harness.tools.register({ name: "browser", description: "mock", execute: async input => {
+    hostCalls.push(["browser", input]);
+    return { url: "http://localhost:3000/", title: "Game", snapshot: '- button "Start"' };
+  } });
+  harness.provider.run = async prompt => {
+    assert.match(prompt, /workspace_command/);
+    return { text: "SOLAR_STATE: DISCOVER", sessionId: "app-session" };
+  };
+  const replies = [
+    'SOLAR_TOOL: workspace_command {"action":"run","command":"inspect and start app"}',
+    'SOLAR_TOOL: browser {"action":"open","url":"http://localhost:3000"}',
+    'SOLAR_TOOL: browser {"action":"click","selector":"role=button[name=Start]"}',
+    "I opened the game and clicked Start.\nSOLAR_STATE: DISCOVER"
+  ];
+  harness.provider.resume = async () => ({ text: replies.shift(), sessionId: "app-session" });
+  const result = await harness.converse("Test the game in the browser; if none exists, create a simple app to test it.");
+  assert.match(result.reply, /clicked Start/);
+  assert.deepEqual(hostCalls.map(([name, input]) => [name, input.action]), [
+    ["workspace_command", "run"], ["browser", "open"], ["browser", "click"]
+  ]);
+});
+
+test("Solar does not claim a game was tested without browser interaction", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.browser.execute = async () => ({ url: "http://localhost:3000/", title: "Game", snapshot: '- button "Start"' });
+  harness.provider.run = async () => ({ text: 'SOLAR_TOOL: browser {"action":"open","url":"http://localhost:3000"}', sessionId: "incomplete-game" });
+  harness.provider.resume = async () => ({ text: "I tested the game successfully.\nSOLAR_STATE: DISCOVER", sessionId: "incomplete-game" });
+  const result = await harness.converse("Test the game in the browser.");
+  assert.doesNotMatch(result.reply, /tested the game successfully/i);
   assert.match(result.reply, /couldn't get a complete response/i);
 });
 
