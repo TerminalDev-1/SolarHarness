@@ -31,7 +31,8 @@ for independent scopes.
 - Give Solar, sub-agents, and sub-delegates workspace-write access for
   implementation; keep delegation planning read-only.
 - Let Solar test local HTML, Next.js, and Three.js apps in a windowed Playwright
-  browser with a blue control tint and notice. It can interact with pages and
+  browser with a blue control tint, notice, and visible Solar cursor. It can
+  move its cursor, click page elements or coordinates, press keys, and
   save full-page screenshots. The window remains open after a task; Playwright
   tries managed Chromium first, then Microsoft Edge if needed.
 - Search and read sources through the separate `web_search_headless` tool. It
@@ -97,6 +98,9 @@ npm run dev
 If Playwright is missing globally, run `npm install -g playwright`. Install its
 browser executable with `playwright install chromium` if needed. The project also
 installs Playwright locally through `npm install`.
+
+Run `npm run test:browser-live` to verify the visible cursor, page clicks, and
+key presses against a local test page.
 
 `chat` is the default command, so `npm run dev` opens the interface directly.
 For a compiled production run:

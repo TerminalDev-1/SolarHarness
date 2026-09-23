@@ -61,7 +61,8 @@ sub-agents, and sub-delegates run with workspace-write access.
   asks it to continue the task before returning a failure to the user.
 - `browser` is the visible interactive Playwright tool for website and web app
   testing, including local HTML, Next.js, and Three.js apps. It opens pages,
-  clicks, fills fields, presses keys, scrolls, navigates, and captures screenshots.
+  moves a visible blue Solar cursor, clicks selectors or viewport coordinates,
+  fills fields, presses keys, scrolls, navigates, and captures screenshots.
   Its context persists across tasks until the user closes it, resets the session,
   or exits the app. Launch first resolves the Playwright Chromium executable,
   then falls back to Microsoft Edge through
@@ -70,6 +71,9 @@ sub-agents, and sub-delegates run with workspace-write access.
   and accessibility snapshot to the same Solar session; `screenshot` also saves
   a PNG under `.solarharness/screenshots` in the workspace and returns its path.
   Launch it in a compact windowed frame with a blue page tint and control notice.
+  For a game test, starting the game alone is incomplete: Solar must use another
+  browser mouse or key action and inspect the resulting page. A user pressing a
+  key in the visible window does not count as a Solar tool action.
 - `web_search_headless` handles ordinary web research in a separate, short-lived
   headless Playwright session. `search` returns titles, source URLs, and snippets;
   `read` returns page text for a source URL. It tries Google first, falls back to
@@ -107,6 +111,22 @@ Do not update `README.md` for every small fix or internal change. Update the
 README only when the public harness architecture, installation, commands,
 workflow, safety model, or meaningful user-facing capabilities change. Keep it
 concise and avoid turning routine maintenance into release-note noise.
+
+## Evidence and honest reporting
+
+- Report failed tests and incomplete live runs plainly. Do not weaken a test,
+  invent a fallback action, or change the success condition merely to make a
+  failure look like a pass. Fix the behavior and rerun the original scenario.
+- Distinguish mocked unit tests from live browser tests. A passing mock does not
+  prove that the visible browser opened or that a game responded to input.
+- Attribute actions only when the harness recorded a successful tool call. A
+  browser window can also receive user input; do not credit Solar for clicks,
+  key presses, score changes, or visual effects the user may have caused.
+  Report the tool action and the observed page state separately. If attribution
+  is uncertain, say so.
+- Do not claim a task is verified or ready to commit while its required live
+  scenario still fails. State what failed, what was changed, and what remains
+  unverified. Correct an earlier inaccurate claim as soon as it is found.
 
 ## Claude Code-style activity indicator
 

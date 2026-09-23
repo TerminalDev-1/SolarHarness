@@ -235,13 +235,14 @@ test("Solar can inspect a local app, run it, and interact with the visible brows
     'SOLAR_TOOL: workspace_command {"action":"run","command":"inspect and start app"}',
     'SOLAR_TOOL: browser {"action":"open","url":"http://localhost:3000"}',
     'SOLAR_TOOL: browser {"action":"click","selector":"role=button[name=Start]"}',
-    "I opened the game and clicked Start.\nSOLAR_STATE: DISCOVER"
+    'SOLAR_TOOL: browser {"action":"press","key":"ArrowRight"}',
+    "I opened the game, clicked Start, and pressed ArrowRight.\nSOLAR_STATE: DISCOVER"
   ];
   harness.provider.resume = async () => ({ text: replies.shift(), sessionId: "app-session" });
   const result = await harness.converse("Test the game in the browser; if none exists, create a simple app to test it.");
-  assert.match(result.reply, /clicked Start/);
+  assert.match(result.reply, /pressed ArrowRight/);
   assert.deepEqual(hostCalls.map(([name, input]) => [name, input.action]), [
-    ["workspace_command", "run"], ["browser", "open"], ["browser", "click"]
+    ["workspace_command", "run"], ["browser", "open"], ["browser", "click"], ["browser", "press"]
   ]);
 });
 
@@ -259,6 +260,8 @@ test("activity text describes browser actions rather than generic thinking", () 
   assert.equal(initialActivity("Open YouTube and search MrBeast"), "opening YouTube");
   assert.equal(activityDetail("Browser: open https://www.youtube.com"), "opening YouTube");
   assert.equal(activityDetail("Browser: searching YouTube for MrBeast"), "searching YouTube for MrBeast");
+  assert.equal(activityDetail("Browser: move 300,200"), "moving Solar's cursor to 300, 200");
+  assert.equal(activityDetail("Browser: press ArrowRight"), "pressing ArrowRight in the browser");
   assert.equal(actionStatus("thinking", initialActivity("Open YouTube and search MrBeast")), "Thinking — opening YouTube");
   assert.equal(actionStatus("browsing", activityDetail("Browser: searching YouTube for MrBeast")), "Thinking — searching YouTube for MrBeast");
 });

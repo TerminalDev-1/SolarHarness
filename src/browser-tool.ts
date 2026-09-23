@@ -5,9 +5,11 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
 export type BrowserInput = {
-  action: "open" | "youtube_search" | "snapshot" | "screenshot" | "click" | "fill" | "press" | "scroll" | "back" | "forward" | "close";
+  action: "open" | "youtube_search" | "snapshot" | "screenshot" | "move" | "click" | "fill" | "press" | "scroll" | "back" | "forward" | "close";
   url?: string;
   selector?: string;
+  x?: number;
+  y?: number;
   value?: string;
   key?: string;
   direction?: "up" | "down";
@@ -61,9 +63,22 @@ export class SolarBrowser {
         await page.screenshot({ path: screenshotPath, fullPage: input.fullPage ?? true });
         return { ...await this.describe(page), screenshotPath };
       }
+      case "move":
+        this.checkPoint(page, input.x, input.y);
+        await this.moveCursor(page, input.x!, input.y!);
+        break;
       case "click":
-        if (!input.selector) throw new Error("click requires a selector.");
-        await page.locator(input.selector).click({ timeout: 10_000 });
+        if (input.selector) {
+          const target = page.locator(input.selector);
+          await target.scrollIntoViewIfNeeded({ timeout: 10_000 });
+          const bounds = await target.boundingBox();
+          if (bounds) await this.moveCursor(page, bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+          await target.click({ timeout: 10_000 });
+        } else {
+          this.checkPoint(page, input.x, input.y);
+          await this.moveCursor(page, input.x!, input.y!);
+          await page.mouse.click(input.x!, input.y!);
+        }
         break;
       case "fill":
         if (!input.selector || typeof input.value !== "string") throw new Error("fill requires a selector and value.");
@@ -71,6 +86,7 @@ export class SolarBrowser {
         break;
       case "press":
         if (!input.key) throw new Error("press requires a key.");
+        await page.bringToFront();
         if (input.selector) await page.locator(input.selector).press(input.key, { timeout: 10_000 });
         else await page.keyboard.press(input.key);
         break;
@@ -142,6 +158,18 @@ export class SolarBrowser {
           pointerEvents: "none"
         });
         document.body.appendChild(notice);
+        const cursor = document.createElement("div");
+        cursor.id = "solar-harness-cursor";
+        cursor.setAttribute("aria-hidden", "true");
+        Object.assign(cursor.style, {
+          position: "fixed", left: "0px", top: "0px", display: "none",
+          width: "18px", height: "18px", borderRadius: "50%",
+          background: "#2563eb", border: "3px solid #fff",
+          boxShadow: "0 0 0 3px #1d4ed8, 0 2px 12px #0009",
+          transform: "translate(-50%, -50%)", transition: "left 120ms, top 120ms",
+          zIndex: "2147483647", pointerEvents: "none"
+        });
+        document.body.appendChild(cursor);
       };
       if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", showNotice, { once: true });
       else showNotice();
@@ -157,6 +185,25 @@ export class SolarBrowser {
       page.locator("body").ariaSnapshot({ timeout: 10_000 })
     ]);
     return { url: page.url(), title, snapshot: snapshot.slice(0, 20_000) };
+  }
+
+  private checkPoint(page: Page, x: number | undefined, y: number | undefined): void {
+    const size = page.viewportSize();
+    if (!size || !Number.isFinite(x) || !Number.isFinite(y) || x! < 0 || y! < 0 || x! >= size.width || y! >= size.height) {
+      throw new Error("move or coordinate click requires x and y inside the browser viewport.");
+    }
+  }
+
+  private async moveCursor(page: Page, x: number, y: number): Promise<void> {
+    await page.mouse.move(x, y, { steps: 8 });
+    await page.evaluate(({ x, y }) => {
+      const cursor = document.getElementById("solar-harness-cursor");
+      if (cursor) {
+        cursor.style.left = `${x}px`;
+        cursor.style.top = `${y}px`;
+        cursor.style.display = "block";
+      }
+    }, { x, y });
   }
 
   private async dismissYouTubeConsent(page: Page): Promise<void> {

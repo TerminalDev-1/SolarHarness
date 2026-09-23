@@ -28,10 +28,14 @@ export function activityDetail(event: string): string | undefined {
       return `opening ${/(^|\.)youtube\.com$/i.test(hostname) ? "YouTube" : hostname}`;
     } catch { return "opening the browser"; }
   }
+  const move = event.match(/^Browser: move (\d+),(\d+)/i);
+  if (move) return `moving Solar's cursor to ${move[1]}, ${move[2]}`;
+  const press = event.match(/^Browser: press (.+)$/i);
+  if (press) return `pressing ${press[1]} in the browser`;
   const browserAction = event.match(/^Browser: (.+)$/i);
   if (browserAction) {
     const action = browserAction[1].split(" ")[0];
-    return ({ snapshot: "reading the page", screenshot: "capturing the page", click: "clicking in the browser", fill: "entering text in the browser", press: "pressing a key in the browser", scroll: "scrolling the page", back: "going back", forward: "going forward", close: "closing the browser" } as Record<string, string>)[action]
+    return ({ snapshot: "reading the page", screenshot: "capturing the page", click: "clicking in the browser", fill: "entering text in the browser", scroll: "scrolling the page", back: "going back", forward: "going forward", close: "closing the browser" } as Record<string, string>)[action]
       ?? `${action.replace(/_/g, " ")} in the browser`;
   }
   const command = event.match(/^Running command: (.+)$/i);

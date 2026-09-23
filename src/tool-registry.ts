@@ -76,7 +76,7 @@ export function registerHarnessTools(dependencies: {
   });
   registry.register<BrowserInput, BrowserResult>({
     name: "browser",
-    description: "Interact with a visible Playwright browser for web app testing and page tasks: open, snapshot, screenshot, click, fill, press, scroll, back, forward, YouTube search, or close.",
+    description: "Interact with a visible Playwright browser: open, snapshot, screenshot, move Solar's visible cursor, click a selector or viewport coordinates, fill, press keys, scroll, navigate, search YouTube, or close.",
     execute: dependencies.browser
   });
   registry.register<WebSearchHeadlessInput, WebSearchHeadlessResult>({
