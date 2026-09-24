@@ -1,11 +1,10 @@
 # Solar Harness agent architecture
 
-## Interface preview branches
+## Interface baseline branch
 
 `Interface_Design_Preview` preserves the original interface baseline.
-`Interface_Redesign_Preview` contains the terminal-interface redesign developed
-for PR #1. After that PR is merged, regular work can continue on `main`. Keep
-the preview branches available for comparison until they are no longer needed.
+The terminal-interface redesign from PR #1 is merged into `main`. Continue
+interface work on `main`; the redesign preview branch has been retired.
 
 ## Roles
 
