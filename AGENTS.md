@@ -172,6 +172,11 @@ same text-safe spinner and fixed terracotta/orange color treatment.
 The main activity copy names the current action, such as opening YouTube,
 searching for a query, or running a command. Do not show a generic Thinking label
 when a concrete action is known.
+Activity labels must stay short. Use a mentioned file name when available (for
+example, `Working on index.html`) and never echo the user's full prompt into the
+status line. The `/pets` command selects a text-safe animated cat, dog, or fox
+beside Solar's activity line; `/pets off` hides it. Pet animation must not use
+emoji-capable glyphs or change the fixed activity text color.
 
 ## Public publishing authorization
 

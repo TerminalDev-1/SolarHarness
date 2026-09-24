@@ -223,7 +223,8 @@ for the role and runtime contract.
 ## Claude Code-style activity indicator
 
 SolarHarness uses a compact activity treatment inspired by Claude Code: a small
-animated symbol, a concrete status such as `Thinking — opening YouTube`, and
+animated symbol, a concrete status such as `Opening YouTube` or
+`Working on index.html`, and
 elapsed time on one line.
 It is an approximation designed for this Ink-based terminal UI rather than a copy
 of Claude Code's renderer.
@@ -240,6 +241,10 @@ terracotta/orange ANSI span and animates only an adjacent text-safe sequence:
 `·`, `✦`, `✧`, `✦`. Frames advance every 240 ms. This preserves the calm
 Claude Code-like feel without per-character color cycling, emoji substitution, or
 green flashes across supported terminal themes.
+
+An animated text pet sits beside the activity while Solar works. The cat is
+selected by default; use `/pets cat`, `/pets dog`, `/pets fox`, or `/pets off`
+to change it. Run `/pets` to see the current selection.
 
 ## Preview status
 

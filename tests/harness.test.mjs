@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { AgentManager } from "../dist/agent-manager.js";
 import { actionStatus, activityDetail, initialActivity } from "../dist/activity.js";
+import { petFrame } from "../dist/pets.js";
 import { SolarBrowser } from "../dist/browser-tool.js";
 import { CodexCliProvider, requestedSubAgentCount } from "../dist/codex-provider.js";
 import { SolarHarness } from "../dist/harness.js";
@@ -446,8 +447,18 @@ test("activity text describes browser actions rather than generic thinking", () 
   assert.equal(activityDetail("Browser: search MrBeast"), "searching in the browser for MrBeast");
   assert.equal(activityDetail("Browser: move 300,200"), "moving Solar's cursor to 300, 200");
   assert.equal(activityDetail("Browser: press ArrowRight"), "pressing ArrowRight in the browser");
-  assert.equal(actionStatus("thinking", initialActivity("Open YouTube and search MrBeast")), "Thinking — opening YouTube");
-  assert.equal(actionStatus("browsing", activityDetail("Browser: searching YouTube for MrBeast")), "Thinking — searching YouTube for MrBeast");
+  assert.equal(actionStatus("thinking", initialActivity("Open YouTube and search MrBeast")), "Opening YouTube");
+  assert.equal(actionStatus("browsing", activityDetail("Browser: searching YouTube for MrBeast")), "Searching YouTube for MrBeast");
+  assert.equal(actionStatus("thinking", initialActivity("Please update index.html and make the entire page blue")), "Working on index.html");
+  assert.equal(actionStatus("thinking", initialActivity("Please explain the current implementation in detail")), "Working on your request");
+  assert.equal(actionStatus("command", activityDetail("Running command: Get-Content src/index.html")), "Working on index.html");
+});
+
+test("terminal pets animate and can be hidden", () => {
+  assert.equal(petFrame("cat", 0), "=^.^=");
+  assert.equal(petFrame("cat", 2), "=^-^=");
+  assert.notEqual(petFrame("dog", 0), petFrame("fox", 0));
+  assert.equal(petFrame("off", 10), "");
 });
 
 test("the main agent feeds browser results back into the same model session", async () => {

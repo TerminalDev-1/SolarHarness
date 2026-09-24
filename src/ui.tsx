@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import { SolarHarness } from "./harness.js";
 import { actionStatus, activityDetail, initialActivity } from "./activity.js";
+import { PET_NAMES, petFrame, type PetSelection } from "./pets.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type ReasoningEffort } from "./types.js";
 
 type UiPhase = "idle" | "thinking" | "browsing" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating";
@@ -78,6 +79,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [currentActivity, setCurrentActivity] = useState("working on your request");
   const [spinner, setSpinner] = useState(0);
+  const [pet, setPet] = useState<PetSelection>("cat");
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -228,7 +230,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task for Solar to handle directly, or ask to delegate it. Controls: /delegate · /new · /auto-approve <on|off> · /theme <light|dark> · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
+        addMessage({ role: "solar", text: "Describe a task for Solar to handle directly, or ask to delegate it. Controls: /delegate · /new · /auto-approve <on|off> · /theme <light|dark> · /pets [cat|dog|fox|off] · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
       } else if (line === "/auto-approve") {
@@ -247,6 +249,14 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         const nextTheme = line.slice(7).trim();
         if (nextTheme === "light" || nextTheme === "dark") changeTheme(nextTheme);
         else addMessage({ role: "error", text: "Usage: /theme <light|dark>" });
+      } else if (line === "/pets") {
+        addMessage({ role: "solar", text: `Current pet: ${pet}. Choose with /pets <cat|dog|fox|off>.` });
+      } else if (line.startsWith("/pets ")) {
+        const selection = line.slice(6).trim().toLowerCase();
+        if (selection === "off" || PET_NAMES.some(name => name === selection)) {
+          setPet(selection as PetSelection);
+          addMessage({ role: "solar", text: selection === "off" ? "Pet hidden." : `${selection[0].toUpperCase()}${selection.slice(1)} will keep Solar company while it works.` });
+        } else addMessage({ role: "error", text: "Usage: /pets <cat|dog|fox|off>" });
       } else if (line === "/effort") {
         setPendingEffort({ cursor: REASONING_EFFORTS.indexOf(currentReasoning) });
       } else if (line.startsWith("/effort ")) {
@@ -359,6 +369,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
           <Box>
             <Text color={theme.pulse}>{spinnerFrames[spinner % spinnerFrames.length]} </Text>
             <ActivityText text={phaseInfo.activity} />
+            {pet !== "off" && <Text color={theme.secondary}>  {petFrame(pet, spinner)}</Text>}
             <Text color={theme.subtle}> · {elapsed}s</Text>
           </Box>
           {activityLog.slice(-4).map((activity, index) => (

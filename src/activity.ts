@@ -1,6 +1,6 @@
 /** Short, truthful status copy for the main agent's current action. */
 export function actionStatus(phase: "thinking" | "browsing" | "command", detail: string): string {
-  return `${phase === "command" ? "Working" : "Thinking"} — ${detail}`;
+  return detail.charAt(0).toUpperCase() + detail.slice(1);
 }
 
 export function initialActivity(request: string): string {
@@ -11,7 +11,14 @@ export function initialActivity(request: string): string {
   if (url) {
     try { return `opening ${new URL(url).hostname}`; } catch { /* Use the request below. */ }
   }
-  return `working on ${request.replace(/\s+/g, " ").trim().slice(0, 72)}`;
+  const file = mentionedFile(request);
+  if (file) return `working on ${file}`;
+  return "working on your request";
+}
+
+function mentionedFile(value: string): string | undefined {
+  const match = value.match(/(?:^|[\s"'`(])(?:[\w.-]+[\\/])*([\w.-]+\.(?:html?|css|jsx?|tsx?|json|md|py|rs|go|java|vue|svelte|ya?ml))(?:$|[\s"'`),:;!?])/i);
+  return match?.[1];
 }
 
 export function activityDetail(event: string): string | undefined {
@@ -41,7 +48,10 @@ export function activityDetail(event: string): string | undefined {
       ?? `${action.replace(/_/g, " ")} in the browser`;
   }
   const command = event.match(/^Running command: (.+)$/i);
-  if (command) return `running ${command[1].slice(0, 70)}`;
+  if (command) {
+    const file = mentionedFile(command[1]);
+    return file ? `working on ${file}` : "running a command";
+  }
   if (event.startsWith("Command completed:")) return "checking command output";
   if (event.startsWith("Designing a named sub-agent plan")) return "drafting the sub-agent plan";
   if (event.startsWith("Synthesizing sub-agent reports")) return "reviewing sub-agent reports";
