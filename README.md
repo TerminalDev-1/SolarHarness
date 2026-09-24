@@ -11,12 +11,9 @@ Solar to delegate. Delegation plans are reviewed before launch unless
 auto-approve is enabled. Sub-agents can create named Light-pinned sub-delegates
 for independent scopes.
 
-This `Interface_Redesign_Preview` branch previews a calmer terminal layout with
-a centered reading column, compact conversation, and one blocky input frame. The published
-`Interface_Design_Preview` branch preserves the baseline for comparison. Main
-remains unchanged while this interface work is reviewed.
-The preview opens in a brushed-silver theme with a chrome header rail and the
-earlier rainbow-blue message frame. `/theme dark` restores the terminal's
+SolarHarness uses a centered terminal layout with a compact conversation and
+one blocky input frame. It opens in a brushed-silver theme with a chrome header
+rail and a rainbow-blue message frame. `/theme dark` restores the terminal's
 native background. Its welcome view highlights browsing, file inspection, tool
 use, and creation.
 

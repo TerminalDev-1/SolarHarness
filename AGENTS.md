@@ -2,11 +2,10 @@
 
 ## Interface preview branches
 
-`Interface_Design_Preview` is a published baseline branch.
-`Interface_Redesign_Preview` is the active, published terminal-interface redesign
-branch. Keep `main` unchanged while this preview is in progress. Work on the
-redesign branch and publish its updates there. Once the redesign is accepted,
-the preview branches can be deleted; do not delete them during active work.
+`Interface_Design_Preview` preserves the original interface baseline.
+`Interface_Redesign_Preview` contains the terminal-interface redesign developed
+for PR #1. After that PR is merged, regular work can continue on `main`. Keep
+the preview branches available for comparison until they are no longer needed.
 
 ## Roles
 
