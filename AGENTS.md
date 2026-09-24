@@ -194,12 +194,14 @@ The redesign preview keeps Ink and the terminal runtime. Use a centered reading
 column, compact transcript rows, and one expressive input frame. Avoid full-width colored
 message cards or repeated status panels; those made the interface look like a
 chat app with excessive empty space. Keep commands and approval flows accessible.
-The preview starts in the chromatic theme and applies its deep navy background
-and icy foreground before rendering the splash. The light theme has been removed.
-The sole message frame uses text-safe block glyphs with a shiny blue-led
-cyan-to-indigo-to-violet chromatic rail; keep that treatment through idle,
-busy, and approval states. `/theme dark` remains a plain fallback, and
-`/theme chromatic` restores the default. Welcome copy should reflect Solar's browser, file inspection,
+The preview starts in the chromatic theme and applies a saturated royal-blue
+background with an icy foreground before rendering the splash. The light theme
+has been removed. A bright cyan-to-blue-to-indigo rail appears in the header,
+and compact block markers distinguish transcript speakers without message cards.
+The sole message frame uses text-safe block glyphs and an ice-blue highlight;
+keep that treatment through idle, busy, and approval states. `/theme dark`
+restores the terminal's native background, and `/theme chromatic` restores the
+default. Welcome copy should reflect Solar's browser, file inspection,
 tool use, and creation abilities rather than only coding work.
 The header shows only the Solar brand and workspace. Do not restore the idle
 `Ready` badge or a separate header status indicator; active work appears in the

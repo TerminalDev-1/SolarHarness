@@ -15,9 +15,10 @@ This `Interface_Redesign_Preview` branch previews a calmer terminal layout with
 a centered reading column, compact conversation, and one blocky input frame. The published
 `Interface_Design_Preview` branch preserves the baseline for comparison. Main
 remains unchanged while this interface work is reviewed.
-The preview opens in a deep navy chromatic theme with a shiny, blocky blue
-message frame; `/theme dark` remains a plain fallback. Its welcome view highlights browsing, file
-inspection, tool use, and creation.
+The preview opens in a saturated royal-blue chromatic theme with a bright header
+rail and shiny, blocky message frame. `/theme dark` restores the terminal's
+native background. Its welcome view highlights browsing, file inspection, tool
+use, and creation.
 
 ## What it can do
 

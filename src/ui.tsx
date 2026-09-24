@@ -35,19 +35,19 @@ const darkTheme: Theme = {
 };
 
 const chromaticTheme: Theme = {
-  accent: "#7dd3fc",
-  accentStrong: "#a5b4fc",
-  primary: "#edf7ff",
-  secondary: "#b1c9e5",
-  subtle: "#7794b7",
+  accent: "#40dcff",
+  accentStrong: "#a2afff",
+  primary: "#f2fbff",
+  secondary: "#c8e7ff",
+  subtle: "#a0c4ee",
   success: "#6ee7b7",
   warning: "#fbbf24",
   error: "#fda4af",
-  promptBright: "#e0f2fe",
-  promptSoft: "#93c5fd",
-  chromatic: ["#22d3ee", "#38bdf8", "#60a5fa", "#e0f2fe", "#3b82f6", "#6366f1", "#a78bfa"],
-  background: "#071529",
-  pulse: "#7dd3fc"
+  promptBright: "#effbff",
+  promptSoft: "#b4e8ff",
+  chromatic: ["#00dcff", "#22bdff", "#348cff", "#75c7ff", "#ecfaff", "#528cff", "#4162ff", "#6158f6", "#a970ff"],
+  background: "#0a347a",
+  pulse: "#4de1ff"
 };
 
 const themes: Record<ThemeName, Theme> = { dark: darkTheme, chromatic: chromaticTheme };
@@ -370,7 +370,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   return (
     <Box key={themeName} width={terminalWidth - 1} justifyContent="center">
     <Box width={contentWidth} flexDirection="column">
-      <Header compact={compact} workspace={workspace} />
+      <Header compact={compact} workspace={workspace} width={contentWidth} />
 
       {conversation.length === 0 && <Welcome />}
 
@@ -507,12 +507,15 @@ function ActivityText({ text }: { text: string }): React.JSX.Element {
   return <Text color={theme.pulse}>{text}</Text>;
 }
 
-function Header({ compact, workspace }: { compact: boolean; workspace: string }): React.JSX.Element {
+function Header({ compact, workspace, width }: { compact: boolean; workspace: string; width: number }): React.JSX.Element {
   const workspaceLabel = compact ? workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace : workspace;
   return (
-    <Box marginTop={1} marginBottom={1} flexDirection="column" paddingX={1}>
-      <Text><Text bold color={theme.pulse}>✦ Solar</Text><Text color={theme.secondary}> Harness</Text></Text>
-      <Text color={theme.subtle}>{workspaceLabel}</Text>
+    <Box marginTop={1} marginBottom={1} flexDirection="column">
+      <Box paddingX={1} flexDirection="column">
+        <Text><Text bold color={theme.pulse}>▣ Solar</Text><Text color={theme.secondary}> Harness</Text></Text>
+        <Text color={theme.subtle}>{workspaceLabel}</Text>
+      </Box>
+      <ChromaticRail width={width} glyph="▄" colors={theme.chromatic} />
     </Box>
   );
 }
@@ -522,6 +525,7 @@ function Message({ message }: { message: ChatMessage }): React.JSX.Element {
   const label = message.role === "user" ? "You" : message.role === "error" ? "Error" : "Solar";
   return (
     <Box marginBottom={1} paddingX={1}>
+      <Text color={color}>▌ </Text>
       <Box width={8}><Text bold color={color}>{label}</Text></Box>
       <Box flexGrow={1}><Text color={message.role === "error" ? theme.error : theme.primary}>{message.text}</Text></Box>
     </Box>
