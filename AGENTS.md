@@ -199,6 +199,9 @@ text-safe block glyphs with a blue-led cyan-to-indigo-to-violet chromatic rail;
 keep that treatment through idle, busy, and approval states. `/theme dark`
 remains available. Welcome copy should reflect Solar's browser, file inspection,
 tool use, and creation abilities rather than only coding work.
+The header shows only the Solar brand and workspace. Do not restore the idle
+`Ready` badge or a separate header status indicator; active work appears in the
+activity line, and approval controls explain pending user action.
 
 ## Public publishing authorization
 

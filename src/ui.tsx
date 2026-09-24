@@ -372,7 +372,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   return (
     <Box key={themeName} width={terminalWidth - 1} justifyContent="center">
     <Box width={contentWidth} flexDirection="column">
-      <Header compact={compact} workspace={workspace} status={busy ? "working" : pendingPlan ? "review required" : pendingEffort ? "choose effort" : pendingNew ? "confirm new session" : "ready"} statusColor={busy ? phaseInfo.color : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.success} />
+      <Header compact={compact} workspace={workspace} />
 
       {conversation.length === 0 && <Welcome />}
 
@@ -394,11 +394,11 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         <Box marginTop={1} flexDirection="column" paddingX={1}>
           <Box>
             <Text color={theme.pulse}>{spinnerFrames[spinner % spinnerFrames.length]} </Text>
-            <ActivityText text={phaseInfo.activity} />
+            <ActivityText text={phaseInfo} />
             {pet !== "off" && <Text color={theme.secondary}>  {petFrame(pet, spinner)}</Text>}
             <Text color={theme.subtle}> · {elapsed}s</Text>
           </Box>
-          {latestStepLabel && latestStepLabel.toLowerCase() !== phaseInfo.activity.toLowerCase() && <Text color={theme.subtle}>  {latestStepLabel}</Text>}
+          {latestStepLabel && latestStepLabel.toLowerCase() !== phaseInfo.toLowerCase() && <Text color={theme.subtle}>  {latestStepLabel}</Text>}
         </Box>
       )}
 
@@ -464,7 +464,7 @@ function Splash({ compact }: { compact: boolean }): React.JSX.Element {
       <Text color={theme.pulse}>     --  O  --</Text>
       <Text color={theme.pulse}>       /  |  \</Text>
       <Box marginTop={1}><Text bold color={theme.primary}>S O L A R   H A R N E S S</Text></Box>
-      <Text color={theme.secondary}>Your workspace is ready.</Text>
+      <Text color={theme.secondary}>Welcome to Solar Harness.</Text>
       <Box marginTop={1}><Text color={theme.subtle}>Press any key to continue</Text></Box>
     </Box>
   );
@@ -509,14 +509,11 @@ function ActivityText({ text }: { text: string }): React.JSX.Element {
   return <Text color={theme.pulse}>{text}</Text>;
 }
 
-function Header({ compact, workspace, status, statusColor }: { compact: boolean; workspace: string; status: string; statusColor: string }): React.JSX.Element {
+function Header({ compact, workspace }: { compact: boolean; workspace: string }): React.JSX.Element {
   const workspaceLabel = compact ? workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace : workspace;
   return (
     <Box marginTop={1} marginBottom={1} flexDirection="column" paddingX={1}>
-      <Box justifyContent="space-between">
-        <Text><Text bold color={theme.pulse}>✦ Solar</Text><Text color={theme.secondary}> Harness</Text></Text>
-        <Text color={statusColor}>{status === "ready" ? "Ready" : status}</Text>
-      </Box>
+      <Text><Text bold color={theme.pulse}>✦ Solar</Text><Text color={theme.secondary}> Harness</Text></Text>
       <Text color={theme.subtle}>{workspaceLabel}</Text>
     </Box>
   );
@@ -607,16 +604,14 @@ function Footer({ compact, model, reasoning, themeName, autoApprove }: { compact
   );
 }
 
-function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): { activity: string; color: string } {
-  if (phase === "thinking") return { activity: actionStatus(phase, detail), color: theme.accentStrong };
-  if (phase === "browsing") return { activity: actionStatus(phase, detail), color: theme.pulse };
-  if (phase === "planning") return { activity: `Planning — ${detail}`, color: theme.warning };
-  if (phase === "delegating") return { activity: `Launching sub-agents — ${detail}`, color: theme.accent };
-  if (phase === "working") return { activity: `${activeSubAgents} sub-agent${activeSubAgents === 1 ? "" : "s"} — ${detail}`, color: theme.accent };
-  if (phase === "command") return { activity: actionStatus(phase, detail), color: theme.pulse };
-  if (phase === "synthesizing") return { activity: `Reviewing — ${detail}`, color: theme.accentStrong };
-  if (phase === "updating") return { activity: `Updating — ${detail}`, color: theme.warning };
-  return { activity: "Ready", color: theme.success };
+function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): string {
+  if (phase === "thinking" || phase === "browsing" || phase === "command") return actionStatus(phase, detail);
+  if (phase === "planning") return `Planning — ${detail}`;
+  if (phase === "delegating") return `Launching sub-agents — ${detail}`;
+  if (phase === "working") return `${activeSubAgents} sub-agent${activeSubAgents === 1 ? "" : "s"} — ${detail}`;
+  if (phase === "synthesizing") return `Reviewing — ${detail}`;
+  if (phase === "updating") return `Updating — ${detail}`;
+  return "";
 }
 
 export function startSolarUi(harness: SolarHarness, model: string, reasoning: ReasoningEffort): void {
