@@ -10,48 +10,48 @@ type ChatMessage = { role: "user" | "solar" | "error"; text: string };
 type PendingPlan = { plan: DelegationPlan; request: string; context: string; selected: boolean[]; cursor: number };
 type PendingEffort = { cursor: number };
 type PendingNew = { cursor: number };
-type ThemeName = "dark" | "chromatic";
+type ThemeName = "dark" | "silver";
 type Theme = {
   accent: string; accentStrong: string; primary: string; secondary: string;
   subtle: string; success: string; warning: string; error: string;
-  promptBright: string; promptSoft: string; chromatic: readonly string[];
+  promptBright: string; promptSoft: string; rail: readonly string[];
   background: string; pulse: string;
 };
 
 const darkTheme: Theme = {
-  accent: "#8ab4f8",
-  accentStrong: "#c4b5fd",
+  accent: "#aeb8c5",
+  accentStrong: "#d5dce5",
   primary: "#e8eaed",
   secondary: "#9aa0a6",
   subtle: "#5f6368",
   success: "#81c995",
   warning: "#fdd663",
   error: "#f28b82",
-  promptBright: "#bfdbfe",
-  promptSoft: "#93c5fd",
-  chromatic: ["#22d3ee", "#38bdf8", "#60a5fa", "#818cf8", "#a78bfa"],
+  promptBright: "#f8fafc",
+  promptSoft: "#aeb8c5",
+  rail: ["#647181", "#aeb8c5", "#eef2f6", "#ffffff", "#cbd5e1", "#647181"],
   background: "#0b0b0b",
   pulse: "#d97757"
 };
 
-const chromaticTheme: Theme = {
-  accent: "#40dcff",
-  accentStrong: "#a2afff",
-  primary: "#f2fbff",
-  secondary: "#c8e7ff",
-  subtle: "#a0c4ee",
-  success: "#6ee7b7",
-  warning: "#fbbf24",
-  error: "#fda4af",
-  promptBright: "#effbff",
-  promptSoft: "#b4e8ff",
-  chromatic: ["#00dcff", "#22bdff", "#348cff", "#75c7ff", "#ecfaff", "#528cff", "#4162ff", "#6158f6", "#a970ff"],
-  background: "#0a347a",
-  pulse: "#4de1ff"
+const silverTheme: Theme = {
+  accent: "#354558",
+  accentStrong: "#4a596d",
+  primary: "#17212d",
+  secondary: "#344355",
+  subtle: "#526274",
+  success: "#176b52",
+  warning: "#80520b",
+  error: "#9c2636",
+  promptBright: "#ffffff",
+  promptSoft: "#45566a",
+  rail: ["#526171", "#8e9baa", "#e4ebf2", "#ffffff", "#bcc7d2", "#f6f9fc", "#8290a0", "#46576a"],
+  background: "#b9c3ce",
+  pulse: "#293b50"
 };
 
-const themes: Record<ThemeName, Theme> = { dark: darkTheme, chromatic: chromaticTheme };
-let theme = chromaticTheme;
+const themes: Record<ThemeName, Theme> = { dark: darkTheme, silver: silverTheme };
+let theme = silverTheme;
 
 // Avoid emoji-capable glyphs such as ✳, which Windows Terminal renders as a
 // green full-color emoji regardless of the requested ANSI foreground color.
@@ -80,7 +80,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
   const [autoApprove, setAutoApprove] = useState(harness.getAutoPermissions().enabled);
-  const [themeName, setThemeName] = useState<ThemeName>("chromatic");
+  const [themeName, setThemeName] = useState<ThemeName>("silver");
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [currentActivity, setCurrentActivity] = useState("working on your request");
@@ -242,7 +242,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task for Solar to handle directly, or ask to delegate it. Controls: /delegate · /new · /auto-approve <on|off> · /theme <chromatic|dark> · /pets [cat|dog|fox|off] · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
+        addMessage({ role: "solar", text: "Describe a task for Solar to handle directly, or ask to delegate it. Controls: /delegate · /new · /auto-approve <on|off> · /theme <silver|dark> · /pets [cat|dog|fox|off] · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
       } else if (line === "/auto-approve") {
@@ -256,11 +256,11 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
           addMessage({ role: "solar", text: `Auto-approve is now ${setting}. ${enabled ? "Future sub-agent plans will launch immediately without the review screen." : "Future sub-agent plans will wait for your review before launch."}` });
         } else addMessage({ role: "error", text: "Usage: /auto-approve <on|off>" });
       } else if (line === "/theme") {
-        addMessage({ role: "solar", text: `Current theme: ${themeName}. Usage: /theme <chromatic|dark>` });
+        addMessage({ role: "solar", text: `Current theme: ${themeName}. Usage: /theme <silver|dark>` });
       } else if (line.startsWith("/theme ")) {
         const nextTheme = line.slice(7).trim();
-        if (nextTheme === "chromatic" || nextTheme === "dark") changeTheme(nextTheme);
-        else addMessage({ role: "error", text: "Usage: /theme <chromatic|dark>" });
+        if (nextTheme === "silver" || nextTheme === "dark") changeTheme(nextTheme);
+        else addMessage({ role: "error", text: "Usage: /theme <silver|dark>" });
       } else if (line === "/pets") {
         addMessage({ role: "solar", text: `Current pet: ${pet}. Choose with /pets <cat|dog|fox|off>.` });
       } else if (line.startsWith("/pets ")) {
@@ -400,7 +400,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         </Box>
       )}
 
-      <ChromaticInput
+      <MetallicInput
         width={contentWidth}
         value={pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
         entered={Boolean(input) && !pendingPlan && !pendingEffort && !pendingNew}
@@ -423,27 +423,27 @@ function Welcome(): React.JSX.Element {
   );
 }
 
-function ChromaticInput({ width, value, entered, cursor, busy }: { width: number; value: string; entered: boolean; cursor: boolean; busy: boolean }): React.JSX.Element {
+function MetallicInput({ width, value, entered, cursor, busy }: { width: number; value: string; entered: boolean; cursor: boolean; busy: boolean }): React.JSX.Element {
   const available = Math.max(1, width - 7);
   const visibleValue = entered ? value.slice(-available) : value.slice(0, available);
   return (
     <Box flexDirection="column" marginTop={1} width={width}>
-      <ChromaticRail width={width} glyph="▄" colors={theme.chromatic} />
+      <MetallicRail width={width} glyph="▄" colors={theme.rail} />
       <Box width={width}>
-        <Text color={theme.chromatic[0]}>▌</Text>
+        <Text color={theme.rail[0]}>▌</Text>
         <Box width={width - 2} paddingX={1}>
           <Text color={theme.promptBright}>› </Text>
           <Text color={entered ? theme.primary : busy ? theme.secondary : theme.promptSoft}>{visibleValue}</Text>
           {cursor && <Text inverse> </Text>}
         </Box>
-        <Text color={theme.chromatic.at(-1)}>▐</Text>
+        <Text color={theme.rail.at(-1)}>▐</Text>
       </Box>
-      <ChromaticRail width={width} glyph="▀" colors={[...theme.chromatic].reverse()} />
+      <MetallicRail width={width} glyph="▀" colors={[...theme.rail].reverse()} />
     </Box>
   );
 }
 
-function ChromaticRail({ width, glyph, colors }: { width: number; glyph: string; colors: readonly string[] }): React.JSX.Element {
+function MetallicRail({ width, glyph, colors }: { width: number; glyph: string; colors: readonly string[] }): React.JSX.Element {
   return (
     <Box width={width}>
       {colors.map((color, index) => {
@@ -515,7 +515,7 @@ function Header({ compact, workspace, width }: { compact: boolean; workspace: st
         <Text><Text bold color={theme.pulse}>▣ Solar</Text><Text color={theme.secondary}> Harness</Text></Text>
         <Text color={theme.subtle}>{workspaceLabel}</Text>
       </Box>
-      <ChromaticRail width={width} glyph="▄" colors={theme.chromatic} />
+      <MetallicRail width={width} glyph="▄" colors={theme.rail} />
     </Box>
   );
 }
@@ -618,14 +618,14 @@ function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): str
 
 export function startSolarUi(harness: SolarHarness, model: string, reasoning: ReasoningEffort): void {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("Solar Harness Preview requires an interactive terminal.");
-  theme = chromaticTheme;
-  applyTerminalTheme(process.stdout, chromaticTheme, "chromatic");
+  theme = silverTheme;
+  applyTerminalTheme(process.stdout, silverTheme, "silver");
   render(<SolarApp harness={harness} model={model} reasoning={reasoning} />, { exitOnCtrlC: false });
 }
 
 function applyTerminalTheme(stdout: NodeJS.WriteStream, palette: Theme, themeName: ThemeName): void {
   if (themeName === "dark") {
-    // Restore native terminal colors so the chromatic palette does not survive on dark.
+    // Restore native terminal colors so the silver palette does not survive on dark.
     stdout.write("\x1b]110\x07\x1b]111\x07\x1b[0m\x1b[2J\x1b[H");
     return;
   }

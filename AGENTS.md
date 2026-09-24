@@ -168,7 +168,7 @@ The Windows Terminal green-hue bug is fixed. It was not an orchestration or ANSI
 palette problem: the `✳` spinner frame was promoted to a full-color green emoji,
 ignoring the requested foreground color. The activity indicator now uses only
 text-safe frames (`·`, `✦`, `✧`, `✦`) and one solid ANSI color per theme.
-The default chromatic theme uses blue; the plain dark fallback uses terracotta.
+The default silver theme uses graphite; the plain dark fallback uses terracotta.
 Activity text is rendered as a single color span, while only the adjacent glyph
 animates at a calm 240 ms cadence. Do not reintroduce emoji-capable spinner
 characters or per-character ANSI styling; those can recreate green flashes and
@@ -194,14 +194,14 @@ The redesign preview keeps Ink and the terminal runtime. Use a centered reading
 column, compact transcript rows, and one expressive input frame. Avoid full-width colored
 message cards or repeated status panels; those made the interface look like a
 chat app with excessive empty space. Keep commands and approval flows accessible.
-The preview starts in the chromatic theme and applies a saturated royal-blue
-background with an icy foreground before rendering the splash. The light theme
-has been removed. A bright cyan-to-blue-to-indigo rail appears in the header,
-and compact block markers distinguish transcript speakers without message cards.
-The sole message frame uses text-safe block glyphs and an ice-blue highlight;
-keep that treatment through idle, busy, and approval states. `/theme dark`
-restores the terminal's native background, and `/theme chromatic` restores the
-default. Welcome copy should reflect Solar's browser, file inspection,
+The preview starts in the silver theme with a brushed-metal terminal background
+and dark graphite text. The earlier light and chromatic-blue themes have been
+replaced. A dark-to-white metallic rail appears in the header, and compact block
+markers distinguish transcript speakers without message cards. The sole message
+frame uses text-safe block glyphs and bright silver highlights; keep that
+treatment through idle, busy, and approval states. `/theme dark` restores the
+terminal's native background, and `/theme silver` restores the default.
+Welcome copy should reflect Solar's browser, file inspection,
 tool use, and creation abilities rather than only coding work.
 The header shows only the Solar brand and workspace. Do not restore the idle
 `Ready` badge or a separate header status indicator; active work appears in the
