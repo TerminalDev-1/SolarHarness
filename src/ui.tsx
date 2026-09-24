@@ -10,43 +10,54 @@ type ChatMessage = { role: "user" | "solar" | "error"; text: string };
 type PendingPlan = { plan: DelegationPlan; request: string; context: string; selected: boolean[]; cursor: number };
 type PendingEffort = { cursor: number };
 type PendingNew = { cursor: number };
-type ThemeName = "dark" | "light";
+type ThemeName = "dark" | "silver";
 type Theme = {
   accent: string; accentStrong: string; primary: string; secondary: string;
-  subtle: string; success: string; warning: string; error: string; prompt: string;
+  subtle: string; success: string; warning: string; error: string;
+  rail: readonly string[];
   background: string; pulse: string;
 };
 
 const darkTheme: Theme = {
-  accent: "#8ab4f8",
-  accentStrong: "#c4b5fd",
+  accent: "#aeb8c5",
+  accentStrong: "#d5dce5",
   primary: "#e8eaed",
   secondary: "#9aa0a6",
   subtle: "#5f6368",
   success: "#81c995",
   warning: "#fdd663",
   error: "#f28b82",
-  prompt: "#a8c7fa",
+  rail: ["#647181", "#aeb8c5", "#eef2f6", "#ffffff", "#cbd5e1", "#647181"],
   background: "#0b0b0b",
   pulse: "#d97757"
 };
 
-const lightTheme: Theme = {
-  accent: "#185abc",
-  accentStrong: "#673ab7",
-  primary: "#202124",
-  secondary: "#5f6368",
-  subtle: "#80868b",
-  success: "#137333",
-  warning: "#b06000",
-  error: "#b3261e",
-  prompt: "#174ea6",
-  background: "#f8f9fa",
-  pulse: "#b45309"
+const silverTheme: Theme = {
+  accent: "#354558",
+  accentStrong: "#4a596d",
+  primary: "#17212d",
+  secondary: "#344355",
+  subtle: "#526274",
+  success: "#176b52",
+  warning: "#80520b",
+  error: "#9c2636",
+  rail: ["#526171", "#8e9baa", "#e4ebf2", "#ffffff", "#bcc7d2", "#f6f9fc", "#8290a0", "#46576a"],
+  background: "#b9c3ce",
+  pulse: "#293b50"
 };
 
-const themes: Record<ThemeName, Theme> = { dark: darkTheme, light: lightTheme };
-let theme = darkTheme;
+const themes: Record<ThemeName, Theme> = { dark: darkTheme, silver: silverTheme };
+let theme = silverTheme;
+
+// Preserve the original rainbow-blue input independently of the surrounding theme.
+const rainbowInput = {
+  background: "#0a347a",
+  primary: "#f2fbff",
+  secondary: "#c8e7ff",
+  prompt: "#effbff",
+  placeholder: "#b4e8ff",
+  rail: ["#00dcff", "#22bdff", "#348cff", "#75c7ff", "#ecfaff", "#528cff", "#4162ff", "#6158f6", "#a970ff"]
+} as const;
 
 // Avoid emoji-capable glyphs such as ✳, which Windows Terminal renders as a
 // green full-color emoji regardless of the requested ANSI foreground color.
@@ -75,7 +86,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
   const [autoApprove, setAutoApprove] = useState(harness.getAutoPermissions().enabled);
-  const [themeName, setThemeName] = useState<ThemeName>("dark");
+  const [themeName, setThemeName] = useState<ThemeName>("silver");
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [currentActivity, setCurrentActivity] = useState("working on your request");
@@ -237,7 +248,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task for Solar to handle directly, or ask to delegate it. Controls: /delegate · /new · /auto-approve <on|off> · /theme <light|dark> · /pets [cat|dog|fox|off] · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
+        addMessage({ role: "solar", text: "Describe a task for Solar to handle directly, or ask to delegate it. Controls: /delegate · /new · /auto-approve <on|off> · /theme <silver|dark> · /pets [cat|dog|fox|off] · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
       } else if (line === "/auto-approve") {
@@ -251,11 +262,11 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
           addMessage({ role: "solar", text: `Auto-approve is now ${setting}. ${enabled ? "Future sub-agent plans will launch immediately without the review screen." : "Future sub-agent plans will wait for your review before launch."}` });
         } else addMessage({ role: "error", text: "Usage: /auto-approve <on|off>" });
       } else if (line === "/theme") {
-        addMessage({ role: "solar", text: `Current theme: ${themeName}. Usage: /theme <light|dark>` });
+        addMessage({ role: "solar", text: `Current theme: ${themeName}. Usage: /theme <silver|dark>` });
       } else if (line.startsWith("/theme ")) {
         const nextTheme = line.slice(7).trim();
-        if (nextTheme === "light" || nextTheme === "dark") changeTheme(nextTheme);
-        else addMessage({ role: "error", text: "Usage: /theme <light|dark>" });
+        if (nextTheme === "silver" || nextTheme === "dark") changeTheme(nextTheme);
+        else addMessage({ role: "error", text: "Usage: /theme <silver|dark>" });
       } else if (line === "/pets") {
         addMessage({ role: "solar", text: `Current pet: ${pet}. Choose with /pets <cat|dog|fox|off>.` });
       } else if (line.startsWith("/pets ")) {
@@ -359,9 +370,15 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const terminalWidth = stdout.columns || 80;
   const compact = terminalWidth < 62;
   if (showSplash) return <Splash compact={compact} />;
+  const contentWidth = Math.min(Math.max(terminalWidth - 4, 20), 88);
+  const latestStep = activityLog.at(-1);
+  const latestStepLabel = latestStep ? activityDetail(latestStep) ?? latestStep : undefined;
   return (
-    <Box key={themeName} flexDirection="column" paddingX={compact ? 0 : 1}>
-      <Header compact={compact} workspace={workspace} status={busy ? phaseInfo.activity : pendingPlan ? "review required" : pendingEffort ? "choose effort" : pendingNew ? "confirm new session" : "ready"} statusColor={busy ? phaseInfo.color : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.success} />
+    <Box key={themeName} width={terminalWidth - 1} justifyContent="center">
+    <Box width={contentWidth} flexDirection="column">
+      <Header compact={compact} workspace={workspace} width={contentWidth} />
+
+      {conversation.length === 0 && <Welcome />}
 
       <Box flexDirection="column">
         {conversation.map((message, index) => <Message key={index} message={message} />)}
@@ -378,28 +395,70 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       {pendingNew && <NewSessionConfirmation pending={pendingNew} workspace={harness.getTestWorkspace()} />}
 
       {busy && (
-        <Box marginTop={1} flexDirection="column">
+        <Box marginTop={1} flexDirection="column" paddingX={1}>
           <Box>
             <Text color={theme.pulse}>{spinnerFrames[spinner % spinnerFrames.length]} </Text>
-            <ActivityText text={phaseInfo.activity} />
+            <ActivityText text={phaseInfo} />
             {pet !== "off" && <Text color={theme.secondary}>  {petFrame(pet, spinner)}</Text>}
             <Text color={theme.subtle}> · {elapsed}s</Text>
           </Box>
-          {activityLog.slice(-4).map((activity, index) => (
-            <Text key={`${activity}-${index}`} color={activity.startsWith("Running command:") ? theme.secondary : theme.subtle}>  {activity.startsWith("Running command:") ? "└─ $ " + activity.slice(17) : "│ " + activity}</Text>
-          ))}
+          {latestStepLabel && latestStepLabel.toLowerCase() !== phaseInfo.toLowerCase() && <Text color={theme.subtle}>  {latestStepLabel}</Text>}
         </Box>
       )}
 
-      <Box borderStyle="round" borderColor={busy ? theme.subtle : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.prompt} paddingX={1} marginTop={1}>
-        <Text color={busy ? theme.subtle : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.prompt}>{busy ? "· " : pendingPlan || pendingEffort || pendingNew ? "? " : "> "}</Text>
-        <Text color={input && !pendingPlan && !pendingEffort && !pendingNew ? theme.primary : theme.secondary}>
-          {pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Working…" : "Describe what you want to accomplish")}
-        </Text>
-        {!busy && !pendingPlan && !pendingEffort && !pendingNew && <Text inverse> </Text>}
-      </Box>
+      <RainbowInput
+        width={contentWidth}
+        value={pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
+        entered={Boolean(input) && !pendingPlan && !pendingEffort && !pendingNew}
+        cursor={!busy && !pendingPlan && !pendingEffort && !pendingNew}
+        busy={busy}
+      />
 
-      <Footer workspace={workspace} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} />
+      <Footer compact={compact} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} />
+    </Box>
+    </Box>
+  );
+}
+
+function Welcome(): React.JSX.Element {
+  return (
+    <Box flexDirection="column" marginY={1} paddingX={1}>
+      <Text bold color={theme.primary}>What can Solar help with?</Text>
+      <Text color={theme.secondary}>Browse the web, inspect files, use tools, or build something new.</Text>
+    </Box>
+  );
+}
+
+function RainbowInput({ width, value, entered, cursor, busy }: { width: number; value: string; entered: boolean; cursor: boolean; busy: boolean }): React.JSX.Element {
+  const available = Math.max(1, width - 7);
+  const visibleValue = entered ? value.slice(-available) : value.slice(0, available);
+  const remaining = Math.max(0, width - 2 - 3 - visibleValue.length - Number(cursor));
+  return (
+    <Box flexDirection="column" marginTop={1} width={width}>
+      <GradientRail width={width} glyph="▄" colors={rainbowInput.rail} />
+      <Box width={width}>
+        <Text color={rainbowInput.rail[0]}>▌</Text>
+        <Text backgroundColor={rainbowInput.background}>
+          <Text color={rainbowInput.prompt}> › </Text>
+          <Text color={entered ? rainbowInput.primary : busy ? rainbowInput.secondary : rainbowInput.placeholder}>{visibleValue}</Text>
+          {cursor && <Text inverse> </Text>}
+          {" ".repeat(remaining)}
+        </Text>
+        <Text color={rainbowInput.rail.at(-1)}>▐</Text>
+      </Box>
+      <GradientRail width={width} glyph="▀" colors={[...rainbowInput.rail].reverse()} />
+    </Box>
+  );
+}
+
+function GradientRail({ width, glyph, colors }: { width: number; glyph: string; colors: readonly string[] }): React.JSX.Element {
+  return (
+    <Box width={width}>
+      {colors.map((color, index) => {
+        const start = Math.floor(index * width / colors.length);
+        const end = Math.floor((index + 1) * width / colors.length);
+        return <Text key={`${color}-${index}`} color={color}>{glyph.repeat(end - start)}</Text>;
+      })}
     </Box>
   );
 }
@@ -411,7 +470,7 @@ function Splash({ compact }: { compact: boolean }): React.JSX.Element {
       <Text color={theme.pulse}>     --  O  --</Text>
       <Text color={theme.pulse}>       /  |  \</Text>
       <Box marginTop={1}><Text bold color={theme.primary}>S O L A R   H A R N E S S</Text></Box>
-      <Text color={theme.secondary}>Your workspace is ready.</Text>
+      <Text color={theme.secondary}>Welcome to Solar Harness.</Text>
       <Box marginTop={1}><Text color={theme.subtle}>Press any key to continue</Text></Box>
     </Box>
   );
@@ -456,24 +515,29 @@ function ActivityText({ text }: { text: string }): React.JSX.Element {
   return <Text color={theme.pulse}>{text}</Text>;
 }
 
-function Header({ compact, workspace, status, statusColor }: { compact: boolean; workspace: string; status: string; statusColor: string }): React.JSX.Element {
+function Header({ compact, workspace, width }: { compact: boolean; workspace: string; width: number }): React.JSX.Element {
+  const workspaceLabel = compact ? workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace : workspace;
   return (
-    <Box marginTop={1} marginBottom={1} paddingLeft={1} flexDirection="column">
-      <Text><Text bold color={theme.primary}>Solar Harness</Text><Text color={theme.subtle}>  preview</Text></Text>
-      <Text color={theme.subtle}>{compact ? "" : "Workspace: "}{workspace}</Text>
-      {status !== "ready" && <Text color={statusColor}>✦ {status}</Text>}
+    <Box marginTop={1} marginBottom={1} flexDirection="column">
+      <Box paddingX={1} flexDirection="column">
+        <Text><Text bold color={theme.pulse}>▣ Solar</Text><Text color={theme.secondary}> Harness</Text></Text>
+        <Text color={theme.subtle}>{workspaceLabel}</Text>
+      </Box>
+      <GradientRail width={width} glyph="▄" colors={theme.rail} />
     </Box>
   );
 }
 
 function Message({ message }: { message: ChatMessage }): React.JSX.Element {
-  if (message.role === "user") {
-    return <Box marginY={1}><Text color={theme.accent}>&gt; </Text><Text color={theme.primary}>{message.text}</Text></Box>;
-  }
-  if (message.role === "error") {
-    return <Box><Text color={theme.error}>! </Text><Text color={theme.error}>{message.text}</Text></Box>;
-  }
-  return <Box><Text color={theme.accentStrong}>✦ </Text><Text color={theme.primary}>{message.text}</Text></Box>;
+  const color = message.role === "user" ? theme.accent : message.role === "error" ? theme.error : theme.accentStrong;
+  const label = message.role === "user" ? "You" : message.role === "error" ? "Error" : "Solar";
+  return (
+    <Box marginBottom={1} paddingX={1}>
+      <Text color={color}>▌ </Text>
+      <Box width={8}><Text bold color={color}>{label}</Text></Box>
+      <Box flexGrow={1}><Text color={message.role === "error" ? theme.error : theme.primary}>{message.text}</Text></Box>
+    </Box>
+  );
 }
 
 function PlanApproval({ pending }: { pending: PendingPlan }): React.JSX.Element {
@@ -510,8 +574,8 @@ function PlanApproval({ pending }: { pending: PendingPlan }): React.JSX.Element 
 
 function SubAgents({ agents }: { agents: AgentRecord[] }): React.JSX.Element {
   return (
-    <Box flexDirection="column" marginTop={1} paddingLeft={2} borderStyle="single" borderLeft borderRight={false} borderTop={false} borderBottom={false} borderColor={theme.subtle}>
-      <Text color={theme.secondary}>SUB-AGENTS AND SUB-DELEGATES</Text>
+    <Box flexDirection="column" marginTop={1} paddingX={1}>
+      <Text bold color={theme.accent}>Team</Text>
       {agents.map(agent => {
         const color = agent.status === "completed" ? theme.success : agent.status === "failed" ? theme.error : agent.status === "running" ? theme.accent : theme.secondary;
         const marker = agent.status === "completed" ? "✓" : agent.status === "failed" ? "×" : agent.status === "running" ? "●" : agent.status === "waiting" ? "◇" : "○";
@@ -530,47 +594,46 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
   if (!commands.length) return null;
   const running = agents.some(agent => agent.status === "running" && agent.latestActivity.startsWith("Running command:"));
   return (
-    <Box flexDirection="column" marginTop={1} paddingLeft={2} borderStyle="single" borderLeft borderRight={false} borderTop={false} borderBottom={false} borderColor={theme.subtle}>
-      <Text color={running ? theme.pulse : theme.secondary}>{running ? spinnerFrames[spinner % spinnerFrames.length] : "·"} TERMINAL</Text>
+    <Box flexDirection="column" marginTop={1} paddingX={1}>
+      <Text color={running ? theme.pulse : theme.secondary}>{running ? spinnerFrames[spinner % spinnerFrames.length] : "·"} Recent commands</Text>
       {commands.map((command, index) => {
         const completed = command.activity.startsWith("Command completed:");
         const text = command.activity.replace(/^(Running command|Command completed):\s*/, "");
-        return <Text key={`${command.name}-${text}-${index}`} color={theme.secondary}><Text color={completed ? theme.success : theme.pulse}>{completed ? "✓" : "$"}</Text> <Text color={theme.subtle}>{command.name}</Text>  {text}</Text>;
+        return <Text key={`${command.name}-${text}-${index}`} color={theme.secondary}><Text color={completed ? theme.success : theme.pulse}>{completed ? "✓" : "·"}</Text> <Text color={theme.subtle}>{command.name}</Text>  {text}</Text>;
       })}
     </Box>
   );
 }
 
-function Footer({ workspace, model, reasoning, themeName, autoApprove }: { workspace: string; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean }): React.JSX.Element {
-  const workspaceName = workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace;
+function Footer({ compact, model, reasoning, themeName, autoApprove }: { compact: boolean; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean }): React.JSX.Element {
   return (
-    <Box paddingX={1} justifyContent="space-between">
-      <Text color={theme.subtle}>workspace: {workspaceName}</Text>
-      <Text color={theme.subtle}>{model} · {reasoning} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>
+    <Box paddingX={1} marginTop={1} justifyContent="space-between">
+      <Text color={theme.subtle}>Enter send · ↑↓ history · /help</Text>
+      {!compact && <Text color={theme.subtle}>{model} · {reasoning} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>}
     </Box>
   );
 }
 
-function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): { activity: string; color: string } {
-  if (phase === "thinking") return { activity: actionStatus(phase, detail), color: theme.accentStrong };
-  if (phase === "browsing") return { activity: actionStatus(phase, detail), color: theme.pulse };
-  if (phase === "planning") return { activity: `Planning — ${detail}`, color: theme.warning };
-  if (phase === "delegating") return { activity: `Launching sub-agents — ${detail}`, color: theme.accent };
-  if (phase === "working") return { activity: `${activeSubAgents} sub-agent${activeSubAgents === 1 ? "" : "s"} — ${detail}`, color: theme.accent };
-  if (phase === "command") return { activity: actionStatus(phase, detail), color: theme.pulse };
-  if (phase === "synthesizing") return { activity: `Reviewing — ${detail}`, color: theme.accentStrong };
-  if (phase === "updating") return { activity: `Updating — ${detail}`, color: theme.warning };
-  return { activity: "Ready", color: theme.success };
+function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): string {
+  if (phase === "thinking" || phase === "browsing" || phase === "command") return actionStatus(phase, detail);
+  if (phase === "planning") return `Planning — ${detail}`;
+  if (phase === "delegating") return `Launching sub-agents — ${detail}`;
+  if (phase === "working") return `${activeSubAgents} sub-agent${activeSubAgents === 1 ? "" : "s"} — ${detail}`;
+  if (phase === "synthesizing") return `Reviewing — ${detail}`;
+  if (phase === "updating") return `Updating — ${detail}`;
+  return "";
 }
 
 export function startSolarUi(harness: SolarHarness, model: string, reasoning: ReasoningEffort): void {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("Solar Harness Preview requires an interactive terminal.");
+  theme = silverTheme;
+  applyTerminalTheme(process.stdout, silverTheme, "silver");
   render(<SolarApp harness={harness} model={model} reasoning={reasoning} />, { exitOnCtrlC: false });
 }
 
 function applyTerminalTheme(stdout: NodeJS.WriteStream, palette: Theme, themeName: ThemeName): void {
   if (themeName === "dark") {
-    // Restore native terminal colors so light-mode black cannot survive on dark.
+    // Restore native terminal colors so the silver palette does not survive on dark.
     stdout.write("\x1b]110\x07\x1b]111\x07\x1b[0m\x1b[2J\x1b[H");
     return;
   }

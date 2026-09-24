@@ -11,6 +11,12 @@ Solar to delegate. Delegation plans are reviewed before launch unless
 auto-approve is enabled. Sub-agents can create named Light-pinned sub-delegates
 for independent scopes.
 
+SolarHarness uses a centered terminal layout with a compact conversation and
+one blocky input frame. It opens in a brushed-silver theme with a chrome header
+rail and a rainbow-blue message frame. `/theme dark` restores the terminal's
+native background. Its welcome view highlights browsing, file inspection, tool
+use, and creation.
+
 ## What it can do
 
 - Handle ordinary coding requests directly in the active workspace.
@@ -49,7 +55,7 @@ for independent scopes.
   natural-language request to Solar.
 - Display the nested agent tree, reasoning pins, live state, elapsed time, recent
   commands, and a Claude Code-like activity pulse while work is running.
-- Switch the whole terminal between dark and light palettes—not only the input
+- Switch the whole terminal between metallic silver and dark palettes—not only the input
   box—and always display the active workspace.
 - Find the native Codex executable installed with the Codex desktop app even when
   its versioned directory is missing from the terminal's `PATH`.
@@ -149,7 +155,7 @@ npm run dev -- chat --model gpt-6-luna --reasoning max
 | `/auto-approve off` | Restores the plan review screen. |
 | `/effort` | Opens the effort selector: Light, Medium, High, XHigh, or Max. |
 | `/effort <level>` | Changes Solar's effort and the default for newly launched top-level sub-agents. New sub-delegates still start pinned to Light. |
-| `/theme light` | Applies a terminal-wide light foreground and background palette. |
+| `/theme silver` | Applies the default brushed-metal foreground and background palette. |
 | `/theme dark` | Restores the dark terminal palette. |
 | `/agents` | Shows whether sub-agents are currently assigned. |
 | `/agent <id-or-name> reasoning <level>` | Solar authorizes a sub-agent or sub-delegate's next-exchange effort. |
@@ -238,11 +244,12 @@ was promoted to a full-color green emoji that ignored the requested orange ANSI
 color. Changing the palette could not fix an emoji renderer overriding that
 palette, which is why the green flash survived several color adjustments.
 
-The corrected implementation renders the activity label as one fixed
-terracotta/orange ANSI span and animates only an adjacent text-safe sequence:
+The corrected implementation renders the activity label as one solid ANSI
+color from the active theme and animates only an adjacent text-safe sequence:
 `·`, `✦`, `✧`, `✦`. Frames advance every 240 ms. This preserves the calm
 Claude Code-like feel without per-character color cycling, emoji substitution, or
-green flashes across supported terminal themes.
+green flashes across supported terminal themes. Silver uses graphite; dark uses
+terracotta.
 
 An animated text pet sits beside the activity while Solar works. The cat is
 selected by default; use `/pets cat`, `/pets dog`, `/pets fox`, or `/pets off`
