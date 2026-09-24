@@ -14,7 +14,7 @@ type ThemeName = "dark" | "light";
 type Theme = {
   accent: string; accentStrong: string; primary: string; secondary: string;
   subtle: string; success: string; warning: string; error: string; prompt: string;
-  background: string; pulse: string;
+  promptBright: string; promptSoft: string; background: string; pulse: string;
 };
 
 const darkTheme: Theme = {
@@ -26,7 +26,9 @@ const darkTheme: Theme = {
   success: "#81c995",
   warning: "#fdd663",
   error: "#f28b82",
-  prompt: "#a8c7fa",
+  prompt: "#60a5fa",
+  promptBright: "#bfdbfe",
+  promptSoft: "#93c5fd",
   background: "#0b0b0b",
   pulse: "#d97757"
 };
@@ -40,13 +42,15 @@ const lightTheme: Theme = {
   success: "#137333",
   warning: "#b06000",
   error: "#b3261e",
-  prompt: "#174ea6",
+  prompt: "#2563eb",
+  promptBright: "#1d4ed8",
+  promptSoft: "#3b82f6",
   background: "#f8f9fa",
   pulse: "#b45309"
 };
 
 const themes: Record<ThemeName, Theme> = { dark: darkTheme, light: lightTheme };
-let theme = darkTheme;
+let theme = lightTheme;
 
 // Avoid emoji-capable glyphs such as ✳, which Windows Terminal renders as a
 // green full-color emoji regardless of the requested ANSI foreground color.
@@ -75,7 +79,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
   const [autoApprove, setAutoApprove] = useState(harness.getAutoPermissions().enabled);
-  const [themeName, setThemeName] = useState<ThemeName>("dark");
+  const [themeName, setThemeName] = useState<ThemeName>("light");
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [currentActivity, setCurrentActivity] = useState("working on your request");
@@ -395,10 +399,10 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         </Box>
       )}
 
-      <Box borderStyle="round" borderColor={busy ? theme.subtle : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.prompt} paddingX={1} marginTop={1}>
-        <Text color={busy ? theme.subtle : theme.prompt}>› </Text>
+      <Box borderStyle="round" borderColor={theme.prompt} paddingX={1} marginTop={1}>
+        <Text color={theme.promptBright}>›</Text><Text color={theme.promptSoft}> </Text>
         <Box>
-          <Text color={input && !pendingPlan && !pendingEffort && !pendingNew ? theme.primary : theme.secondary}>
+          <Text color={input && !pendingPlan && !pendingEffort && !pendingNew ? theme.primary : busy ? theme.secondary : theme.promptSoft}>
             {pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Describe what you want to accomplish")}
           </Text>
           {!busy && !pendingPlan && !pendingEffort && !pendingNew && <Text inverse> </Text>}
@@ -584,6 +588,8 @@ function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): { a
 
 export function startSolarUi(harness: SolarHarness, model: string, reasoning: ReasoningEffort): void {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("Solar Harness Preview requires an interactive terminal.");
+  theme = lightTheme;
+  applyTerminalTheme(process.stdout, lightTheme, "light");
   render(<SolarApp harness={harness} model={model} reasoning={reasoning} />, { exitOnCtrlC: false });
 }
 

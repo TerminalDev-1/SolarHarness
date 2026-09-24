@@ -15,6 +15,8 @@ This `Interface_Redesign_Preview` branch previews a calmer terminal layout with
 a centered reading column, compact conversation, and a single input outline. The published
 `Interface_Design_Preview` branch preserves the baseline for comparison. Main
 remains unchanged while this interface work is reviewed.
+The preview opens in a light theme with a blue-accented message box; `/theme dark`
+is still available.
 
 ## What it can do
 
