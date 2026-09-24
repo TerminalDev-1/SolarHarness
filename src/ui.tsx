@@ -359,8 +359,12 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const terminalWidth = stdout.columns || 80;
   const compact = terminalWidth < 62;
   if (showSplash) return <Splash compact={compact} />;
+  const contentWidth = Math.min(Math.max(terminalWidth - 4, 20), 88);
+  const latestStep = activityLog.at(-1);
+  const latestStepLabel = latestStep ? activityDetail(latestStep) ?? latestStep : undefined;
   return (
-    <Box key={themeName} flexDirection="column" paddingX={compact ? 0 : 2}>
+    <Box key={themeName} width={terminalWidth - 1} justifyContent="center">
+    <Box width={contentWidth} flexDirection="column">
       <Header compact={compact} workspace={workspace} status={busy ? "working" : pendingPlan ? "review required" : pendingEffort ? "choose effort" : pendingNew ? "confirm new session" : "ready"} statusColor={busy ? phaseInfo.color : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.success} />
 
       {conversation.length === 0 && <Welcome />}
@@ -380,22 +384,19 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       {pendingNew && <NewSessionConfirmation pending={pendingNew} workspace={harness.getTestWorkspace()} />}
 
       {busy && (
-        <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor={theme.pulse} paddingX={1}>
-          <Text bold color={theme.secondary}>IN PROGRESS</Text>
+        <Box marginTop={1} flexDirection="column" paddingX={1}>
           <Box>
             <Text color={theme.pulse}>{spinnerFrames[spinner % spinnerFrames.length]} </Text>
             <ActivityText text={phaseInfo.activity} />
             {pet !== "off" && <Text color={theme.secondary}>  {petFrame(pet, spinner)}</Text>}
             <Text color={theme.subtle}> · {elapsed}s</Text>
           </Box>
-          {activityLog.slice(-3).map((activity, index) => (
-            <Text key={`${activity}-${index}`} color={theme.subtle}>  {activityDetail(activity) ?? activity}</Text>
-          ))}
+          {latestStepLabel && latestStepLabel.toLowerCase() !== phaseInfo.activity.toLowerCase() && <Text color={theme.subtle}>  {latestStepLabel}</Text>}
         </Box>
       )}
 
-      <Box flexDirection="column" borderStyle="round" borderColor={busy ? theme.subtle : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.prompt} paddingX={1} marginTop={1}>
-        <Text bold color={busy ? theme.subtle : theme.prompt}>MESSAGE SOLAR</Text>
+      <Box borderStyle="round" borderColor={busy ? theme.subtle : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.prompt} paddingX={1} marginTop={1}>
+        <Text color={busy ? theme.subtle : theme.prompt}>› </Text>
         <Box>
           <Text color={input && !pendingPlan && !pendingEffort && !pendingNew ? theme.primary : theme.secondary}>
             {pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Describe what you want to accomplish")}
@@ -406,15 +407,15 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
       <Footer compact={compact} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} />
     </Box>
+    </Box>
   );
 }
 
 function Welcome(): React.JSX.Element {
   return (
-    <Box flexDirection="column" marginBottom={1} paddingX={1}>
+    <Box flexDirection="column" marginY={1} paddingX={1}>
       <Text bold color={theme.primary}>What would you like to make?</Text>
-      <Text color={theme.secondary}>Ask Solar to build, inspect, or explain something in your workspace.</Text>
-      <Text color={theme.subtle}>Type /help for commands · Ask to delegate when you want a team</Text>
+      <Text color={theme.secondary}>Build, inspect, or explain something in your workspace.</Text>
     </Box>
   );
 }
@@ -474,23 +475,23 @@ function ActivityText({ text }: { text: string }): React.JSX.Element {
 function Header({ compact, workspace, status, statusColor }: { compact: boolean; workspace: string; status: string; statusColor: string }): React.JSX.Element {
   const workspaceLabel = compact ? workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace : workspace;
   return (
-    <Box marginTop={1} marginBottom={1} flexDirection="column" borderStyle="round" borderColor={theme.accent} paddingX={1}>
+    <Box marginTop={1} marginBottom={1} flexDirection="column" paddingX={1}>
       <Box justifyContent="space-between">
-        <Text><Text bold color={theme.pulse}>✦ SOLAR</Text><Text color={theme.secondary}>  HARNESS</Text></Text>
-        <Text color={statusColor}>● {status === "ready" ? "Ready" : status}</Text>
+        <Text><Text bold color={theme.pulse}>✦ Solar</Text><Text color={theme.secondary}> Harness</Text></Text>
+        <Text color={statusColor}>{status === "ready" ? "Ready" : status}</Text>
       </Box>
-      <Text color={theme.subtle}>Workspace  {workspaceLabel}</Text>
+      <Text color={theme.subtle}>{workspaceLabel}</Text>
     </Box>
   );
 }
 
 function Message({ message }: { message: ChatMessage }): React.JSX.Element {
   const color = message.role === "user" ? theme.accent : message.role === "error" ? theme.error : theme.accentStrong;
-  const label = message.role === "user" ? "YOU" : message.role === "error" ? "ERROR" : "SOLAR";
+  const label = message.role === "user" ? "You" : message.role === "error" ? "Error" : "Solar";
   return (
-    <Box flexDirection="column" marginBottom={1} borderStyle="round" borderColor={color} paddingX={1}>
-      <Text bold color={color}>{label}</Text>
-      <Text color={message.role === "error" ? theme.error : theme.primary}>{message.text}</Text>
+    <Box marginBottom={1} paddingX={1}>
+      <Box width={8}><Text bold color={color}>{label}</Text></Box>
+      <Box flexGrow={1}><Text color={message.role === "error" ? theme.error : theme.primary}>{message.text}</Text></Box>
     </Box>
   );
 }
@@ -529,8 +530,8 @@ function PlanApproval({ pending }: { pending: PendingPlan }): React.JSX.Element 
 
 function SubAgents({ agents }: { agents: AgentRecord[] }): React.JSX.Element {
   return (
-    <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.accent} paddingX={1}>
-      <Text bold color={theme.accent}>TEAM</Text>
+    <Box flexDirection="column" marginTop={1} paddingX={1}>
+      <Text bold color={theme.accent}>Team</Text>
       {agents.map(agent => {
         const color = agent.status === "completed" ? theme.success : agent.status === "failed" ? theme.error : agent.status === "running" ? theme.accent : theme.secondary;
         const marker = agent.status === "completed" ? "✓" : agent.status === "failed" ? "×" : agent.status === "running" ? "●" : agent.status === "waiting" ? "◇" : "○";
@@ -549,8 +550,8 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
   if (!commands.length) return null;
   const running = agents.some(agent => agent.status === "running" && agent.latestActivity.startsWith("Running command:"));
   return (
-    <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.subtle} paddingX={1}>
-      <Text bold color={running ? theme.pulse : theme.secondary}>{running ? spinnerFrames[spinner % spinnerFrames.length] : "·"} RECENT COMMANDS</Text>
+    <Box flexDirection="column" marginTop={1} paddingX={1}>
+      <Text color={running ? theme.pulse : theme.secondary}>{running ? spinnerFrames[spinner % spinnerFrames.length] : "·"} Recent commands</Text>
       {commands.map((command, index) => {
         const completed = command.activity.startsWith("Command completed:");
         const text = command.activity.replace(/^(Running command|Command completed):\s*/, "");

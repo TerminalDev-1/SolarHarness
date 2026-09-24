@@ -189,9 +189,10 @@ example, `Working on index.html`) and never echo the user's full prompt into the
 status line. The `/pets` command selects a text-safe animated cat, dog, or fox
 beside Solar's activity line; `/pets off` hides it. Pet animation must not use
 emoji-capable glyphs or change the fixed activity text color.
-The redesign preview keeps Ink and the terminal runtime, but presents the
-workspace as rounded message, team, activity, and input panels. Keep commands
-and approval flows accessible while refining the layout.
+The redesign preview keeps Ink and the terminal runtime. Use a centered reading
+column, compact transcript rows, and one input outline. Avoid full-width colored
+message cards or repeated status panels; those made the interface look like a
+chat app with excessive empty space. Keep commands and approval flows accessible.
 
 ## Public publishing authorization
 
