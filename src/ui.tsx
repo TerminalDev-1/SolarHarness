@@ -14,7 +14,7 @@ type ThemeName = "dark" | "silver";
 type Theme = {
   accent: string; accentStrong: string; primary: string; secondary: string;
   subtle: string; success: string; warning: string; error: string;
-  promptBright: string; promptSoft: string; rail: readonly string[];
+  rail: readonly string[];
   background: string; pulse: string;
 };
 
@@ -27,8 +27,6 @@ const darkTheme: Theme = {
   success: "#81c995",
   warning: "#fdd663",
   error: "#f28b82",
-  promptBright: "#f8fafc",
-  promptSoft: "#aeb8c5",
   rail: ["#647181", "#aeb8c5", "#eef2f6", "#ffffff", "#cbd5e1", "#647181"],
   background: "#0b0b0b",
   pulse: "#d97757"
@@ -43,8 +41,6 @@ const silverTheme: Theme = {
   success: "#176b52",
   warning: "#80520b",
   error: "#9c2636",
-  promptBright: "#ffffff",
-  promptSoft: "#45566a",
   rail: ["#526171", "#8e9baa", "#e4ebf2", "#ffffff", "#bcc7d2", "#f6f9fc", "#8290a0", "#46576a"],
   background: "#b9c3ce",
   pulse: "#293b50"
@@ -52,6 +48,16 @@ const silverTheme: Theme = {
 
 const themes: Record<ThemeName, Theme> = { dark: darkTheme, silver: silverTheme };
 let theme = silverTheme;
+
+// Preserve the original rainbow-blue input independently of the surrounding theme.
+const rainbowInput = {
+  background: "#0a347a",
+  primary: "#f2fbff",
+  secondary: "#c8e7ff",
+  prompt: "#effbff",
+  placeholder: "#b4e8ff",
+  rail: ["#00dcff", "#22bdff", "#348cff", "#75c7ff", "#ecfaff", "#528cff", "#4162ff", "#6158f6", "#a970ff"]
+} as const;
 
 // Avoid emoji-capable glyphs such as ✳, which Windows Terminal renders as a
 // green full-color emoji regardless of the requested ANSI foreground color.
@@ -400,7 +406,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         </Box>
       )}
 
-      <MetallicInput
+      <RainbowInput
         width={contentWidth}
         value={pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
         entered={Boolean(input) && !pendingPlan && !pendingEffort && !pendingNew}
@@ -423,27 +429,29 @@ function Welcome(): React.JSX.Element {
   );
 }
 
-function MetallicInput({ width, value, entered, cursor, busy }: { width: number; value: string; entered: boolean; cursor: boolean; busy: boolean }): React.JSX.Element {
+function RainbowInput({ width, value, entered, cursor, busy }: { width: number; value: string; entered: boolean; cursor: boolean; busy: boolean }): React.JSX.Element {
   const available = Math.max(1, width - 7);
   const visibleValue = entered ? value.slice(-available) : value.slice(0, available);
+  const remaining = Math.max(0, width - 2 - 3 - visibleValue.length - Number(cursor));
   return (
     <Box flexDirection="column" marginTop={1} width={width}>
-      <MetallicRail width={width} glyph="▄" colors={theme.rail} />
+      <GradientRail width={width} glyph="▄" colors={rainbowInput.rail} />
       <Box width={width}>
-        <Text color={theme.rail[0]}>▌</Text>
-        <Box width={width - 2} paddingX={1}>
-          <Text color={theme.promptBright}>› </Text>
-          <Text color={entered ? theme.primary : busy ? theme.secondary : theme.promptSoft}>{visibleValue}</Text>
+        <Text color={rainbowInput.rail[0]}>▌</Text>
+        <Text backgroundColor={rainbowInput.background}>
+          <Text color={rainbowInput.prompt}> › </Text>
+          <Text color={entered ? rainbowInput.primary : busy ? rainbowInput.secondary : rainbowInput.placeholder}>{visibleValue}</Text>
           {cursor && <Text inverse> </Text>}
-        </Box>
-        <Text color={theme.rail.at(-1)}>▐</Text>
+          {" ".repeat(remaining)}
+        </Text>
+        <Text color={rainbowInput.rail.at(-1)}>▐</Text>
       </Box>
-      <MetallicRail width={width} glyph="▀" colors={[...theme.rail].reverse()} />
+      <GradientRail width={width} glyph="▀" colors={[...rainbowInput.rail].reverse()} />
     </Box>
   );
 }
 
-function MetallicRail({ width, glyph, colors }: { width: number; glyph: string; colors: readonly string[] }): React.JSX.Element {
+function GradientRail({ width, glyph, colors }: { width: number; glyph: string; colors: readonly string[] }): React.JSX.Element {
   return (
     <Box width={width}>
       {colors.map((color, index) => {
@@ -515,7 +523,7 @@ function Header({ compact, workspace, width }: { compact: boolean; workspace: st
         <Text><Text bold color={theme.pulse}>▣ Solar</Text><Text color={theme.secondary}> Harness</Text></Text>
         <Text color={theme.subtle}>{workspaceLabel}</Text>
       </Box>
-      <MetallicRail width={width} glyph="▄" colors={theme.rail} />
+      <GradientRail width={width} glyph="▄" colors={theme.rail} />
     </Box>
   );
 }

@@ -198,8 +198,9 @@ The preview starts in the silver theme with a brushed-metal terminal background
 and dark graphite text. The earlier light and chromatic-blue themes have been
 replaced. A dark-to-white metallic rail appears in the header, and compact block
 markers distinguish transcript speakers without message cards. The sole message
-frame uses text-safe block glyphs and bright silver highlights; keep that
-treatment through idle, busy, and approval states. `/theme dark` restores the
+frame retains the earlier cyan-to-blue-to-violet rainbow rails and royal-blue
+interior, independent of the silver theme; keep that colorful treatment through
+idle, busy, and approval states. `/theme dark` restores the
 terminal's native background, and `/theme silver` restores the default.
 Welcome copy should reflect Solar's browser, file inspection,
 tool use, and creation abilities rather than only coding work.
