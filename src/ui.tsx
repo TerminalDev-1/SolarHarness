@@ -63,6 +63,20 @@ const rainbowInput = {
 // green full-color emoji regardless of the requested ANSI foreground color.
 const spinnerFrames = ["·", "✦", "✧", "✦"];
 const splashDurationMs = 1_800;
+const slashCommands = [
+  { command: "/help", detail: "Show available controls", insert: "/help" },
+  { command: "/new", detail: "Start a fresh session", insert: "/new" },
+  { command: "/auto-approve", detail: "Set plan approval on or off", insert: "/auto-approve " },
+  { command: "/theme", detail: "Choose silver or dark", insert: "/theme " },
+  { command: "/pets", detail: "Choose a pet or turn it off", insert: "/pets " },
+  { command: "/effort", detail: "Choose reasoning effort", insert: "/effort" },
+  { command: "/agents", detail: "Show assigned agents", insert: "/agents" },
+  { command: "/agent", detail: "Control an assigned agent", insert: "/agent " },
+  { command: "/delegate", detail: "Prepare an agent plan", insert: "/delegate" },
+  { command: "/quit", detail: "Close Solar Harness", insert: "/quit" },
+  { command: "/exit", detail: "Close Solar Harness", insert: "/exit" }
+] as const;
+type SlashCommand = (typeof slashCommands)[number];
 
 interface SolarAppProps {
   harness: SolarHarness;
@@ -74,6 +88,8 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [input, setInput] = useState("");
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashSelection, setSlashSelection] = useState(0);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [inputHistory, setInputHistory] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -116,6 +132,16 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
   const activeSubAgents = agents.filter(agent => agent.status === "running").length;
   const phaseInfo = phaseCopy(phase, activeSubAgents, currentActivity);
+  const slashMatches = slashMenuOpen && /^\/[^\s]*$/.test(input)
+    ? slashCommands.filter(item => item.command.startsWith(input))
+    : [];
+
+  const chooseSlashCommand = (item: SlashCommand): void => {
+    setInput(item.insert);
+    setSlashMenuOpen(false);
+    setSlashSelection(0);
+    setHistoryIndex(-1);
+  };
 
   const updateSubAgents = (nextAgents: AgentRecord[]): void => {
     setAgents(nextAgents);
@@ -236,6 +262,8 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     const line = input.trim();
     if (!line || busy) return;
     setInput("");
+    setSlashMenuOpen(false);
+    setSlashSelection(0);
     setHistoryIndex(-1);
     setInputHistory(current => [...current, line]);
     if (line === "/quit" || line === "/exit") { exit(); return; }
@@ -314,7 +342,10 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     if (key.ctrl && character === "c") { exit(); return; }
     if (showSplash) {
       setShowSplash(false);
-      if (!key.return && !key.escape && !key.ctrl && !key.meta && character) setInput(character);
+      if (!key.return && !key.escape && !key.ctrl && !key.meta && character) {
+        setInput(character);
+        setSlashMenuOpen(character === "/");
+      }
       return;
     }
     if (busy) return;
@@ -350,21 +381,40 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       if (key.return) { void approvePlan(); return; }
       return;
     }
+    if (slashMatches.length) {
+      if (key.escape) { setSlashMenuOpen(false); return; }
+      if (key.upArrow) { setSlashSelection(value => (value - 1 + slashMatches.length) % slashMatches.length); return; }
+      if (key.downArrow) { setSlashSelection(value => (value + 1) % slashMatches.length); return; }
+      if (key.tab || key.return) { chooseSlashCommand(slashMatches[Math.min(slashSelection, slashMatches.length - 1)]); return; }
+    }
     if (key.return) { void submit(); return; }
-    if (key.backspace || key.delete) { setInput(value => value.slice(0, -1)); return; }
+    if (key.backspace || key.delete) {
+      const next = input.slice(0, -1);
+      setInput(next);
+      setSlashMenuOpen(next.startsWith("/") && !next.includes(" "));
+      setSlashSelection(0);
+      return;
+    }
     if (key.upArrow && inputHistory.length) {
       const nextIndex = Math.min(inputHistory.length - 1, historyIndex + 1);
       setHistoryIndex(nextIndex);
       setInput(inputHistory[inputHistory.length - 1 - nextIndex] ?? "");
+      setSlashMenuOpen(false);
       return;
     }
     if (key.downArrow && historyIndex >= 0) {
       const nextIndex = historyIndex - 1;
       setHistoryIndex(nextIndex);
       setInput(nextIndex < 0 ? "" : inputHistory[inputHistory.length - 1 - nextIndex] ?? "");
+      setSlashMenuOpen(false);
       return;
     }
-    if (!key.ctrl && !key.meta && character) setInput(value => value + character);
+    if (!key.ctrl && !key.meta && character) {
+      const next = input + character;
+      setInput(next);
+      setSlashMenuOpen(next.startsWith("/") && !next.includes(" "));
+      setSlashSelection(0);
+    }
   });
 
   const terminalWidth = stdout.columns || 80;
@@ -406,6 +456,8 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         </Box>
       )}
 
+      {slashMatches.length > 0 && <SlashCommandMenu matches={slashMatches} selected={slashSelection} />}
+
       <RainbowInput
         width={contentWidth}
         value={pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
@@ -425,6 +477,25 @@ function Welcome(): React.JSX.Element {
     <Box flexDirection="column" marginY={1} paddingX={1}>
       <Text bold color={theme.primary}>What can Solar help with?</Text>
       <Text color={theme.secondary}>Browse the web, inspect files, use tools, or build something new.</Text>
+    </Box>
+  );
+}
+
+function SlashCommandMenu({ matches, selected }: { matches: readonly SlashCommand[]; selected: number }): React.JSX.Element {
+  const first = Math.max(0, Math.min(selected - 3, matches.length - 7));
+  const visible = matches.slice(first, first + 7);
+  return (
+    <Box flexDirection="column" marginTop={1} paddingX={2}>
+      <Text color={theme.subtle}>Commands · ↑↓ select · Tab/Enter insert · Esc close</Text>
+      {visible.map((item, index) => {
+        const active = first + index === selected;
+        return <Text key={item.command} color={active ? theme.primary : theme.secondary}>
+          <Text color={active ? theme.pulse : theme.subtle}>{active ? "›" : " "} </Text>
+          <Text bold={active}>{item.command}</Text>
+          <Text color={theme.subtle}>  {item.detail}</Text>
+        </Text>;
+      })}
+      {matches.length > visible.length && <Text color={theme.subtle}>  {selected + 1}/{matches.length}</Text>}
     </Box>
   );
 }

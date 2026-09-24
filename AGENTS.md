@@ -200,6 +200,10 @@ frame retains the earlier cyan-to-blue-to-violet rainbow rails and royal-blue
 interior, independent of the silver theme; keep that colorful treatment through
 idle, busy, and approval states. `/theme dark` restores the
 terminal's native background, and `/theme silver` restores the default.
+Typing `/` at the chat prompt opens a filtered list of supported slash commands.
+Up and Down select a command, Tab or Enter inserts it into the prompt, and Esc
+closes the list. Selecting a command never executes it; Enter on the filled
+prompt submits it. Keep the menu compact and preserve the rainbow input frame.
 Welcome copy should reflect Solar's browser, file inspection,
 tool use, and creation abilities rather than only coding work.
 The header shows only the Solar brand and workspace. Do not restore the idle

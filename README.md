@@ -147,6 +147,9 @@ npm run dev -- chat --model gpt-6-luna --reasoning max
 
 ## Commands
 
+Type `/` to see matching commands. Use Up and Down to select one, then Tab or
+Enter to insert it. Press Enter again to run it, or Esc to close the list.
+
 | Command | Behavior |
 | --- | --- |
 | `/help` | Shows available interaction controls. |
