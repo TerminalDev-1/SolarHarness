@@ -14,7 +14,8 @@ type ThemeName = "dark" | "light";
 type Theme = {
   accent: string; accentStrong: string; primary: string; secondary: string;
   subtle: string; success: string; warning: string; error: string; prompt: string;
-  promptBright: string; promptSoft: string; background: string; pulse: string;
+  promptBright: string; promptSoft: string; chromatic: readonly string[];
+  background: string; pulse: string;
 };
 
 const darkTheme: Theme = {
@@ -29,6 +30,7 @@ const darkTheme: Theme = {
   prompt: "#60a5fa",
   promptBright: "#bfdbfe",
   promptSoft: "#93c5fd",
+  chromatic: ["#22d3ee", "#38bdf8", "#60a5fa", "#818cf8", "#a78bfa"],
   background: "#0b0b0b",
   pulse: "#d97757"
 };
@@ -45,6 +47,7 @@ const lightTheme: Theme = {
   prompt: "#2563eb",
   promptBright: "#1d4ed8",
   promptSoft: "#3b82f6",
+  chromatic: ["#0891b2", "#0284c7", "#2563eb", "#4f46e5", "#7c3aed"],
   background: "#f8f9fa",
   pulse: "#b45309"
 };
@@ -399,15 +402,13 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         </Box>
       )}
 
-      <Box borderStyle="round" borderColor={theme.prompt} paddingX={1} marginTop={1}>
-        <Text color={theme.promptBright}>›</Text><Text color={theme.promptSoft}> </Text>
-        <Box>
-          <Text color={input && !pendingPlan && !pendingEffort && !pendingNew ? theme.primary : busy ? theme.secondary : theme.promptSoft}>
-            {pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Describe what you want to accomplish")}
-          </Text>
-          {!busy && !pendingPlan && !pendingEffort && !pendingNew && <Text inverse> </Text>}
-        </Box>
-      </Box>
+      <ChromaticInput
+        width={contentWidth}
+        value={pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
+        entered={Boolean(input) && !pendingPlan && !pendingEffort && !pendingNew}
+        cursor={!busy && !pendingPlan && !pendingEffort && !pendingNew}
+        busy={busy}
+      />
 
       <Footer compact={compact} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} />
     </Box>
@@ -418,8 +419,40 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 function Welcome(): React.JSX.Element {
   return (
     <Box flexDirection="column" marginY={1} paddingX={1}>
-      <Text bold color={theme.primary}>What would you like to make?</Text>
-      <Text color={theme.secondary}>Build, inspect, or explain something in your workspace.</Text>
+      <Text bold color={theme.primary}>What can Solar help with?</Text>
+      <Text color={theme.secondary}>Browse the web, inspect files, use tools, or build something new.</Text>
+    </Box>
+  );
+}
+
+function ChromaticInput({ width, value, entered, cursor, busy }: { width: number; value: string; entered: boolean; cursor: boolean; busy: boolean }): React.JSX.Element {
+  const available = Math.max(1, width - 7);
+  const visibleValue = entered ? value.slice(-available) : value.slice(0, available);
+  return (
+    <Box flexDirection="column" marginTop={1} width={width}>
+      <ChromaticRail width={width} glyph="▄" colors={theme.chromatic} />
+      <Box width={width}>
+        <Text color={theme.chromatic[0]}>▌</Text>
+        <Box width={width - 2} paddingX={1}>
+          <Text color={theme.promptBright}>› </Text>
+          <Text color={entered ? theme.primary : busy ? theme.secondary : theme.promptSoft}>{visibleValue}</Text>
+          {cursor && <Text inverse> </Text>}
+        </Box>
+        <Text color={theme.chromatic.at(-1)}>▐</Text>
+      </Box>
+      <ChromaticRail width={width} glyph="▀" colors={[...theme.chromatic].reverse()} />
+    </Box>
+  );
+}
+
+function ChromaticRail({ width, glyph, colors }: { width: number; glyph: string; colors: readonly string[] }): React.JSX.Element {
+  return (
+    <Box width={width}>
+      {colors.map((color, index) => {
+        const start = Math.floor(index * width / colors.length);
+        const end = Math.floor((index + 1) * width / colors.length);
+        return <Text key={`${color}-${index}`} color={color}>{glyph.repeat(end - start)}</Text>;
+      })}
     </Box>
   );
 }

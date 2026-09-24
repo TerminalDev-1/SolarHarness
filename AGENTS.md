@@ -190,13 +190,15 @@ status line. The `/pets` command selects a text-safe animated cat, dog, or fox
 beside Solar's activity line; `/pets off` hides it. Pet animation must not use
 emoji-capable glyphs or change the fixed activity text color.
 The redesign preview keeps Ink and the terminal runtime. Use a centered reading
-column, compact transcript rows, and one input outline. Avoid full-width colored
+column, compact transcript rows, and one expressive input frame. Avoid full-width colored
 message cards or repeated status panels; those made the interface look like a
 chat app with excessive empty space. Keep commands and approval flows accessible.
 The preview starts in the light theme and applies its terminal-wide foreground
-and background palette before rendering the splash. The sole message outline
-uses a blue palette with brighter and softer blue prompt accents; keep it blue
-through idle, busy, and approval states. `/theme dark` remains available.
+and background palette before rendering the splash. The sole message frame uses
+text-safe block glyphs with a blue-led cyan-to-indigo-to-violet chromatic rail;
+keep that treatment through idle, busy, and approval states. `/theme dark`
+remains available. Welcome copy should reflect Solar's browser, file inspection,
+tool use, and creation abilities rather than only coding work.
 
 ## Public publishing authorization
 

@@ -12,11 +12,12 @@ auto-approve is enabled. Sub-agents can create named Light-pinned sub-delegates
 for independent scopes.
 
 This `Interface_Redesign_Preview` branch previews a calmer terminal layout with
-a centered reading column, compact conversation, and a single input outline. The published
+a centered reading column, compact conversation, and one blocky input frame. The published
 `Interface_Design_Preview` branch preserves the baseline for comparison. Main
 remains unchanged while this interface work is reviewed.
-The preview opens in a light theme with a blue-accented message box; `/theme dark`
-is still available.
+The preview opens in a light theme with a blocky blue chromatic message frame;
+`/theme dark` is still available. Its welcome view highlights browsing, file
+inspection, tool use, and creation.
 
 ## What it can do
 
