@@ -51,6 +51,7 @@ let theme = darkTheme;
 // Avoid emoji-capable glyphs such as ✳, which Windows Terminal renders as a
 // green full-color emoji regardless of the requested ANSI foreground color.
 const spinnerFrames = ["·", "✦", "✧", "✦"];
+const splashDurationMs = 1_800;
 
 interface SolarAppProps {
   harness: SolarHarness;
@@ -81,6 +82,12 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [spinner, setSpinner] = useState(0);
   const [pet, setPet] = useState<PetSelection>("cat");
   const [elapsed, setElapsed] = useState(0);
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSplash(false), splashDurationMs);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!busy) return;
@@ -294,6 +301,11 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
   useInput((character, key) => {
     if (key.ctrl && character === "c") { exit(); return; }
+    if (showSplash) {
+      setShowSplash(false);
+      if (!key.return && !key.escape && !key.ctrl && !key.meta && character) setInput(character);
+      return;
+    }
     if (busy) return;
     if (pendingNew) {
       if (key.escape || character.toLowerCase() === "n") { void finishNewSession(false); return; }
@@ -346,6 +358,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
   const terminalWidth = stdout.columns || 80;
   const compact = terminalWidth < 62;
+  if (showSplash) return <Splash compact={compact} />;
   return (
     <Box key={themeName} flexDirection="column" paddingX={compact ? 0 : 1}>
       <Header compact={compact} workspace={workspace} status={busy ? phaseInfo.activity : pendingPlan ? "review required" : pendingEffort ? "choose effort" : pendingNew ? "confirm new session" : "ready"} statusColor={busy ? phaseInfo.color : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.success} />
@@ -387,6 +400,19 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       </Box>
 
       <Footer workspace={workspace} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} />
+    </Box>
+  );
+}
+
+function Splash({ compact }: { compact: boolean }): React.JSX.Element {
+  return (
+    <Box flexDirection="column" marginTop={2} paddingX={compact ? 1 : 4}>
+      <Text color={theme.pulse}>       \  |  /</Text>
+      <Text color={theme.pulse}>     --  O  --</Text>
+      <Text color={theme.pulse}>       /  |  \</Text>
+      <Box marginTop={1}><Text bold color={theme.primary}>S O L A R   H A R N E S S</Text></Box>
+      <Text color={theme.secondary}>Your workspace is ready.</Text>
+      <Box marginTop={1}><Text color={theme.subtle}>Press any key to continue</Text></Box>
     </Box>
   );
 }

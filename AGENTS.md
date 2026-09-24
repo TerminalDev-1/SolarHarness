@@ -172,6 +172,10 @@ same text-safe spinner and fixed terracotta/orange color treatment.
 The main activity copy names the current action, such as opening YouTube,
 searching for a query, or running a command. Do not show a generic Thinking label
 when a concrete action is known.
+Both `npm run dev` and the built CLI open with a short, text-safe Solar splash.
+It clears automatically after 1.8 seconds; a keypress dismisses it immediately
+and printable input is kept for the chat prompt. Keep startup non-blocking and
+avoid emoji-capable glyphs in the splash, as in the activity indicator.
 Activity labels must stay short. Use a mentioned file name when available (for
 example, `Working on index.html`) and never echo the user's full prompt into the
 status line. The `/pets` command selects a text-safe animated cat, dog, or fox

@@ -104,6 +104,8 @@ Run `npm run test:browser-live` to verify the visible cursor, page clicks, and
 key presses against a local test page.
 
 `chat` is the default command, so `npm run dev` opens the interface directly.
+Startup shows a brief Solar splash before the chat prompt; press any key to
+continue immediately. The same splash appears with `npm start` after building.
 For a compiled production run:
 
 ```powershell
