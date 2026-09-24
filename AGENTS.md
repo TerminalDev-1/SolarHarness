@@ -167,7 +167,8 @@ concise and avoid turning routine maintenance into release-note noise.
 The Windows Terminal green-hue bug is fixed. It was not an orchestration or ANSI
 palette problem: the `✳` spinner frame was promoted to a full-color green emoji,
 ignoring the requested foreground color. The activity indicator now uses only
-text-safe frames (`·`, `✦`, `✧`, `✦`) and one fixed terracotta/orange ANSI color.
+text-safe frames (`·`, `✦`, `✧`, `✦`) and one solid ANSI color per theme.
+The default chromatic theme uses blue; the plain dark fallback uses terracotta.
 Activity text is rendered as a single color span, while only the adjacent glyph
 animates at a calm 240 ms cadence. Do not reintroduce emoji-capable spinner
 characters or per-character ANSI styling; those can recreate green flashes and
@@ -176,7 +177,7 @@ without copying an emoji-rendered spinner.
 
 Codex command events are surfaced as compact terminal lines beneath the activity
 indicator. Command activity may change the status copy, but it must reuse the
-same text-safe spinner and fixed terracotta/orange color treatment.
+same text-safe spinner and solid activity color treatment.
 The main activity copy names the current action, such as opening YouTube,
 searching for a query, or running a command. Do not show a generic Thinking label
 when a concrete action is known.
@@ -188,16 +189,17 @@ Activity labels must stay short. Use a mentioned file name when available (for
 example, `Working on index.html`) and never echo the user's full prompt into the
 status line. The `/pets` command selects a text-safe animated cat, dog, or fox
 beside Solar's activity line; `/pets off` hides it. Pet animation must not use
-emoji-capable glyphs or change the fixed activity text color.
+emoji-capable glyphs or add per-character color changes to activity text.
 The redesign preview keeps Ink and the terminal runtime. Use a centered reading
 column, compact transcript rows, and one expressive input frame. Avoid full-width colored
 message cards or repeated status panels; those made the interface look like a
 chat app with excessive empty space. Keep commands and approval flows accessible.
-The preview starts in the light theme and applies its terminal-wide foreground
-and background palette before rendering the splash. The sole message frame uses
-text-safe block glyphs with a blue-led cyan-to-indigo-to-violet chromatic rail;
-keep that treatment through idle, busy, and approval states. `/theme dark`
-remains available. Welcome copy should reflect Solar's browser, file inspection,
+The preview starts in the chromatic theme and applies its deep navy background
+and icy foreground before rendering the splash. The light theme has been removed.
+The sole message frame uses text-safe block glyphs with a shiny blue-led
+cyan-to-indigo-to-violet chromatic rail; keep that treatment through idle,
+busy, and approval states. `/theme dark` remains a plain fallback, and
+`/theme chromatic` restores the default. Welcome copy should reflect Solar's browser, file inspection,
 tool use, and creation abilities rather than only coding work.
 The header shows only the Solar brand and workspace. Do not restore the idle
 `Ready` badge or a separate header status indicator; active work appears in the

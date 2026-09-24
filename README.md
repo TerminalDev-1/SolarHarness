@@ -15,8 +15,8 @@ This `Interface_Redesign_Preview` branch previews a calmer terminal layout with
 a centered reading column, compact conversation, and one blocky input frame. The published
 `Interface_Design_Preview` branch preserves the baseline for comparison. Main
 remains unchanged while this interface work is reviewed.
-The preview opens in a light theme with a blocky blue chromatic message frame;
-`/theme dark` is still available. Its welcome view highlights browsing, file
+The preview opens in a deep navy chromatic theme with a shiny, blocky blue
+message frame; `/theme dark` remains a plain fallback. Its welcome view highlights browsing, file
 inspection, tool use, and creation.
 
 ## What it can do
@@ -57,7 +57,7 @@ inspection, tool use, and creation.
   natural-language request to Solar.
 - Display the nested agent tree, reasoning pins, live state, elapsed time, recent
   commands, and a Claude Code-like activity pulse while work is running.
-- Switch the whole terminal between dark and light palettes—not only the input
+- Switch the whole terminal between chromatic blue and plain dark palettes—not only the input
   box—and always display the active workspace.
 - Find the native Codex executable installed with the Codex desktop app even when
   its versioned directory is missing from the terminal's `PATH`.
@@ -157,7 +157,7 @@ npm run dev -- chat --model gpt-6-luna --reasoning max
 | `/auto-approve off` | Restores the plan review screen. |
 | `/effort` | Opens the effort selector: Light, Medium, High, XHigh, or Max. |
 | `/effort <level>` | Changes Solar's effort and the default for newly launched top-level sub-agents. New sub-delegates still start pinned to Light. |
-| `/theme light` | Applies a terminal-wide light foreground and background palette. |
+| `/theme chromatic` | Applies the default deep navy and shiny blue palette. |
 | `/theme dark` | Restores the dark terminal palette. |
 | `/agents` | Shows whether sub-agents are currently assigned. |
 | `/agent <id-or-name> reasoning <level>` | Solar authorizes a sub-agent or sub-delegate's next-exchange effort. |
@@ -246,11 +246,12 @@ was promoted to a full-color green emoji that ignored the requested orange ANSI
 color. Changing the palette could not fix an emoji renderer overriding that
 palette, which is why the green flash survived several color adjustments.
 
-The corrected implementation renders the activity label as one fixed
-terracotta/orange ANSI span and animates only an adjacent text-safe sequence:
+The corrected implementation renders the activity label as one solid ANSI
+color from the active theme and animates only an adjacent text-safe sequence:
 `·`, `✦`, `✧`, `✦`. Frames advance every 240 ms. This preserves the calm
 Claude Code-like feel without per-character color cycling, emoji substitution, or
-green flashes across supported terminal themes.
+green flashes across supported terminal themes. Chromatic uses blue; dark uses
+terracotta.
 
 An animated text pet sits beside the activity while Solar works. The cat is
 selected by default; use `/pets cat`, `/pets dog`, `/pets fox`, or `/pets off`

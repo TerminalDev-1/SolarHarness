@@ -10,10 +10,10 @@ type ChatMessage = { role: "user" | "solar" | "error"; text: string };
 type PendingPlan = { plan: DelegationPlan; request: string; context: string; selected: boolean[]; cursor: number };
 type PendingEffort = { cursor: number };
 type PendingNew = { cursor: number };
-type ThemeName = "dark" | "light";
+type ThemeName = "dark" | "chromatic";
 type Theme = {
   accent: string; accentStrong: string; primary: string; secondary: string;
-  subtle: string; success: string; warning: string; error: string; prompt: string;
+  subtle: string; success: string; warning: string; error: string;
   promptBright: string; promptSoft: string; chromatic: readonly string[];
   background: string; pulse: string;
 };
@@ -27,7 +27,6 @@ const darkTheme: Theme = {
   success: "#81c995",
   warning: "#fdd663",
   error: "#f28b82",
-  prompt: "#60a5fa",
   promptBright: "#bfdbfe",
   promptSoft: "#93c5fd",
   chromatic: ["#22d3ee", "#38bdf8", "#60a5fa", "#818cf8", "#a78bfa"],
@@ -35,25 +34,24 @@ const darkTheme: Theme = {
   pulse: "#d97757"
 };
 
-const lightTheme: Theme = {
-  accent: "#185abc",
-  accentStrong: "#673ab7",
-  primary: "#202124",
-  secondary: "#5f6368",
-  subtle: "#80868b",
-  success: "#137333",
-  warning: "#b06000",
-  error: "#b3261e",
-  prompt: "#2563eb",
-  promptBright: "#1d4ed8",
-  promptSoft: "#3b82f6",
-  chromatic: ["#0891b2", "#0284c7", "#2563eb", "#4f46e5", "#7c3aed"],
-  background: "#f8f9fa",
-  pulse: "#b45309"
+const chromaticTheme: Theme = {
+  accent: "#7dd3fc",
+  accentStrong: "#a5b4fc",
+  primary: "#edf7ff",
+  secondary: "#b1c9e5",
+  subtle: "#7794b7",
+  success: "#6ee7b7",
+  warning: "#fbbf24",
+  error: "#fda4af",
+  promptBright: "#e0f2fe",
+  promptSoft: "#93c5fd",
+  chromatic: ["#22d3ee", "#38bdf8", "#60a5fa", "#e0f2fe", "#3b82f6", "#6366f1", "#a78bfa"],
+  background: "#071529",
+  pulse: "#7dd3fc"
 };
 
-const themes: Record<ThemeName, Theme> = { dark: darkTheme, light: lightTheme };
-let theme = lightTheme;
+const themes: Record<ThemeName, Theme> = { dark: darkTheme, chromatic: chromaticTheme };
+let theme = chromaticTheme;
 
 // Avoid emoji-capable glyphs such as ✳, which Windows Terminal renders as a
 // green full-color emoji regardless of the requested ANSI foreground color.
@@ -82,7 +80,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
   const [autoApprove, setAutoApprove] = useState(harness.getAutoPermissions().enabled);
-  const [themeName, setThemeName] = useState<ThemeName>("light");
+  const [themeName, setThemeName] = useState<ThemeName>("chromatic");
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [currentActivity, setCurrentActivity] = useState("working on your request");
@@ -244,7 +242,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task for Solar to handle directly, or ask to delegate it. Controls: /delegate · /new · /auto-approve <on|off> · /theme <light|dark> · /pets [cat|dog|fox|off] · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
+        addMessage({ role: "solar", text: "Describe a task for Solar to handle directly, or ask to delegate it. Controls: /delegate · /new · /auto-approve <on|off> · /theme <chromatic|dark> · /pets [cat|dog|fox|off] · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
       } else if (line === "/auto-approve") {
@@ -258,11 +256,11 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
           addMessage({ role: "solar", text: `Auto-approve is now ${setting}. ${enabled ? "Future sub-agent plans will launch immediately without the review screen." : "Future sub-agent plans will wait for your review before launch."}` });
         } else addMessage({ role: "error", text: "Usage: /auto-approve <on|off>" });
       } else if (line === "/theme") {
-        addMessage({ role: "solar", text: `Current theme: ${themeName}. Usage: /theme <light|dark>` });
+        addMessage({ role: "solar", text: `Current theme: ${themeName}. Usage: /theme <chromatic|dark>` });
       } else if (line.startsWith("/theme ")) {
         const nextTheme = line.slice(7).trim();
-        if (nextTheme === "light" || nextTheme === "dark") changeTheme(nextTheme);
-        else addMessage({ role: "error", text: "Usage: /theme <light|dark>" });
+        if (nextTheme === "chromatic" || nextTheme === "dark") changeTheme(nextTheme);
+        else addMessage({ role: "error", text: "Usage: /theme <chromatic|dark>" });
       } else if (line === "/pets") {
         addMessage({ role: "solar", text: `Current pet: ${pet}. Choose with /pets <cat|dog|fox|off>.` });
       } else if (line.startsWith("/pets ")) {
@@ -616,14 +614,14 @@ function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): str
 
 export function startSolarUi(harness: SolarHarness, model: string, reasoning: ReasoningEffort): void {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("Solar Harness Preview requires an interactive terminal.");
-  theme = lightTheme;
-  applyTerminalTheme(process.stdout, lightTheme, "light");
+  theme = chromaticTheme;
+  applyTerminalTheme(process.stdout, chromaticTheme, "chromatic");
   render(<SolarApp harness={harness} model={model} reasoning={reasoning} />, { exitOnCtrlC: false });
 }
 
 function applyTerminalTheme(stdout: NodeJS.WriteStream, palette: Theme, themeName: ThemeName): void {
   if (themeName === "dark") {
-    // Restore native terminal colors so light-mode black cannot survive on dark.
+    // Restore native terminal colors so the chromatic palette does not survive on dark.
     stdout.write("\x1b]110\x07\x1b]111\x07\x1b[0m\x1b[2J\x1b[H");
     return;
   }
