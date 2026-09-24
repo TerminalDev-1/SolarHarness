@@ -1,5 +1,13 @@
 # Solar Harness agent architecture
 
+## Interface preview branches
+
+`Interface_Design_Preview` is a published baseline branch.
+`Interface_Redesign_Preview` is the active, published terminal-interface redesign
+branch. Keep `main` unchanged while this preview is in progress. Work on the
+redesign branch and publish its updates there. Once the redesign is accepted,
+the preview branches can be deleted; do not delete them during active work.
+
 ## Roles
 
 - Solar is the main agent. It owns conversation continuity,
@@ -181,6 +189,9 @@ example, `Working on index.html`) and never echo the user's full prompt into the
 status line. The `/pets` command selects a text-safe animated cat, dog, or fox
 beside Solar's activity line; `/pets off` hides it. Pet animation must not use
 emoji-capable glyphs or change the fixed activity text color.
+The redesign preview keeps Ink and the terminal runtime, but presents the
+workspace as rounded message, team, activity, and input panels. Keep commands
+and approval flows accessible while refining the layout.
 
 ## Public publishing authorization
 

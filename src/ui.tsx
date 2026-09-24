@@ -360,8 +360,10 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const compact = terminalWidth < 62;
   if (showSplash) return <Splash compact={compact} />;
   return (
-    <Box key={themeName} flexDirection="column" paddingX={compact ? 0 : 1}>
-      <Header compact={compact} workspace={workspace} status={busy ? phaseInfo.activity : pendingPlan ? "review required" : pendingEffort ? "choose effort" : pendingNew ? "confirm new session" : "ready"} statusColor={busy ? phaseInfo.color : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.success} />
+    <Box key={themeName} flexDirection="column" paddingX={compact ? 0 : 2}>
+      <Header compact={compact} workspace={workspace} status={busy ? "working" : pendingPlan ? "review required" : pendingEffort ? "choose effort" : pendingNew ? "confirm new session" : "ready"} statusColor={busy ? phaseInfo.color : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.success} />
+
+      {conversation.length === 0 && <Welcome />}
 
       <Box flexDirection="column">
         {conversation.map((message, index) => <Message key={index} message={message} />)}
@@ -378,28 +380,41 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       {pendingNew && <NewSessionConfirmation pending={pendingNew} workspace={harness.getTestWorkspace()} />}
 
       {busy && (
-        <Box marginTop={1} flexDirection="column">
+        <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor={theme.pulse} paddingX={1}>
+          <Text bold color={theme.secondary}>IN PROGRESS</Text>
           <Box>
             <Text color={theme.pulse}>{spinnerFrames[spinner % spinnerFrames.length]} </Text>
             <ActivityText text={phaseInfo.activity} />
             {pet !== "off" && <Text color={theme.secondary}>  {petFrame(pet, spinner)}</Text>}
             <Text color={theme.subtle}> · {elapsed}s</Text>
           </Box>
-          {activityLog.slice(-4).map((activity, index) => (
-            <Text key={`${activity}-${index}`} color={activity.startsWith("Running command:") ? theme.secondary : theme.subtle}>  {activity.startsWith("Running command:") ? "└─ $ " + activity.slice(17) : "│ " + activity}</Text>
+          {activityLog.slice(-3).map((activity, index) => (
+            <Text key={`${activity}-${index}`} color={theme.subtle}>  {activityDetail(activity) ?? activity}</Text>
           ))}
         </Box>
       )}
 
-      <Box borderStyle="round" borderColor={busy ? theme.subtle : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.prompt} paddingX={1} marginTop={1}>
-        <Text color={busy ? theme.subtle : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.prompt}>{busy ? "· " : pendingPlan || pendingEffort || pendingNew ? "? " : "> "}</Text>
-        <Text color={input && !pendingPlan && !pendingEffort && !pendingNew ? theme.primary : theme.secondary}>
-          {pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Working…" : "Describe what you want to accomplish")}
-        </Text>
-        {!busy && !pendingPlan && !pendingEffort && !pendingNew && <Text inverse> </Text>}
+      <Box flexDirection="column" borderStyle="round" borderColor={busy ? theme.subtle : pendingPlan || pendingEffort || pendingNew ? theme.warning : theme.prompt} paddingX={1} marginTop={1}>
+        <Text bold color={busy ? theme.subtle : theme.prompt}>MESSAGE SOLAR</Text>
+        <Box>
+          <Text color={input && !pendingPlan && !pendingEffort && !pendingNew ? theme.primary : theme.secondary}>
+            {pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Describe what you want to accomplish")}
+          </Text>
+          {!busy && !pendingPlan && !pendingEffort && !pendingNew && <Text inverse> </Text>}
+        </Box>
       </Box>
 
-      <Footer workspace={workspace} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} />
+      <Footer compact={compact} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} />
+    </Box>
+  );
+}
+
+function Welcome(): React.JSX.Element {
+  return (
+    <Box flexDirection="column" marginBottom={1} paddingX={1}>
+      <Text bold color={theme.primary}>What would you like to make?</Text>
+      <Text color={theme.secondary}>Ask Solar to build, inspect, or explain something in your workspace.</Text>
+      <Text color={theme.subtle}>Type /help for commands · Ask to delegate when you want a team</Text>
     </Box>
   );
 }
@@ -457,23 +472,27 @@ function ActivityText({ text }: { text: string }): React.JSX.Element {
 }
 
 function Header({ compact, workspace, status, statusColor }: { compact: boolean; workspace: string; status: string; statusColor: string }): React.JSX.Element {
+  const workspaceLabel = compact ? workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace : workspace;
   return (
-    <Box marginTop={1} marginBottom={1} paddingLeft={1} flexDirection="column">
-      <Text><Text bold color={theme.primary}>Solar Harness</Text><Text color={theme.subtle}>  preview</Text></Text>
-      <Text color={theme.subtle}>{compact ? "" : "Workspace: "}{workspace}</Text>
-      {status !== "ready" && <Text color={statusColor}>✦ {status}</Text>}
+    <Box marginTop={1} marginBottom={1} flexDirection="column" borderStyle="round" borderColor={theme.accent} paddingX={1}>
+      <Box justifyContent="space-between">
+        <Text><Text bold color={theme.pulse}>✦ SOLAR</Text><Text color={theme.secondary}>  HARNESS</Text></Text>
+        <Text color={statusColor}>● {status === "ready" ? "Ready" : status}</Text>
+      </Box>
+      <Text color={theme.subtle}>Workspace  {workspaceLabel}</Text>
     </Box>
   );
 }
 
 function Message({ message }: { message: ChatMessage }): React.JSX.Element {
-  if (message.role === "user") {
-    return <Box marginY={1}><Text color={theme.accent}>&gt; </Text><Text color={theme.primary}>{message.text}</Text></Box>;
-  }
-  if (message.role === "error") {
-    return <Box><Text color={theme.error}>! </Text><Text color={theme.error}>{message.text}</Text></Box>;
-  }
-  return <Box><Text color={theme.accentStrong}>✦ </Text><Text color={theme.primary}>{message.text}</Text></Box>;
+  const color = message.role === "user" ? theme.accent : message.role === "error" ? theme.error : theme.accentStrong;
+  const label = message.role === "user" ? "YOU" : message.role === "error" ? "ERROR" : "SOLAR";
+  return (
+    <Box flexDirection="column" marginBottom={1} borderStyle="round" borderColor={color} paddingX={1}>
+      <Text bold color={color}>{label}</Text>
+      <Text color={message.role === "error" ? theme.error : theme.primary}>{message.text}</Text>
+    </Box>
+  );
 }
 
 function PlanApproval({ pending }: { pending: PendingPlan }): React.JSX.Element {
@@ -510,8 +529,8 @@ function PlanApproval({ pending }: { pending: PendingPlan }): React.JSX.Element 
 
 function SubAgents({ agents }: { agents: AgentRecord[] }): React.JSX.Element {
   return (
-    <Box flexDirection="column" marginTop={1} paddingLeft={2} borderStyle="single" borderLeft borderRight={false} borderTop={false} borderBottom={false} borderColor={theme.subtle}>
-      <Text color={theme.secondary}>SUB-AGENTS AND SUB-DELEGATES</Text>
+    <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.accent} paddingX={1}>
+      <Text bold color={theme.accent}>TEAM</Text>
       {agents.map(agent => {
         const color = agent.status === "completed" ? theme.success : agent.status === "failed" ? theme.error : agent.status === "running" ? theme.accent : theme.secondary;
         const marker = agent.status === "completed" ? "✓" : agent.status === "failed" ? "×" : agent.status === "running" ? "●" : agent.status === "waiting" ? "◇" : "○";
@@ -530,23 +549,22 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
   if (!commands.length) return null;
   const running = agents.some(agent => agent.status === "running" && agent.latestActivity.startsWith("Running command:"));
   return (
-    <Box flexDirection="column" marginTop={1} paddingLeft={2} borderStyle="single" borderLeft borderRight={false} borderTop={false} borderBottom={false} borderColor={theme.subtle}>
-      <Text color={running ? theme.pulse : theme.secondary}>{running ? spinnerFrames[spinner % spinnerFrames.length] : "·"} TERMINAL</Text>
+    <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.subtle} paddingX={1}>
+      <Text bold color={running ? theme.pulse : theme.secondary}>{running ? spinnerFrames[spinner % spinnerFrames.length] : "·"} RECENT COMMANDS</Text>
       {commands.map((command, index) => {
         const completed = command.activity.startsWith("Command completed:");
         const text = command.activity.replace(/^(Running command|Command completed):\s*/, "");
-        return <Text key={`${command.name}-${text}-${index}`} color={theme.secondary}><Text color={completed ? theme.success : theme.pulse}>{completed ? "✓" : "$"}</Text> <Text color={theme.subtle}>{command.name}</Text>  {text}</Text>;
+        return <Text key={`${command.name}-${text}-${index}`} color={theme.secondary}><Text color={completed ? theme.success : theme.pulse}>{completed ? "✓" : "·"}</Text> <Text color={theme.subtle}>{command.name}</Text>  {text}</Text>;
       })}
     </Box>
   );
 }
 
-function Footer({ workspace, model, reasoning, themeName, autoApprove }: { workspace: string; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean }): React.JSX.Element {
-  const workspaceName = workspace.split(/[\\/]/).filter(Boolean).at(-1) ?? workspace;
+function Footer({ compact, model, reasoning, themeName, autoApprove }: { compact: boolean; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean }): React.JSX.Element {
   return (
-    <Box paddingX={1} justifyContent="space-between">
-      <Text color={theme.subtle}>workspace: {workspaceName}</Text>
-      <Text color={theme.subtle}>{model} · {reasoning} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>
+    <Box paddingX={1} marginTop={1} justifyContent="space-between">
+      <Text color={theme.subtle}>Enter send · ↑↓ history · /help</Text>
+      {!compact && <Text color={theme.subtle}>{model} · {reasoning} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>}
     </Box>
   );
 }

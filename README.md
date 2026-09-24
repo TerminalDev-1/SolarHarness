@@ -11,6 +11,11 @@ Solar to delegate. Delegation plans are reviewed before launch unless
 auto-approve is enabled. Sub-agents can create named Light-pinned sub-delegates
 for independent scopes.
 
+This `Interface_Redesign_Preview` branch previews a calmer terminal layout with
+workspace, conversation, activity, team, and message panels. The published
+`Interface_Design_Preview` branch preserves the baseline for comparison. Main
+remains unchanged while this interface work is reviewed.
+
 ## What it can do
 
 - Handle ordinary coding requests directly in the active workspace.
