@@ -57,16 +57,24 @@ test("first-run provider choice stores no Gemini key", async () => {
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("Gemini key check targets 3.5 Flash-Lite and rejects invalid keys", async () => {
+test("Gemini setup verifies generation access before saving a key", async () => {
   assert.equal(GEMINI_MODEL, "gemini-3.5-flash-lite");
   let checked;
   await validateGeminiApiKey("private-test-key", async (url, init) => {
     checked = { url, init };
-    return new Response(JSON.stringify({ name: `models/${GEMINI_MODEL}` }), { status: 200 });
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "OK" }] } }] }), { status: 200 });
   });
-  assert.match(checked.url, /models\/gemini-3\.5-flash-lite$/);
+  assert.match(checked.url, /models\/gemini-3\.5-flash-lite:generateContent$/);
+  assert.equal(checked.init.method, "POST");
   assert.equal(checked.init.headers["x-goog-api-key"], "private-test-key");
-  await assert.rejects(validateGeminiApiKey("bad-key", async () => new Response("{}", { status: 403 })), /rejected this API key/);
+  assert.equal(JSON.parse(checked.init.body).generationConfig.maxOutputTokens, 8);
+  await assert.rejects(validateGeminiApiKey("bad-key", async () => new Response("{}", { status: 403 })), /denied generation access/);
+});
+
+test("Gemini project denial explains how to check access and reopen setup", async () => {
+  const provider = new GeminiApiProvider("private-test-key", async () => new Response(JSON.stringify({ error: { message: "Your project has been denied access. Please contact support." } }), { status: 403 }));
+  await assert.rejects(provider.run("Hello", { model: GEMINI_MODEL, reasoning: "light", cwd: process.cwd(), role: "main-agent" }), /Google AI Studio.*--setup/);
+  await provider.close();
 });
 
 test("a pasted Gemini key is protected and remembered for this Windows user", async t => {

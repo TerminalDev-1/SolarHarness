@@ -773,13 +773,14 @@ function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): str
   return "";
 }
 
-type LaunchOptions = { cwd: string; model?: string; reasoning: ReasoningEffort; provider?: ProviderChoice };
+type LaunchOptions = { cwd: string; model?: string; reasoning: ReasoningEffort; provider?: ProviderChoice; setup?: boolean };
 
 function StartupApp({ launch }: { launch: LaunchOptions }): React.JSX.Element {
-  const saved = useMemo(() => launch.provider ?? loadProviderChoice(), [launch.provider]);
+  const configured = useMemo(() => launch.provider ?? loadProviderChoice(), [launch.provider]);
+  const saved = launch.setup ? undefined : configured;
   const hasGeminiKey = useMemo(() => Boolean(loadGeminiApiKey()), []);
   const [choice, setChoice] = useState<ProviderChoice | undefined>(saved === "gemini" && !hasGeminiKey ? undefined : saved);
-  const [cursor, setCursor] = useState(saved === "gemini" ? 1 : 0);
+  const [cursor, setCursor] = useState(configured === "gemini" ? 1 : 0);
   const [enteringKey, setEnteringKey] = useState(saved === "gemini" && !hasGeminiKey);
   const [apiKey, setApiKey] = useState("");
   const [checkingKey, setCheckingKey] = useState(false);
@@ -787,7 +788,7 @@ function StartupApp({ launch }: { launch: LaunchOptions }): React.JSX.Element {
   const { exit } = useApp();
 
   const select = (selected: ProviderChoice, remember = false): void => {
-    if (!launch.provider || remember) {
+    if (!launch.provider || remember || launch.setup) {
       try { saveProviderChoice(selected); }
       catch { setNotice("Could not save the provider choice."); return; }
     }
@@ -827,7 +828,7 @@ function StartupApp({ launch }: { launch: LaunchOptions }): React.JSX.Element {
     if (key.downArrow || key.rightArrow) { setCursor(1); return; }
     if (!key.return) return;
     const selected: ProviderChoice = cursor === 0 ? "codex" : "gemini";
-    if (selected === "gemini" && !loadGeminiApiKey()) {
+    if (selected === "gemini" && (launch.setup || !loadGeminiApiKey())) {
       setEnteringKey(true);
       setNotice("");
       return;

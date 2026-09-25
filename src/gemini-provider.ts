@@ -114,7 +114,13 @@ export class GeminiApiProvider implements SolarModelProvider {
     let body: GeminiReply;
     try { body = await response.json() as GeminiReply; }
     catch { throw new Error(`Gemini returned a non-JSON response (HTTP ${response.status}).`); }
-    if (!response.ok) throw new Error(`Gemini API request failed (HTTP ${response.status}): ${redact(body.error?.message ?? "Unknown error", this.apiKey)}`);
+    if (!response.ok) {
+      const detail = redact(body.error?.message ?? "Unknown error", this.apiKey);
+      const next = response.status === 403
+        ? " Check the key and project access in Google AI Studio. Run Solar with --setup to enter another key."
+        : "";
+      throw new Error(`Gemini API request failed (HTTP ${response.status}): ${detail}${next}`);
+    }
     const modelContent = body.candidates?.[0]?.content;
     const text = modelContent?.parts?.filter(part => !part.thought).map(part => part.text ?? "").join("").trim();
     if (!text) throw new Error(`Gemini returned no text${body.candidates?.[0]?.finishReason ? ` (${body.candidates[0].finishReason})` : ""}.`);
@@ -124,21 +130,25 @@ export class GeminiApiProvider implements SolarModelProvider {
   }
 }
 
-/** Check that the key can access the selected model without consuming generation tokens. */
+/** Check generation access with a tiny request before remembering a key. */
 export async function validateGeminiApiKey(key: string, request: typeof fetch = fetch): Promise<void> {
   let response: Response;
   try {
-    response = await request(`${endpoint}/${GEMINI_MODEL}`, {
-      headers: { "x-goog-api-key": key.trim() },
+    response = await request(`${endpoint}/${GEMINI_MODEL}:generateContent`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": key.trim() },
+      body: JSON.stringify({ contents: [{ parts: [{ text: "Reply OK." }] }], generationConfig: { maxOutputTokens: 8 } }),
       signal: AbortSignal.timeout(15_000)
     });
   } catch {
     throw new Error("Could not reach the Gemini API. Check your connection and try again.");
   }
   if (!response.ok) {
-    if (response.status === 400 || response.status === 401 || response.status === 403)
-      throw new Error("Gemini rejected this API key or it cannot access Gemini 3.5 Flash-Lite.");
-    throw new Error(`Gemini model check failed (HTTP ${response.status}).`);
+    if (response.status === 400 || response.status === 401)
+      throw new Error("Gemini rejected this API key. Check it in Google AI Studio and try again.");
+    if (response.status === 403)
+      throw new Error("Google denied generation access for this key or project (HTTP 403). Check the project in Google AI Studio or try another key.");
+    throw new Error(`Gemini generation check failed (HTTP ${response.status}).`);
   }
 }
 

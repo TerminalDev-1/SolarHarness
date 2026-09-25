@@ -119,11 +119,14 @@ key presses against a local test page.
 `chat` is the default command, so `npm run dev` opens the interface directly.
 On first launch, choose the existing Codex ecosystem or Gemini 3.5 Flash-Lite.
 Paste your Gemini API key into the masked setup input and press Enter. Solar checks
-access, remembers the key for your Windows user in a DPAPI protected file at
+generation access, remembers the key for your Windows user in a DPAPI protected file at
 `~/.solarharness/gemini-key.dpapi`, and selects Gemini immediately. You can also
 set `GEMINI_API_KEY` instead. The provider choice is saved separately in
 `~/.solarharness/settings.json`. Later launches show the brief
 Solar splash before chat; press any key to continue immediately.
+If Google later rejects the project or key, run `npm run dev -- chat --setup`
+to reopen setup and enter another key. HTTP 403 requires checking the key or
+project access in Google AI Studio.
 For a compiled production run:
 
 ```powershell

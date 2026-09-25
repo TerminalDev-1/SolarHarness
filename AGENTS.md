@@ -182,8 +182,9 @@ searching for a query, or running a command. Do not show a generic Thinking labe
 when a concrete action is known.
 First-time startup shows a text-safe provider choice: the existing Codex
 ecosystem or Gemini 3.5 Flash-Lite. The Gemini choice opens a masked key input
-that accepts a pasted API key. Verify access with the Gemini models endpoint
-before selecting the provider. On Windows, protect the remembered key for the
+that accepts a pasted API key. Verify access with a minimal Gemini 3.5 Flash-Lite
+`generateContent` request before selecting the provider; model metadata access
+alone does not prove generation access. On Windows, protect the remembered key for the
 current user with DPAPI in `~/.solarharness/gemini-key.dpapi`; keep it out of
 settings, logs, transcripts, and the repository. `GEMINI_API_KEY` remains a
 fallback when no saved key exists. Gemini runs
@@ -194,6 +195,9 @@ dismisses it immediately and printable input is kept for the chat prompt.
 Keep startup non-blocking and avoid emoji-capable glyphs.
 `/provider <codex|gemini>` updates the saved choice for the next launch; the
 current session keeps its active provider.
+`--setup` reopens provider setup and requires a fresh Gemini key when Gemini is
+chosen, so a denied or revoked key can be replaced. Report Gemini HTTP 403 as
+a Google key/project access problem and provide this recovery path.
 Activity labels must stay short. Use a mentioned file name when available (for
 example, `Working on index.html`) and never echo the user's full prompt into the
 status line. The `/pets` command selects a text-safe animated cat, dog, or fox

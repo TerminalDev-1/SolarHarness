@@ -17,8 +17,9 @@ program
   .description("Start the Solar Harness Preview terminal UI")
   .option("--model <model>", "Model for the selected provider")
   .option("--provider <provider>", "Use codex or gemini")
+  .option("--setup", "Reopen provider setup and replace a Gemini API key")
   .option("--reasoning <effort>", "Default reasoning: light, medium, high, xhigh, or max", "light")
-  .action(({ model, reasoning, provider }: { model?: string; reasoning: ReasoningEffort; provider?: ProviderChoice }) => {
+  .action(({ model, reasoning, provider, setup }: { model?: string; reasoning: ReasoningEffort; provider?: ProviderChoice; setup?: boolean }) => {
     if (!REASONING_EFFORTS.includes(reasoning)) {
       throw new Error("--reasoning must be light, medium, high, xhigh, or max.");
     }
@@ -26,7 +27,7 @@ program
     const launchDirectory = resolve(process.cwd());
     const workspace = basename(launchDirectory).toLowerCase() === "test" ? launchDirectory : join(launchDirectory, "test");
     mkdirSync(workspace, { recursive: true });
-    startSolarUi({ cwd: workspace, model, reasoning, provider });
+    startSolarUi({ cwd: workspace, model, reasoning, provider, setup });
   });
 
 program.parseAsync().catch(error => {
