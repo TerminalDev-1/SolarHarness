@@ -2,13 +2,15 @@ import React, { useEffect, useState } from "react";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import { SolarHarness } from "./harness.js";
 import { actionStatus, activityDetail, initialActivity } from "./activity.js";
-import { PET_NAMES, petFrame, type PetSelection } from "./pets.js";
+import { PET_NAMES, petSprite, type PetSelection } from "./pets.js";
+import { formatStats } from "./stats.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type ReasoningEffort } from "./types.js";
 
 type UiPhase = "idle" | "thinking" | "browsing" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating";
 type ChatMessage = { role: "user" | "solar" | "error"; text: string };
 type PendingPlan = { plan: DelegationPlan; request: string; context: string; selected: boolean[]; cursor: number };
 type PendingEffort = { cursor: number };
+type PendingSpeed = { cursor: number };
 type PendingNew = { cursor: number };
 type ThemeName = "dark" | "silver";
 type Theme = {
@@ -69,6 +71,9 @@ const slashCommands = [
   { command: "/auto-approve", detail: "Set plan approval on or off", insert: "/auto-approve " },
   { command: "/theme", detail: "Choose silver or dark", insert: "/theme " },
   { command: "/pets", detail: "Choose a pet or turn it off", insert: "/pets " },
+  { command: "/speed", detail: "Select Standard or Fast", insert: "/speed" },
+  { command: "/fast", detail: "Turn Fast mode on or off", insert: "/fast " },
+  { command: "/stats", detail: "Show usage and achievements", insert: "/stats" },
   { command: "/effort", detail: "Choose reasoning effort", insert: "/effort" },
   { command: "/agents", detail: "Show assigned agents", insert: "/agents" },
   { command: "/agent", detail: "Control an assigned agent", insert: "/agent " },
@@ -99,6 +104,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [pendingPlan, setPendingPlan] = useState<PendingPlan | null>(null);
   const [pendingEffort, setPendingEffort] = useState<PendingEffort | null>(null);
+  const [pendingSpeed, setPendingSpeed] = useState<PendingSpeed | null>(null);
   const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
   const [autoApprove, setAutoApprove] = useState(harness.getAutoPermissions().enabled);
@@ -108,12 +114,20 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [currentActivity, setCurrentActivity] = useState("working on your request");
   const [spinner, setSpinner] = useState(0);
   const [pet, setPet] = useState<PetSelection>("cat");
+  const [petTick, setPetTick] = useState(0);
+  const [fast, setFast] = useState(harness.getFast());
   const [elapsed, setElapsed] = useState(0);
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
+    harness.stats.startChat();
     const timer = setTimeout(() => setShowSplash(false), splashDurationMs);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setPetTick(value => value + 1), 240);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -171,6 +185,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     try {
       const result = await harness.executePlan(plan, request, context, updateSubAgents, reportActivity);
       addMessage({ role: "solar", text: result });
+      for (const achievement of harness.takeAchievements()) addMessage({ role: "solar", text: `◆ Achievement unlocked: ${achievement}` });
       setBrief([]);
     } catch (error) {
       addMessage({ role: "error", text: error instanceof Error ? error.message : String(error) });
@@ -232,6 +247,13 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     addMessage({ role: "solar", text: `Reasoning effort is now ${effort}. This applies to Solar and newly launched top-level sub-agents; new sub-delegates remain pinned to Light until Solar explicitly authorizes a change.` });
   };
 
+  const changeSpeed = (enabled: boolean): void => {
+    harness.setFast(enabled);
+    setFast(enabled);
+    setPendingSpeed(null);
+    addMessage({ role: "solar", text: `Speed is now ${enabled ? "Fast" : "Standard"}. New Codex turns will use this setting.` });
+  };
+
   const changeTheme = (nextTheme: ThemeName): void => {
     theme = themes[nextTheme];
     applyTerminalTheme(stdout, theme, nextTheme);
@@ -276,7 +298,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task for Solar to handle directly, or ask to delegate it. Controls: /delegate · /new · /auto-approve <on|off> · /theme <silver|dark> · /pets [cat|dog|fox|off] · /effort [level] · /agents · /agent <id-or-name> reasoning <level> · /agent <id-or-name> context <message> · /agent <id-or-name> cancel · /quit" });
+        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /theme · /auto-approve · /help · /quit" });
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
       } else if (line === "/auto-approve") {
@@ -301,8 +323,18 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         const selection = line.slice(6).trim().toLowerCase();
         if (selection === "off" || PET_NAMES.some(name => name === selection)) {
           setPet(selection as PetSelection);
-          addMessage({ role: "solar", text: selection === "off" ? "Pet hidden." : `${selection[0].toUpperCase()}${selection.slice(1)} will keep Solar company while it works.` });
+          addMessage({ role: "solar", text: selection === "off" ? "Pet hidden." : `${selection[0].toUpperCase()}${selection.slice(1)} is exploring the interface.` });
         } else addMessage({ role: "error", text: "Usage: /pets <cat|dog|fox|off>" });
+      } else if (line === "/speed") {
+        setPendingSpeed({ cursor: fast ? 1 : 0 });
+      } else if (line === "/fast" || line === "/fast status") {
+        addMessage({ role: "solar", text: `Fast mode is ${fast ? "on" : "off"}. Use /fast on, /fast off, or /speed.` });
+      } else if (line === "/fast on" || line === "/fast off") {
+        changeSpeed(line === "/fast on");
+      } else if (line.startsWith("/fast ")) {
+        addMessage({ role: "error", text: "Usage: /fast <on|off|status>" });
+      } else if (line === "/stats") {
+        addMessage({ role: "solar", text: formatStats(harness.stats.snapshot()) });
       } else if (line === "/effort") {
         setPendingEffort({ cursor: REASONING_EFFORTS.indexOf(currentReasoning) });
       } else if (line.startsWith("/effort ")) {
@@ -326,6 +358,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         setAutoApprove(harness.getAutoPermissions().enabled);
         setAgents(harness.manager.list());
         addMessage({ role: "solar", text: response.reply });
+        for (const achievement of harness.takeAchievements()) addMessage({ role: "solar", text: `◆ Achievement unlocked: ${achievement}` });
         if (response.readyToDelegate) {
           await preparePlan(nextBrief.join("\n"), nextBrief.join("\n"));
         }
@@ -362,6 +395,12 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       if (key.upArrow) { setPendingEffort(value => value && ({ cursor: Math.max(0, value.cursor - 1) })); return; }
       if (key.downArrow) { setPendingEffort(value => value && ({ cursor: Math.min(REASONING_EFFORTS.length - 1, value.cursor + 1) })); return; }
       if (key.return) { changeEffort(REASONING_EFFORTS[pendingEffort.cursor]); return; }
+      return;
+    }
+    if (pendingSpeed) {
+      if (key.escape) { setPendingSpeed(null); return; }
+      if (key.upArrow || key.downArrow) { setPendingSpeed(value => value && ({ cursor: 1 - value.cursor })); return; }
+      if (key.return) { changeSpeed(pendingSpeed.cursor === 1); return; }
       return;
     }
     if (pendingPlan) {
@@ -428,6 +467,8 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     <Box width={contentWidth} flexDirection="column">
       <Header compact={compact} workspace={workspace} width={contentWidth} />
 
+      {pet !== "off" && <PetCompanion pet={pet} tick={petTick} width={contentWidth} />}
+
       {conversation.length === 0 && <Welcome />}
 
       <Box flexDirection="column">
@@ -441,6 +482,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
       {pendingPlan && <PlanApproval pending={pendingPlan} />}
 
       {pendingEffort && <EffortPicker pending={pendingEffort} current={currentReasoning} />}
+      {pendingSpeed && <SpeedPicker pending={pendingSpeed} fast={fast} model={model} />}
 
       {pendingNew && <NewSessionConfirmation pending={pendingNew} workspace={harness.getTestWorkspace()} />}
 
@@ -449,7 +491,6 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
           <Box>
             <Text color={theme.pulse}>{spinnerFrames[spinner % spinnerFrames.length]} </Text>
             <ActivityText text={phaseInfo} />
-            {pet !== "off" && <Text color={theme.secondary}>  {petFrame(pet, spinner)}</Text>}
             <Text color={theme.subtle}> · {elapsed}s</Text>
           </Box>
           {latestStepLabel && latestStepLabel.toLowerCase() !== phaseInfo.toLowerCase() && <Text color={theme.subtle}>  {latestStepLabel}</Text>}
@@ -460,13 +501,13 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
       <RainbowInput
         width={contentWidth}
-        value={pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
-        entered={Boolean(input) && !pendingPlan && !pendingEffort && !pendingNew}
-        cursor={!busy && !pendingPlan && !pendingEffort && !pendingNew}
+        value={pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
+        entered={Boolean(input) && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
+        cursor={!busy && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
         busy={busy}
       />
 
-      <Footer compact={compact} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} />
+      <Footer compact={compact} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} fast={fast} />
     </Box>
     </Box>
   );
@@ -479,6 +520,16 @@ function Welcome(): React.JSX.Element {
       <Text color={theme.secondary}>Browse the web, inspect files, use tools, or build something new.</Text>
     </Box>
   );
+}
+
+function PetCompanion({ pet, tick, width }: { pet: PetSelection; tick: number; width: number }): React.JSX.Element {
+  const travel = Math.max(0, width - 19);
+  const period = Math.max(1, travel * 2);
+  const step = tick % period;
+  const position = Math.min(step, period - step);
+  return <Box flexDirection="column" paddingLeft={position} marginBottom={1}>
+    {petSprite(pet, tick).map((line, index) => <Text key={index} color={index === 0 ? theme.accentStrong : index === 3 ? theme.subtle : theme.secondary}>{line}</Text>)}
+  </Box>;
 }
 
 function SlashCommandMenu({ matches, selected }: { matches: readonly SlashCommand[]; selected: number }): React.JSX.Element {
@@ -560,6 +611,22 @@ function EffortPicker({ pending, current }: { pending: PendingEffort; current: R
       <Box marginTop={1}><Text color={theme.primary}>↑↓</Text><Text color={theme.secondary}> select  </Text><Text color={theme.primary}>Enter</Text><Text color={theme.secondary}> apply  </Text><Text color={theme.primary}>Esc</Text><Text color={theme.secondary}> cancel</Text></Box>
     </Box>
   );
+}
+
+function SpeedPicker({ pending, fast, model }: { pending: PendingSpeed; fast: boolean; model: string }): React.JSX.Element {
+  return <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.warning} paddingX={1}>
+    <Text bold color={theme.warning}>Speed</Text>
+    <Text color={pending.cursor === 0 ? theme.primary : theme.secondary}>{pending.cursor === 0 ? "›" : " "} Standard{!fast ? " (current)" : ""}</Text>
+    <Text color={pending.cursor === 1 ? theme.primary : theme.secondary}>{pending.cursor === 1 ? "›" : " "} Fast{fast ? " (current)" : ""} · {fastDescription(model)}</Text>
+    <Text color={theme.subtle}>↑↓ select · Enter apply · Esc cancel</Text>
+  </Box>;
+}
+
+function fastDescription(model: string): string {
+  if (/^gpt-5\.4/i.test(model)) return "up to 1.5× faster · 2× credits";
+  if (/^gpt-5\.[56]/i.test(model)) return "up to 1.5× faster · 2.5× credits";
+  if (/^gpt-6-(?:astra|sol|luna)/i.test(model)) return "faster responses · 2.5× credits where available";
+  return "faster responses · higher credit use where available";
 }
 
 function NewSessionConfirmation({ pending, workspace }: { pending: PendingNew; workspace: string }): React.JSX.Element {
@@ -676,11 +743,11 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
   );
 }
 
-function Footer({ compact, model, reasoning, themeName, autoApprove }: { compact: boolean; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean }): React.JSX.Element {
+function Footer({ compact, model, reasoning, themeName, autoApprove, fast }: { compact: boolean; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean; fast: boolean }): React.JSX.Element {
   return (
     <Box paddingX={1} marginTop={1} justifyContent="space-between">
       <Text color={theme.subtle}>Enter send · ↑↓ history · /help</Text>
-      {!compact && <Text color={theme.subtle}>{model} · {reasoning} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>}
+      {!compact && <Text color={theme.subtle}>{model} · {reasoning} · {fast ? "Fast" : "Standard"} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>}
     </Box>
   );
 }

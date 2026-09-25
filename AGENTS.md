@@ -186,8 +186,18 @@ avoid emoji-capable glyphs in the splash, as in the activity indicator.
 Activity labels must stay short. Use a mentioned file name when available (for
 example, `Working on index.html`) and never echo the user's full prompt into the
 status line. The `/pets` command selects a text-safe animated cat, dog, or fox
-beside Solar's activity line; `/pets off` hides it. Pet animation must not use
-emoji-capable glyphs or add per-character color changes to activity text.
+in a small shaded companion lane. The pet moves across the interface during idle
+and busy states; `/pets off` hides it. Pet animation must not use emoji-capable
+glyphs or add per-character color changes to activity text.
+`/speed` opens a Standard/Fast selector; `/fast on|off|status` controls the same
+setting. Pass Fast through Codex CLI's `service_tier` for every new main and
+sub-agent turn. Keep speed separate from reasoning effort and describe rate
+changes according to current official Codex documentation.
+`/stats` shows Solar Harness local chats, prompts, completed prompts, tracked
+Codex CLI input/output tokens, favorite model, and achievements. Persist these
+counts in the user's home directory, outside the `/new` workspace cleanup.
+Award achievements from recorded activity, and label local token counts so they
+are not mistaken for account-wide usage or remaining credit.
 The redesign preview keeps Ink and the terminal runtime. Use a centered reading
 column, compact transcript rows, and one expressive input frame. Avoid full-width colored
 message cards or repeated status panels; those made the interface look like a

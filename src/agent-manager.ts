@@ -20,6 +20,8 @@ export class AgentManager {
 
   constructor(private readonly provider: CodexCliProvider, private readonly options: CodexRunOptions) {}
 
+  setFast(enabled: boolean): void { this.options.fast = enabled; }
+
   async spawn(input: SpawnSubAgentInput): Promise<AgentRecord> {
     const parent = input.parentId ? this.records.get(input.parentId) : undefined;
     if (input.parentId && !parent) throw new Error(`Unknown parent sub-agent: ${input.parentId}`);

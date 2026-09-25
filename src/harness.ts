@@ -6,10 +6,12 @@ import { parseHostToolCall } from "./host-tool-call.js";
 import { decodeHostTurn, writeHostTurnSchema } from "./host-turn.js";
 import { SolarWorkspaceTool, type WorkspaceCommandInput, type WorkspaceCommandResult } from "./workspace-tool.js";
 import { mkdir, readdir, rm } from "node:fs/promises";
+import { readdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { SOLAR_SYSTEM_PROMPT } from "./system-prompt.js";
 import { registerHarnessTools, type AdjustSubEffortLevelInput, type AutoPermissionsState, type RuntimeOperation, type RuntimeOperationsInput, type SetAutoPermissionsInput, type SpawnSubAgentInput, type ToolRegistry } from "./tool-registry.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type HarnessOptions, type ReasoningEffort } from "./types.js";
+import { StatsStore } from "./stats.js";
 
 export class SolarHarness {
   readonly provider = new CodexCliProvider();
@@ -18,14 +20,17 @@ export class SolarHarness {
   readonly browser: SolarBrowser;
   readonly webSearchHeadless = new SolarWebSearchHeadless();
   readonly workspace: SolarWorkspaceTool;
+  readonly stats = new StatsStore();
   private mainSessionId?: string;
   private readonly mainTranscript: string[] = [];
   private autoPermissions = false;
+  private fast = false;
+  private unlocked: string[] = [];
 
   constructor(private readonly options: HarnessOptions) {
     this.browser = new SolarBrowser(options.cwd);
     this.workspace = new SolarWorkspaceTool(options.cwd);
-    this.manager = new AgentManager(this.provider, options);
+    this.manager = new AgentManager(this.provider, { ...options, onUsage: (input, output) => this.stats.recordUsage(input, output) });
     this.tools = registerHarnessTools({
       spawn: input => this.manager.spawn(input),
       orchestrate: input => this.manager.orchestrate(input),
@@ -38,6 +43,7 @@ export class SolarHarness {
   }
 
   async converse(message: string, onActivity?: (message: string) => void): Promise<{ reply: string; readyToDelegate: boolean }> {
+    const startedAt = Date.now();
     const standaloneAutoPermissions = standaloneAutoPermissionRequest(message);
     if (standaloneAutoPermissions !== undefined) {
       const state = await this.tools.call<SetAutoPermissionsInput, AutoPermissionsState>("set-auto-permissions", { enabled: standaloneAutoPermissions });
@@ -64,7 +70,7 @@ export class SolarHarness {
       `User: ${message}`,
       'Every turn uses the structured host response schema. Choose kind=tool with a real tool name and JSON-encoded input when an action is needed; choose kind=answer with a plain reply only when no action is needed or the task is complete. The host executes tool requests and resumes this session with the result. Never claim an action ran without a successful tool result.'
     ].join("\n\n");
-    const runOptions = { ...this.options, role: "main-agent" as const, onEvent: onActivity };
+    const runOptions = { ...this.options, fast: this.fast, role: "main-agent" as const, onEvent: onActivity, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
     const youtubeQuery = youtubeSearchQuery(message);
     const runtimeHistoryRequested = asksAboutRuntimeHistory(message);
     const webQuery = youtubeQuery || runtimeHistoryRequested ? undefined : webSearchQuery(message);
@@ -289,12 +295,20 @@ export class SolarHarness {
       ? browserFallbackReply(lastToolResult, youtubeQuery, youtubeSearchComplete, webQuery, lastSearchResult)
       : modelReply || browserFallbackReply(lastToolResult, youtubeQuery, youtubeSearchComplete, webQuery, lastSearchResult);
     this.mainTranscript.push(`User: ${message}`, `Solar: ${reply}`);
+    const websiteBuilt = /\b(?:build|create|make)\b[^.!?\n]*\b(?:website|web\s?page|landing page)\b/i.test(message)
+      && !/couldn'?t|failed|unable to/i.test(reply)
+      && hasRecentWebFile(this.options.cwd, startedAt);
+    this.unlocked = this.stats.recordPrompt(this.options.model, true, websiteBuilt);
     return { reply, readyToDelegate };
   }
 
   setReasoning(reasoning: ReasoningEffort): void {
     this.options.reasoning = reasoning;
   }
+
+  setFast(enabled: boolean): void { this.fast = enabled; this.manager.setFast(enabled); }
+  getFast(): boolean { return this.fast; }
+  takeAchievements(): string[] { const unlocked = this.unlocked; this.unlocked = []; return unlocked; }
 
   setAutoPermissions(enabled: boolean): AutoPermissionsState {
     this.autoPermissions = enabled;
@@ -306,6 +320,7 @@ export class SolarHarness {
   }
 
   resetConversation(): void {
+    this.stats.startChat();
     void this.browser.close();
     void this.workspace.close();
     this.mainSessionId = undefined;
@@ -343,12 +358,13 @@ export class SolarHarness {
   async plan(request: string, context: string, onActivity?: (message: string) => void): Promise<DelegationPlan> {
     onActivity?.(`Designing a named sub-agent plan at ${this.options.reasoning} reasoning`);
     const retainedContext = [this.mainTranscript.join("\n\n"), context].filter(Boolean).join("\n\n");
-    const plan = await this.provider.createPlan(request, retainedContext, { ...this.options, role: "main-agent", onEvent: onActivity });
+    const plan = await this.provider.createPlan(request, retainedContext, { ...this.options, fast: this.fast, role: "main-agent", onEvent: onActivity, onUsage: (input, output) => this.stats.recordUsage(input, output) });
     onActivity?.(`Plan ready: ${plan.tasks.map(task => `${task.name} — ${task.title}`).join(" · ")}`);
     return plan;
   }
 
   async executePlan(plan: DelegationPlan, request: string, context: string, onProgress: (agents: AgentRecord[]) => void, onActivity?: (message: string) => void): Promise<string> {
+    const startedAt = Date.now();
     this.manager.pruneFinished();
     const subAgents = plan.tasks.map(task => this.tools.call<SpawnSubAgentInput, AgentRecord>("spawn_sub_agent", {
       ...task, context: [context, task.context].filter(Boolean).join("\n"), reasoning: this.options.reasoning
@@ -369,12 +385,15 @@ export class SolarHarness {
       `Sub-agent plan: ${plan.summary}`,
       `Sub-agent reports:\n${reports}`
     ].join("\n\n");
-    const runOptions = { ...this.options, role: "main-agent" as const, onEvent: onActivity };
+    const runOptions = { ...this.options, fast: this.fast, role: "main-agent" as const, onEvent: onActivity, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
     const synthesis = this.mainSessionId
       ? await this.provider.resume(this.mainSessionId, synthesisPrompt, runOptions)
       : await this.provider.run([SOLAR_SYSTEM_PROMPT, synthesisPrompt].join("\n\n"), runOptions);
     this.mainSessionId = synthesis.sessionId ?? this.mainSessionId;
     this.mainTranscript.push(`Solar: ${synthesis.text}`);
+    if (/\b(?:build|create|make)\b[^.!?\n]*\b(?:website|web\s?page|landing page)\b/i.test(request) && hasRecentWebFile(this.options.cwd, startedAt)) {
+      this.unlocked.push(...this.stats.recordWebsiteBuilt());
+    }
     return synthesis.text;
   }
 
@@ -383,6 +402,22 @@ export class SolarHarness {
     return this.executePlan(plan, request, context, onProgress, onActivity);
   }
 
+}
+
+function hasRecentWebFile(root: string, since: number): boolean {
+  const visit = (directory: string, depth: number): boolean => {
+    if (depth > 5) return false;
+    try {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "dist") continue;
+        const path = join(directory, entry.name);
+        if (entry.isDirectory() && visit(path, depth + 1)) return true;
+        if (entry.isFile() && /\.(?:html|tsx|jsx)$/i.test(entry.name) && statSync(path).mtimeMs >= since) return true;
+      }
+    } catch { return false; }
+    return false;
+  };
+  return visit(root, 0);
 }
 
 function browserRequested(message: string): boolean {

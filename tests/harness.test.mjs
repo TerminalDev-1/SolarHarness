@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { AgentManager } from "../dist/agent-manager.js";
 import { actionStatus, activityDetail, initialActivity } from "../dist/activity.js";
-import { petFrame } from "../dist/pets.js";
+import { petFrame, petSprite } from "../dist/pets.js";
 import { SolarBrowser } from "../dist/browser-tool.js";
 import { CodexCliProvider, requestedSubAgentCount } from "../dist/codex-provider.js";
 import { SolarHarness } from "../dist/harness.js";
@@ -14,6 +14,33 @@ import { decodeHostTurn, writeHostTurnSchema } from "../dist/host-turn.js";
 import { SOLAR_SYSTEM_PROMPT } from "../dist/system-prompt.js";
 import { SolarWebSearchHeadless } from "../dist/web-search-headless.js";
 import { SolarWorkspaceTool, runWorkspaceCommand } from "../dist/workspace-tool.js";
+import { StatsStore, formatStats } from "../dist/stats.js";
+
+process.env.SOLAR_STATS_PATH = join(tmpdir(), `solar-harness-test-stats-${process.pid}.json`);
+test.after(async () => { await rm(process.env.SOLAR_STATS_PATH, { force: true }); });
+
+test("stats persist local usage and unlock milestones", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-stats-"));
+  try {
+    const path = join(root, "stats.json");
+    const stats = new StatsStore(path);
+    stats.startChat();
+    assert.deepEqual(stats.recordPrompt("gpt-6-luna", true), ["First prompt!"]);
+    stats.recordUsage(12, 5);
+    const loaded = new StatsStore(path).snapshot();
+    assert.equal(loaded.chats, 1);
+    assert.equal(loaded.inputTokens, 12);
+    assert.match(formatStats(loaded), /Favorite model: gpt-6-luna/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("pets have shaded idle frames for each selection", () => {
+  for (const pet of ["cat", "dog", "fox"]) {
+    assert.equal(petSprite(pet, 0).length, 5);
+    assert.notDeepEqual(petSprite(pet, 0), petSprite(pet, 2));
+  }
+  assert.deepEqual(petSprite("off", 0), []);
+});
 
 test("resetIntoTestWorkspace clears contents but keeps the test directory", async () => {
   const root = await mkdtemp(join(tmpdir(), "solar-harness-reset-"));

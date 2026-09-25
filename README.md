@@ -51,6 +51,11 @@ use, and creation.
 - Start a genuinely clean session with `/new`, including clearing old sub-agent
   records and deleting all contents of the `test` workspace.
 - Change Solar's default reasoning effort at runtime from Light through Max.
+- Select Standard or Fast processing with `/speed` or `/fast on|off|status`.
+- Keep a shaded cat, dog, or fox moving across the terminal while idle or working;
+  choose one with `/pets` or hide it with `/pets off`.
+- View local chats, completed prompts, tracked Codex token usage, favorite model,
+  and milestones with `/stats`. Stats are saved under `~/.solarharness/stats.json`.
 - Adjust a particular sub-agent's next-exchange effort through a command or a
   natural-language request to Solar.
 - Display the nested agent tree, reasoning pins, live state, elapsed time, recent

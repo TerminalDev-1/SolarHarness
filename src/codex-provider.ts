@@ -8,6 +8,7 @@ import { SOLAR_SYSTEM_PROMPT } from "./system-prompt.js";
 type CodexEvent = {
   type?: string;
   item?: { type?: string; text?: string; command?: string; status?: string };
+  usage?: { input_tokens?: number; output_tokens?: number };
   error?: { message?: string; code?: string; type?: string } | string;
 };
 
@@ -43,6 +44,8 @@ export class CodexCliProvider {
       "exec", "--json", "--sandbox", sandbox,
       "--model", options.model,
       "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`,
+      "-c", `service_tier=\"${options.fast ? "fast" : "default"}\"`,
+      ...(options.fast ? ["-c", "features.fast_mode=true"] : []),
       "-c", "agents.enabled=false",
       ...extraArgs,
       prompt
@@ -65,6 +68,7 @@ export class CodexCliProvider {
         try {
           const event = JSON.parse(line) as CodexEvent;
           if (event.type === "thread.started") sessionId = (event as CodexEvent & { thread_id?: string }).thread_id;
+          if (event.type === "turn.completed" && event.usage) options.onUsage?.(event.usage.input_tokens ?? 0, event.usage.output_tokens ?? 0);
           if (event.type === "error") {
             const message = typeof event.error === "string" ? event.error : event.error?.message;
             if (message) eventErrors.push(message);
@@ -97,7 +101,9 @@ export class CodexCliProvider {
   async resume(sessionId: string, prompt: string, options: CodexRunOptions, extraArgs: string[] = []): Promise<CodexRunResult> {
     const args = ["exec", "resume", "--json", "--model", options.model,
       "-c", 'sandbox_mode="workspace-write"',
-      "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`, "-c", "agents.enabled=false", ...extraArgs, sessionId, prompt];
+      "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`, "-c", `service_tier=\"${options.fast ? "fast" : "default"}\"`,
+      ...(options.fast ? ["-c", "features.fast_mode=true"] : []),
+      "-c", "agents.enabled=false", ...extraArgs, sessionId, prompt];
     return this.runWithArgs(args, options);
   }
 
@@ -135,6 +141,7 @@ export class CodexCliProvider {
       for (const line of lines) try {
         const event = JSON.parse(line) as CodexEvent & { thread_id?: string };
         if (event.type === "thread.started") sessionId = event.thread_id;
+        if (event.type === "turn.completed" && event.usage) options.onUsage?.(event.usage.input_tokens ?? 0, event.usage.output_tokens ?? 0);
         if (event.type === "error") {
           const message = typeof event.error === "string" ? event.error : event.error?.message;
           if (message) eventErrors.push(message);

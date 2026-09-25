@@ -41,6 +41,8 @@ export interface CodexRunOptions {
   cwd: string;
   role?: "main-agent" | "planner" | "sub-agent" | "sub-delegate";
   onEvent?: (message: string) => void;
+  onUsage?: (inputTokens: number, outputTokens: number) => void;
+  fast?: boolean;
   signal?: AbortSignal;
 }
 
