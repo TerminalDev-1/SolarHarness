@@ -112,9 +112,11 @@ test("Gemini API backend keeps session context and reports token usage", async (
   const usage = [];
   const options = { model: GEMINI_MODEL, reasoning: "light", cwd: process.cwd(), role: "main-agent", onUsage: (...tokens) => usage.push(tokens) };
   const first = await provider.run("Hello", options);
+  provider.replaceApiKey("replacement-test-key");
   const second = await provider.resume(first.sessionId, "Continue", options);
   assert.equal(second.text, "Second reply");
   assert.equal(calls[0].headers["x-goog-api-key"], "private-test-key");
+  assert.equal(calls[1].headers["x-goog-api-key"], "replacement-test-key");
   assert.equal(JSON.parse(calls[1].body).contents.length, 3);
   assert.equal(JSON.parse(calls[1].body).contents[1].parts[0].thoughtSignature, "signature-example");
   assert.equal(JSON.parse(calls[0].body).generationConfig.thinkingConfig.thinkingLevel, "low");

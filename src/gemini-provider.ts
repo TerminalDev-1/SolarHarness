@@ -22,7 +22,11 @@ export class GeminiApiProvider implements SolarModelProvider {
   private readonly sessions = new Map<string, Content[]>();
   private readonly workspaces = new Map<string, SolarWorkspaceTool>();
 
-  constructor(private readonly apiKey = loadGeminiApiKey() ?? "", private readonly request: typeof fetch = fetch) {}
+  constructor(private apiKey = loadGeminiApiKey() ?? "", private readonly request: typeof fetch = fetch) {}
+
+  replaceApiKey(key: string): void {
+    this.apiKey = key.trim();
+  }
 
   async createPlan(task: string, context: string | undefined, options: CodexRunOptions): Promise<DelegationPlan> {
     const count = requestedSubAgentCount(task);

@@ -65,6 +65,8 @@ const slashCommands = [
   { command: "/new", detail: "Start a fresh session", insert: "/new" },
   { command: "/auto-approve", detail: "Set plan approval on or off", insert: "/auto-approve " },
   { command: "/provider", detail: "Choose Codex or Gemini for next launch", insert: "/provider " },
+  { command: "/change-api-key", detail: "Replace the current Gemini API key", insert: "/change-api-key" },
+  { command: "/rsetup", detail: "Reopen full provider setup", insert: "/rsetup" },
   { command: "/theme", detail: "Choose dark or light", insert: "/theme " },
   { command: "/pets", detail: "Choose a pet or turn it off", insert: "/pets " },
   { command: "/speed", detail: "Select Standard or Fast", insert: "/speed" },
@@ -84,9 +86,10 @@ interface SolarAppProps {
   model: string;
   reasoning: ReasoningEffort;
   initialSplash: boolean;
+  onRSetup: (reasoning: ReasoningEffort) => void;
 }
 
-function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): React.JSX.Element {
+function SolarApp({ harness, model, reasoning, initialSplash, onRSetup }: SolarAppProps): React.JSX.Element {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [input, setInput] = useState("");
@@ -115,6 +118,10 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
   const [fast, setFast] = useState(harness.getFast());
   const [elapsed, setElapsed] = useState(0);
   const [showSplash, setShowSplash] = useState(initialSplash);
+  const [changingGeminiKey, setChangingGeminiKey] = useState(false);
+  const [replacementKey, setReplacementKey] = useState("");
+  const [checkingReplacement, setCheckingReplacement] = useState(false);
+  const [keyNotice, setKeyNotice] = useState("");
 
   useEffect(() => {
     harness.stats.startChat();
@@ -264,6 +271,24 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
     addMessage({ role: "solar", text: `Theme changed to ${nextTheme}.` });
   };
 
+  const submitReplacementKey = async (): Promise<void> => {
+    const key = replacementKey.trim();
+    if (!key) { setKeyNotice("Paste your Gemini API key first."); return; }
+    setCheckingReplacement(true);
+    setKeyNotice("Checking Gemini 3.5 Flash-Lite access...");
+    try {
+      await validateGeminiApiKey(key);
+      saveGeminiApiKey(key);
+      harness.replaceGeminiApiKey(key);
+      setReplacementKey("");
+      setChangingGeminiKey(false);
+      setKeyNotice("");
+      addMessage({ role: "solar", text: "Gemini API key updated. Solar will use it for the next request." });
+    } catch (error) {
+      setKeyNotice(error instanceof Error ? error.message : "Could not update the Gemini key.");
+    } finally { setCheckingReplacement(false); }
+  };
+
   const finishNewSession = async (confirmed: boolean): Promise<void> => {
     setPendingNew(null);
     if (!confirmed) {
@@ -301,7 +326,12 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /provider <codex|gemini> · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
+        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /change-api-key · /rsetup · /provider <codex|gemini> · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
+      } else if (line === "/change-api-key") {
+        if (!harness.isGemini()) addMessage({ role: "error", text: "/change-api-key is available only when Gemini is selected. Use /rsetup to choose Gemini." });
+        else { setReplacementKey(""); setKeyNotice(""); setChangingGeminiKey(true); }
+      } else if (line === "/rsetup") {
+        onRSetup(currentReasoning);
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
       } else if (line === "/auto-approve") {
@@ -384,6 +414,17 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
 
   useInput((character, key) => {
     if (key.ctrl && character === "c") { exit(); return; }
+    if (changingGeminiKey) {
+      if (checkingReplacement) return;
+      if (key.escape) { setChangingGeminiKey(false); setReplacementKey(""); setKeyNotice(""); return; }
+      if (key.return) { void submitReplacementKey(); return; }
+      if (key.backspace || key.delete) { setReplacementKey(value => value.slice(0, -1)); return; }
+      if (character && !key.ctrl && !key.meta) {
+        setReplacementKey(value => value + character.replace(/[\r\n\x00-\x1f\x7f]/g, ""));
+        setKeyNotice("");
+      }
+      return;
+    }
     if (showSplash) {
       setShowSplash(false);
       if (!key.return && !key.escape && !key.ctrl && !key.meta && character) {
@@ -470,6 +511,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
   const terminalWidth = stdout.columns || 80;
   const compact = terminalWidth < 62;
   if (showSplash) return <Splash compact={compact} />;
+  if (changingGeminiKey) return <GeminiKeySetup apiKey={replacementKey} checking={checkingReplacement} notice={keyNotice} />;
   const contentWidth = Math.min(Math.max(terminalWidth - 4, 20), 88);
   const latestStep = activityLog.at(-1);
   const latestStepLabel = latestStep ? activityDetail(latestStep) ?? latestStep : undefined;
@@ -775,9 +817,28 @@ function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): str
 
 type LaunchOptions = { cwd: string; model?: string; reasoning: ReasoningEffort; provider?: ProviderChoice; setup?: boolean };
 
+function GeminiKeySetup({ apiKey, checking, notice }: { apiKey: string; checking: boolean; notice: string }): React.JSX.Element {
+  return <Box flexDirection="column" marginTop={2} paddingX={4}>
+    <Text color={theme.pulse}>       \  |  /</Text>
+    <Text color={theme.pulse}>     --  O  --</Text>
+    <Text color={theme.pulse}>       /  |  \</Text>
+    <Box marginTop={1}><Text bold color={theme.primary}>S O L A R   H A R N E S S</Text></Box>
+    <Text color={theme.secondary}>Paste your Gemini API key:</Text>
+    <Box marginTop={1} flexDirection="column">
+      <Text color={theme.primary}>Gemini 3.5 Flash-Lite · API key</Text>
+      <Text color={theme.accent}>{checking ? "Checking..." : apiKey ? "•".repeat(Math.min(apiKey.length, 48)) : "Paste key here"}</Text>
+      <Text color={theme.subtle}>Saved for this Windows user after verification.</Text>
+    </Box>
+    {notice && <Box marginTop={1}><Text color={theme.warning}>{notice}</Text></Box>}
+    <Box marginTop={1}><Text color={theme.subtle}>Enter verify and continue · Esc back</Text></Box>
+  </Box>;
+}
+
 function StartupApp({ launch }: { launch: LaunchOptions }): React.JSX.Element {
   const configured = useMemo(() => launch.provider ?? loadProviderChoice(), [launch.provider]);
-  const saved = launch.setup ? undefined : configured;
+  const [forceSetup, setForceSetup] = useState(Boolean(launch.setup));
+  const saved = forceSetup ? undefined : configured;
+  const [currentReasoning, setCurrentReasoning] = useState(launch.reasoning);
   const hasGeminiKey = useMemo(() => Boolean(loadGeminiApiKey()), []);
   const [choice, setChoice] = useState<ProviderChoice | undefined>(saved === "gemini" && !hasGeminiKey ? undefined : saved);
   const [cursor, setCursor] = useState(configured === "gemini" ? 1 : 0);
@@ -788,7 +849,7 @@ function StartupApp({ launch }: { launch: LaunchOptions }): React.JSX.Element {
   const { exit } = useApp();
 
   const select = (selected: ProviderChoice, remember = false): void => {
-    if (!launch.provider || remember || launch.setup) {
+    if (!launch.provider || remember || forceSetup) {
       try { saveProviderChoice(selected); }
       catch { setNotice("Could not save the provider choice."); return; }
     }
@@ -828,7 +889,7 @@ function StartupApp({ launch }: { launch: LaunchOptions }): React.JSX.Element {
     if (key.downArrow || key.rightArrow) { setCursor(1); return; }
     if (!key.return) return;
     const selected: ProviderChoice = cursor === 0 ? "codex" : "gemini";
-    if (selected === "gemini" && (launch.setup || !loadGeminiApiKey())) {
+    if (selected === "gemini" && (forceSetup || !loadGeminiApiKey())) {
       setEnteringKey(true);
       setNotice("");
       return;
@@ -837,27 +898,31 @@ function StartupApp({ launch }: { launch: LaunchOptions }): React.JSX.Element {
   });
 
   const harness = useMemo(() => choice ? new SolarHarness({
-    task: "", cwd: launch.cwd, reasoning: launch.reasoning, provider: choice,
+    task: "", cwd: launch.cwd, reasoning: currentReasoning, provider: choice,
     model: choice === "gemini" ? GEMINI_MODEL : (launch.model ?? "gpt-6-luna")
-  }) : undefined, [choice, launch.cwd, launch.reasoning, launch.model]);
+  }) : undefined, [choice, launch.cwd, currentReasoning, launch.model]);
+  if (!choice && enteringKey) return <GeminiKeySetup apiKey={apiKey} checking={checkingKey} notice={notice} />;
   if (!choice || !harness) return <Box flexDirection="column" marginTop={2} paddingX={4}>
     <Text color={theme.pulse}>       \  |  /</Text>
     <Text color={theme.pulse}>     --  O  --</Text>
     <Text color={theme.pulse}>       /  |  \</Text>
     <Box marginTop={1}><Text bold color={theme.primary}>S O L A R   H A R N E S S</Text></Box>
-    <Text color={theme.secondary}>{enteringKey ? "Paste your Gemini API key:" : "Choose how Solar should work in this setup:"}</Text>
-    {enteringKey ? <Box marginTop={1} flexDirection="column">
-      <Text color={theme.primary}>Gemini 3.5 Flash-Lite · API key</Text>
-      <Text color={theme.accent}>{checkingKey ? "Checking..." : apiKey ? "•".repeat(Math.min(apiKey.length, 48)) : "Paste key here"}</Text>
-      <Text color={theme.subtle}>Saved for this Windows user after verification.</Text>
-    </Box> : <Box marginTop={1} flexDirection="column">
+    <Text color={theme.secondary}>Choose how Solar should work in this setup:</Text>
+    <Box marginTop={1} flexDirection="column">
       <Text color={cursor === 0 ? theme.primary : theme.secondary}>{cursor === 0 ? "›" : " "} Existing Codex ecosystem · use your current sign-in</Text>
       <Text color={cursor === 1 ? theme.primary : theme.secondary}>{cursor === 1 ? "›" : " "} Gemini 3.5 Flash-Lite · paste an API key</Text>
-    </Box>}
+    </Box>
     {notice && <Box marginTop={1}><Text color={theme.warning}>{notice}</Text></Box>}
-    <Box marginTop={1}><Text color={theme.subtle}>{enteringKey ? "Enter verify and continue · Esc back" : "↑↓ choose · Enter continue"}</Text></Box>
+    <Box marginTop={1}><Text color={theme.subtle}>↑↓ choose · Enter continue</Text></Box>
   </Box>;
-  return <SolarApp harness={harness} model={choice === "gemini" ? GEMINI_MODEL : (launch.model ?? "gpt-6-luna")} reasoning={launch.reasoning} initialSplash={Boolean(saved)} />;
+  return <SolarApp harness={harness} model={choice === "gemini" ? GEMINI_MODEL : (launch.model ?? "gpt-6-luna")} reasoning={currentReasoning} initialSplash={Boolean(saved)} onRSetup={reasoning => {
+    setCurrentReasoning(reasoning);
+    setForceSetup(true);
+    setChoice(undefined);
+    setEnteringKey(false);
+    setApiKey("");
+    setNotice("");
+  }} />;
 }
 
 export function startSolarUi(launch: LaunchOptions): void {

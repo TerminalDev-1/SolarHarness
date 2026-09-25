@@ -195,6 +195,12 @@ dismisses it immediately and printable input is kept for the chat prompt.
 Keep startup non-blocking and avoid emoji-capable glyphs.
 `/provider <codex|gemini>` updates the saved choice for the next launch; the
 current session keeps its active provider.
+`/change-api-key` is available only in Gemini mode. It opens the masked Gemini
+key setup screen, verifies a new key, and replaces the active provider key
+without clearing the conversation. Esc cancels and retains the existing key.
+`/rsetup` opens the full Codex/Gemini provider chooser in the current terminal;
+the selected provider starts a fresh Solar conversation. Choosing Gemini there
+requires entering and verifying a key, even when one was previously saved.
 `--setup` reopens provider setup and requires a fresh Gemini key when Gemini is
 chosen, so a denied or revoked key can be replaced. Report Gemini HTTP 403 as
 a Google key/project access problem and provide this recovery path.

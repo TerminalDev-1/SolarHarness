@@ -311,6 +311,11 @@ export class SolarHarness {
   setFast(enabled: boolean): void { this.fast = enabled; this.manager.setFast(enabled); }
   getFast(): boolean { return this.fast; }
   isGemini(): boolean { return this.options.provider === "gemini"; }
+
+  replaceGeminiApiKey(key: string): void {
+    if (!(this.provider instanceof GeminiApiProvider)) throw new Error("API key changes are available only with Gemini.");
+    this.provider.replaceApiKey(key);
+  }
   takeAchievements(): string[] { const unlocked = this.unlocked; this.unlocked = []; return unlocked; }
 
   setAutoPermissions(enabled: boolean): AutoPermissionsState {

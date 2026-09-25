@@ -86,7 +86,7 @@ is grouped into fewer assignments when additional sub-agents add no value. Each
 sub-agent can own a different directory, allowing directory trees to be created at
 once instead of sequentially.
 
-Sub-agents are separate Codex sessions but share the same `test` workspace. Give
+Sub-agents are separate model sessions but share the same `test` workspace. Give
 parallel sub-agents non-overlapping directory or file ownership when possible. Solar
 includes shared context in each assignment, and the final response synthesizes
 only the sub-agents launched for the current approved plan.
@@ -127,6 +127,9 @@ Solar splash before chat; press any key to continue immediately.
 If Google later rejects the project or key, run `npm run dev -- chat --setup`
 to reopen setup and enter another key. HTTP 403 requires checking the key or
 project access in Google AI Studio.
+While Gemini is selected, `/change-api-key` opens the masked key screen and
+updates the active key without clearing the chat. `/rsetup` reopens the full
+Codex/Gemini chooser and starts a fresh Solar conversation after selection.
 For a compiled production run:
 
 ```powershell
@@ -173,9 +176,14 @@ Enter to insert it. Press Enter again to run it, or Esc to close the list.
 | `/auto-approve on` | Treats subsequent plans as pre-approved and launches them immediately. |
 | `/auto-approve off` | Restores the plan review screen. |
 | `/provider <codex|gemini>` | Saves the provider for the next launch. Gemini setup asks for a key if none is saved. |
+| `/change-api-key` | In Gemini mode, reopens the masked key screen and uses the verified replacement immediately. Esc keeps the current key. |
+| `/rsetup` | Reopens the full provider chooser and starts a fresh conversation after selection. |
 | `/effort` | Opens the effort selector: Light, Medium, High, XHigh, or Max. |
 | `/effort <level>` | Changes Solar's effort and the default for newly launched top-level sub-agents. New sub-delegates still start pinned to Light. |
 | `/theme dark` or `/theme light` | Switches the interface palette; the rainbow input stays the same. |
+| `/speed` or `/fast <on|off|status>` | Selects Standard or Fast processing in Codex mode. |
+| `/pets <cat|dog|fox|off>` | Chooses a moving terminal pet or hides it. |
+| `/stats` | Shows local chat, token, favorite model, and achievement counts. |
 | `/agents` | Shows whether sub-agents are currently assigned. |
 | `/agent <id-or-name> reasoning <level>` | Solar authorizes a sub-agent or sub-delegate's next-exchange effort. |
 | `/agent <id-or-name> context <message>` | Sends additional context to a sub-agent or sub-delegate; a completed agent resumes its session. |
@@ -203,7 +211,7 @@ the explicit `/new` workspace-deletion confirmation.
 - `/new` defaults to **No**, explains both context and folder deletion, and shows
   the exact workspace path before anything destructive happens.
 - Confirming `/new` aborts active sub-agents, clears their records, resets the
-  Solar transcript and Codex session ID, deletes every entry inside the
+  Solar transcript and model session ID, deletes every entry inside the
   validated `test` directory, recreates it when necessary, and starts there.
 - Generated `.solarharness` schemas and `test/agent-*` experiment output are
   excluded from source control.
@@ -241,7 +249,7 @@ conversation turn, regardless of the wording of the request. Closing the
 visible browser window does not end the Solar session; the next open action
 launches a new window.
 
-Each agent receives its own Codex session and assignment while sharing the test
+Each agent receives its own model session and assignment while sharing the test
 workspace. A top-level sub-agent can return a structured sub-delegate request; the
 harness runs those named children at Light reasoning, sends their reports back to
 the parent session for integration, and keeps the complete tree visible to
