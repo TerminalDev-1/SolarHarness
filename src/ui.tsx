@@ -12,15 +12,14 @@ type PendingPlan = { plan: DelegationPlan; request: string; context: string; sel
 type PendingEffort = { cursor: number };
 type PendingSpeed = { cursor: number };
 type PendingNew = { cursor: number };
-type ThemeName = "dark" | "silver";
 type Theme = {
   accent: string; accentStrong: string; primary: string; secondary: string;
   subtle: string; success: string; warning: string; error: string;
   rail: readonly string[];
-  background: string; pulse: string;
+  pulse: string;
 };
 
-const darkTheme: Theme = {
+const theme: Theme = {
   accent: "#aeb8c5",
   accentStrong: "#d5dce5",
   primary: "#e8eaed",
@@ -30,28 +29,10 @@ const darkTheme: Theme = {
   warning: "#fdd663",
   error: "#f28b82",
   rail: ["#647181", "#aeb8c5", "#eef2f6", "#ffffff", "#cbd5e1", "#647181"],
-  background: "#0b0b0b",
   pulse: "#d97757"
 };
 
-const silverTheme: Theme = {
-  accent: "#354558",
-  accentStrong: "#4a596d",
-  primary: "#17212d",
-  secondary: "#344355",
-  subtle: "#526274",
-  success: "#176b52",
-  warning: "#80520b",
-  error: "#9c2636",
-  rail: ["#526171", "#8e9baa", "#e4ebf2", "#ffffff", "#bcc7d2", "#f6f9fc", "#8290a0", "#46576a"],
-  background: "#b9c3ce",
-  pulse: "#293b50"
-};
-
-const themes: Record<ThemeName, Theme> = { dark: darkTheme, silver: silverTheme };
-let theme = silverTheme;
-
-// Preserve the original rainbow-blue input independently of the surrounding theme.
+// The rainbow-blue input stays independent of the dark interface palette.
 const rainbowInput = {
   background: "#0a347a",
   primary: "#f2fbff",
@@ -69,7 +50,6 @@ const slashCommands = [
   { command: "/help", detail: "Show available controls", insert: "/help" },
   { command: "/new", detail: "Start a fresh session", insert: "/new" },
   { command: "/auto-approve", detail: "Set plan approval on or off", insert: "/auto-approve " },
-  { command: "/theme", detail: "Choose silver or dark", insert: "/theme " },
   { command: "/pets", detail: "Choose a pet or turn it off", insert: "/pets " },
   { command: "/speed", detail: "Select Standard or Fast", insert: "/speed" },
   { command: "/fast", detail: "Turn Fast mode on or off", insert: "/fast " },
@@ -108,7 +88,6 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
   const [autoApprove, setAutoApprove] = useState(harness.getAutoPermissions().enabled);
-  const [themeName, setThemeName] = useState<ThemeName>("silver");
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [currentActivity, setCurrentActivity] = useState("working on your request");
@@ -254,13 +233,6 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
     addMessage({ role: "solar", text: `Speed is now ${enabled ? "Fast" : "Standard"}. New Codex turns will use this setting.` });
   };
 
-  const changeTheme = (nextTheme: ThemeName): void => {
-    theme = themes[nextTheme];
-    applyTerminalTheme(stdout, theme, nextTheme);
-    setThemeName(nextTheme);
-    addMessage({ role: "solar", text: `Theme changed to ${nextTheme}.` });
-  };
-
   const finishNewSession = async (confirmed: boolean): Promise<void> => {
     setPendingNew(null);
     if (!confirmed) {
@@ -298,7 +270,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /theme · /auto-approve · /help · /quit" });
+        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
       } else if (line === "/auto-approve") {
@@ -311,12 +283,8 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
           setAutoApprove(enabled);
           addMessage({ role: "solar", text: `Auto-approve is now ${setting}. ${enabled ? "Future sub-agent plans will launch immediately without the review screen." : "Future sub-agent plans will wait for your review before launch."}` });
         } else addMessage({ role: "error", text: "Usage: /auto-approve <on|off>" });
-      } else if (line === "/theme") {
-        addMessage({ role: "solar", text: `Current theme: ${themeName}. Usage: /theme <silver|dark>` });
-      } else if (line.startsWith("/theme ")) {
-        const nextTheme = line.slice(7).trim();
-        if (nextTheme === "silver" || nextTheme === "dark") changeTheme(nextTheme);
-        else addMessage({ role: "error", text: "Usage: /theme <silver|dark>" });
+      } else if (line === "/theme" || line.startsWith("/theme ")) {
+        addMessage({ role: "solar", text: "Solar Harness now uses the dark theme. Theme switching has been retired." });
       } else if (line === "/pets") {
         addMessage({ role: "solar", text: `Current pet: ${pet}. Choose with /pets <cat|dog|fox|off>.` });
       } else if (line.startsWith("/pets ")) {
@@ -463,7 +431,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const latestStep = activityLog.at(-1);
   const latestStepLabel = latestStep ? activityDetail(latestStep) ?? latestStep : undefined;
   return (
-    <Box key={themeName} width={terminalWidth - 1} justifyContent="center">
+    <Box width={terminalWidth - 1} justifyContent="center">
     <Box width={contentWidth} flexDirection="column">
       <Header compact={compact} workspace={workspace} width={contentWidth} />
 
@@ -507,7 +475,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         busy={busy}
       />
 
-      <Footer compact={compact} model={model} reasoning={currentReasoning} themeName={themeName} autoApprove={autoApprove} fast={fast} />
+      <Footer compact={compact} model={model} reasoning={currentReasoning} autoApprove={autoApprove} fast={fast} />
     </Box>
     </Box>
   );
@@ -743,11 +711,11 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
   );
 }
 
-function Footer({ compact, model, reasoning, themeName, autoApprove, fast }: { compact: boolean; model: string; reasoning: ReasoningEffort; themeName: ThemeName; autoApprove: boolean; fast: boolean }): React.JSX.Element {
+function Footer({ compact, model, reasoning, autoApprove, fast }: { compact: boolean; model: string; reasoning: ReasoningEffort; autoApprove: boolean; fast: boolean }): React.JSX.Element {
   return (
     <Box paddingX={1} marginTop={1} justifyContent="space-between">
       <Text color={theme.subtle}>Enter send · ↑↓ history · /help</Text>
-      {!compact && <Text color={theme.subtle}>{model} · {reasoning} · {fast ? "Fast" : "Standard"} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>}
+      {!compact && <Text color={theme.subtle}>{model} · {reasoning} · {fast ? "Fast" : "Standard"} · dark · auto {autoApprove ? "on" : "off"}</Text>}
     </Box>
   );
 }
@@ -764,16 +732,10 @@ function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): str
 
 export function startSolarUi(harness: SolarHarness, model: string, reasoning: ReasoningEffort): void {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("Solar Harness Preview requires an interactive terminal.");
-  theme = silverTheme;
-  applyTerminalTheme(process.stdout, silverTheme, "silver");
+  restoreTerminalColors(process.stdout);
   render(<SolarApp harness={harness} model={model} reasoning={reasoning} />, { exitOnCtrlC: false });
 }
 
-function applyTerminalTheme(stdout: NodeJS.WriteStream, palette: Theme, themeName: ThemeName): void {
-  if (themeName === "dark") {
-    // Restore native terminal colors so the silver palette does not survive on dark.
-    stdout.write("\x1b]110\x07\x1b]111\x07\x1b[0m\x1b[2J\x1b[H");
-    return;
-  }
-  stdout.write(`\x1b]10;${palette.primary}\x07\x1b]11;${palette.background}\x07\x1b[0m\x1b[2J\x1b[H`);
+function restoreTerminalColors(stdout: NodeJS.WriteStream): void {
+  stdout.write("\x1b]110\x07\x1b]111\x07\x1b[0m\x1b[2J\x1b[H");
 }

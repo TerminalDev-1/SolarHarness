@@ -166,7 +166,7 @@ The Windows Terminal green-hue bug is fixed. It was not an orchestration or ANSI
 palette problem: the `✳` spinner frame was promoted to a full-color green emoji,
 ignoring the requested foreground color. The activity indicator now uses only
 text-safe frames (`·`, `✦`, `✧`, `✦`) and one solid ANSI color per theme.
-The default silver theme uses graphite; the plain dark fallback uses terracotta.
+The dark theme uses terracotta.
 Activity text is rendered as a single color span, while only the adjacent glyph
 animates at a calm 240 ms cadence. Do not reintroduce emoji-capable spinner
 characters or per-character ANSI styling; those can recreate green flashes and
@@ -202,14 +202,12 @@ The redesign preview keeps Ink and the terminal runtime. Use a centered reading
 column, compact transcript rows, and one expressive input frame. Avoid full-width colored
 message cards or repeated status panels; those made the interface look like a
 chat app with excessive empty space. Keep commands and approval flows accessible.
-The preview starts in the silver theme with a brushed-metal terminal background
-and dark graphite text. The earlier light and chromatic-blue themes have been
-replaced. A dark-to-white metallic rail appears in the header, and compact block
+The preview starts in the dark theme on the terminal's native background.
+A dark-to-white rail appears in the header, and compact block
 markers distinguish transcript speakers without message cards. The sole message
 frame retains the earlier cyan-to-blue-to-violet rainbow rails and royal-blue
-interior, independent of the silver theme; keep that colorful treatment through
-idle, busy, and approval states. `/theme dark` restores the
-terminal's native background, and `/theme silver` restores the default.
+interior, independent of the dark theme; keep that colorful treatment through
+idle, busy, and approval states. The silver theme and `/theme` selector are retired.
 Typing `/` at the chat prompt opens a filtered list of supported slash commands.
 Up and Down select a command, Tab or Enter inserts it into the prompt, and Esc
 closes the list. Selecting a command never executes it; Enter on the filled
@@ -226,6 +224,10 @@ The user has granted standing authorization for current and future agents to
 commit SolarHarness changes and push them to this project's GitHub repository.
 This authorization remains active until the user explicitly revokes it. Do not
 request permission again for every ordinary project commit or push.
+After completing and verifying a requested SolarHarness change, commit the files
+for that change and push the commit to the project GitHub remote automatically.
+Keep unrelated working-tree changes out of the commit. If verification or push
+fails, report the failure plainly rather than claiming publication succeeded.
 
 Keep publication scoped to this repository and the work the user requested. Do
 not treat this authorization as permission to publish unrelated data, generated

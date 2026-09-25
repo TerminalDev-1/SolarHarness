@@ -12,9 +12,9 @@ auto-approve is enabled. Sub-agents can create named Light-pinned sub-delegates
 for independent scopes.
 
 SolarHarness uses a centered terminal layout with a compact conversation and
-one blocky input frame. It opens in a brushed-silver theme with a chrome header
-rail and a rainbow-blue message frame. `/theme dark` restores the terminal's
-native background. Its welcome view highlights browsing, file inspection, tool
+one blocky input frame. It opens in the dark theme on the terminal's native
+background, with a monochrome header rail and a rainbow-blue message frame.
+Its welcome view highlights browsing, file inspection, tool
 use, and creation.
 
 ## What it can do
@@ -60,8 +60,8 @@ use, and creation.
   natural-language request to Solar.
 - Display the nested agent tree, reasoning pins, live state, elapsed time, recent
   commands, and a Claude Code-like activity pulse while work is running.
-- Switch the whole terminal between metallic silver and dark palettes—not only the input
-  box—and always display the active workspace.
+- Display the dark interface on the terminal's native background while keeping
+  the rainbow-blue input frame and active workspace visible.
 - Find the native Codex executable installed with the Codex desktop app even when
   its versioned directory is missing from the terminal's `PATH`.
 
@@ -163,8 +163,6 @@ Enter to insert it. Press Enter again to run it, or Esc to close the list.
 | `/auto-approve off` | Restores the plan review screen. |
 | `/effort` | Opens the effort selector: Light, Medium, High, XHigh, or Max. |
 | `/effort <level>` | Changes Solar's effort and the default for newly launched top-level sub-agents. New sub-delegates still start pinned to Light. |
-| `/theme silver` | Applies the default brushed-metal foreground and background palette. |
-| `/theme dark` | Restores the dark terminal palette. |
 | `/agents` | Shows whether sub-agents are currently assigned. |
 | `/agent <id-or-name> reasoning <level>` | Solar authorizes a sub-agent or sub-delegate's next-exchange effort. |
 | `/agent <id-or-name> context <message>` | Sends additional context to a sub-agent or sub-delegate; a completed agent resumes its session. |
@@ -256,10 +254,9 @@ The corrected implementation renders the activity label as one solid ANSI
 color from the active theme and animates only an adjacent text-safe sequence:
 `·`, `✦`, `✧`, `✦`. Frames advance every 240 ms. This preserves the calm
 Claude Code-like feel without per-character color cycling, emoji substitution, or
-green flashes across supported terminal themes. Silver uses graphite; dark uses
-terracotta.
+green flashes. The dark theme uses terracotta.
 
-An animated text pet sits beside the activity while Solar works. The cat is
+An animated text pet moves across the interface while Solar is idle or working. The cat is
 selected by default; use `/pets cat`, `/pets dog`, `/pets fox`, or `/pets off`
 to change it. Run `/pets` to see the current selection.
 
