@@ -15,10 +15,12 @@ import { SOLAR_SYSTEM_PROMPT } from "../dist/system-prompt.js";
 import { SolarWebSearchHeadless } from "../dist/web-search-headless.js";
 import { SolarWorkspaceTool, runWorkspaceCommand } from "../dist/workspace-tool.js";
 import { StatsStore, formatStats } from "../dist/stats.js";
-import { GeminiApiProvider } from "../dist/gemini-provider.js";
+import { GEMINI_MODEL, GeminiApiProvider, validateGeminiApiKey } from "../dist/gemini-provider.js";
+import { loadGeminiApiKey, saveGeminiApiKey } from "../dist/gemini-key-store.js";
 import { loadProviderChoice, saveProviderChoice } from "../dist/provider-settings.js";
 
 process.env.SOLAR_STATS_PATH = join(tmpdir(), `solar-harness-test-stats-${process.pid}.json`);
+process.env.SOLAR_SETTINGS_PATH = join(tmpdir(), `solar-harness-test-settings-${process.pid}.json`);
 test.after(async () => { await rm(process.env.SOLAR_STATS_PATH, { force: true }); });
 
 test("stats persist local usage and unlock milestones", async () => {
@@ -55,6 +57,43 @@ test("first-run provider choice stores no Gemini key", async () => {
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("Gemini key check targets 3.5 Flash-Lite and rejects invalid keys", async () => {
+  assert.equal(GEMINI_MODEL, "gemini-3.5-flash-lite");
+  let checked;
+  await validateGeminiApiKey("private-test-key", async (url, init) => {
+    checked = { url, init };
+    return new Response(JSON.stringify({ name: `models/${GEMINI_MODEL}` }), { status: 200 });
+  });
+  assert.match(checked.url, /models\/gemini-3\.5-flash-lite$/);
+  assert.equal(checked.init.headers["x-goog-api-key"], "private-test-key");
+  await assert.rejects(validateGeminiApiKey("bad-key", async () => new Response("{}", { status: 403 })), /rejected this API key/);
+});
+
+test("a pasted Gemini key is protected and remembered for this Windows user", async t => {
+  if (process.platform !== "win32") { t.skip("Windows DPAPI only"); return; }
+  const root = await mkdtemp(join(tmpdir(), "solar-gemini-key-"));
+  const oldSettingsPath = process.env.SOLAR_SETTINGS_PATH;
+  try {
+    process.env.SOLAR_SETTINGS_PATH = join(root, "settings.json");
+    const path = join(root, "key.dpapi");
+    saveGeminiApiKey("private-test-key", path);
+    assert.equal(loadGeminiApiKey(path), "private-test-key");
+    assert.doesNotMatch(await readFile(path, "utf8"), /private-test-key/);
+    saveGeminiApiKey("private-test-key");
+    let usedKey;
+    const provider = new GeminiApiProvider(undefined, async (_url, init) => {
+      usedKey = init.headers["x-goog-api-key"];
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "Ready" }] } }] }), { status: 200 });
+    });
+    await provider.run("Hello", { model: GEMINI_MODEL, reasoning: "light", cwd: root, role: "main-agent" });
+    assert.equal(usedKey, "private-test-key");
+    await provider.close();
+  } finally {
+    process.env.SOLAR_SETTINGS_PATH = oldSettingsPath;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("Gemini API backend keeps session context and reports token usage", async () => {
   const calls = [];
   const reply = text => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text, thoughtSignature: "signature-example" }] } }], usageMetadata: { promptTokenCount: 7, candidatesTokenCount: 3 } }), { status: 200 });
@@ -63,7 +102,7 @@ test("Gemini API backend keeps session context and reports token usage", async (
     return reply(calls.length === 1 ? "First reply" : "Second reply");
   });
   const usage = [];
-  const options = { model: "gemini-3.8-flash", reasoning: "light", cwd: process.cwd(), role: "main-agent", onUsage: (...tokens) => usage.push(tokens) };
+  const options = { model: GEMINI_MODEL, reasoning: "light", cwd: process.cwd(), role: "main-agent", onUsage: (...tokens) => usage.push(tokens) };
   const first = await provider.run("Hello", options);
   const second = await provider.resume(first.sessionId, "Continue", options);
   assert.equal(second.text, "Second reply");
@@ -87,7 +126,7 @@ test("Gemini sub-agents can use the workspace command before reporting", async (
     return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: responses.shift() }] } }] }), { status: 200 });
   });
   try {
-    const result = await provider.run("Check arithmetic in the workspace", { model: "gemini-3.8-flash", reasoning: "medium", cwd: root, role: "sub-agent" });
+    const result = await provider.run("Check arithmetic in the workspace", { model: GEMINI_MODEL, reasoning: "medium", cwd: root, role: "sub-agent" });
     assert.match(result.text, /observed 4/);
     assert.match(requests[1].contents.at(-1).parts[0].text, /"stdout":"4/);
   } finally { await provider.close(); await rm(root, { recursive: true, force: true }); }
@@ -98,7 +137,7 @@ test("Gemini main turns execute Solar host tools and resume with their results",
   const oldKey = process.env.GEMINI_API_KEY;
   process.env.GEMINI_API_KEY = "private-test-key";
   try {
-    const harness = new SolarHarness({ task: "", model: "gemini-3.8-flash", provider: "gemini", reasoning: "light", cwd: root });
+    const harness = new SolarHarness({ task: "", model: GEMINI_MODEL, provider: "gemini", reasoning: "light", cwd: root });
     const replies = [
       { kind: "tool", tool: "workspace_command", input: JSON.stringify({ action: "run", command: "node -p 2+2" }), reply: "" },
       { kind: "answer", tool: "none", input: "", reply: "The command returned 4." }

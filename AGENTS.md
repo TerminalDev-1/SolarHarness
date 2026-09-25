@@ -128,7 +128,7 @@ sub-agents, and sub-delegates run with workspace-write access.
 
 ## Model defaults
 
-Codex defaults to GPT-6 Luna and Gemini defaults to Gemini 3.8 Flash, both with
+Codex defaults to GPT-6 Luna and Gemini uses Gemini 3.5 Flash-Lite, both with
 Light reasoning. Light maps to Codex CLI `low` and Gemini thinking level `low`.
 Solar and sub-agents inherit the selected default. Every new sub-delegate starts pinned to Light regardless of
 its parent's setting. A sub-agent cannot raise its sub-delegate above Light;
@@ -181,8 +181,12 @@ The main activity copy names the current action, such as opening YouTube,
 searching for a query, or running a command. Do not show a generic Thinking label
 when a concrete action is known.
 First-time startup shows a text-safe provider choice: the existing Codex
-ecosystem or a Gemini API key supplied through `GEMINI_API_KEY`. Persist only
-the selected provider in the user's Solar settings, never the key. Gemini runs
+ecosystem or Gemini 3.5 Flash-Lite. The Gemini choice opens a masked key input
+that accepts a pasted API key. Verify access with the Gemini models endpoint
+before selecting the provider. On Windows, protect the remembered key for the
+current user with DPAPI in `~/.solarharness/gemini-key.dpapi`; keep it out of
+settings, logs, transcripts, and the repository. `GEMINI_API_KEY` remains a
+fallback when no saved key exists. Gemini runs
 Solar and named agents through the Gemini API; agent workspace actions must be
 executed and reported from real tool results. Existing setups still open with
 the short text-safe Solar splash. It clears after 1.8 seconds; a keypress

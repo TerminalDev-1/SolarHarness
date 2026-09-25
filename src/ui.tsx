@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import { SolarHarness } from "./harness.js";
 import { loadProviderChoice, saveProviderChoice, type ProviderChoice } from "./provider-settings.js";
+import { loadGeminiApiKey, saveGeminiApiKey } from "./gemini-key-store.js";
+import { GEMINI_MODEL, validateGeminiApiKey } from "./gemini-provider.js";
 import { actionStatus, activityDetail, initialActivity } from "./activity.js";
 import { PET_NAMES, petSprite, type PetSelection } from "./pets.js";
 import { formatStats } from "./stats.js";
@@ -318,7 +320,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
         const selected = line.slice(10).trim();
         if (selected === "codex" || selected === "gemini") {
           saveProviderChoice(selected);
-          addMessage({ role: "solar", text: `${selected === "gemini" ? "Gemini" : "Codex"} will be used on the next launch.${selected === "gemini" ? " Set GEMINI_API_KEY in the environment before starting Solar Harness." : ""}` });
+          addMessage({ role: "solar", text: `${selected === "gemini" ? "Gemini 3.5 Flash-Lite" : "Codex"} will be used on the next launch.${selected === "gemini" && !loadGeminiApiKey() ? " Setup will ask for your API key." : ""}` });
         } else addMessage({ role: "error", text: "Usage: /provider <codex|gemini>" });
       } else if (line === "/theme") {
         addMessage({ role: "solar", text: `Current theme: ${themeName}. Usage: /theme <dark|light>` });
@@ -775,47 +777,86 @@ type LaunchOptions = { cwd: string; model?: string; reasoning: ReasoningEffort; 
 
 function StartupApp({ launch }: { launch: LaunchOptions }): React.JSX.Element {
   const saved = useMemo(() => launch.provider ?? loadProviderChoice(), [launch.provider]);
-  const [choice, setChoice] = useState<ProviderChoice | undefined>(saved === "gemini" && !process.env.GEMINI_API_KEY ? undefined : saved);
-  const [cursor, setCursor] = useState(0);
-  const [notice, setNotice] = useState(saved === "gemini" && !process.env.GEMINI_API_KEY ? "Gemini needs GEMINI_API_KEY. Set it in your environment and restart." : "");
+  const hasGeminiKey = useMemo(() => Boolean(loadGeminiApiKey()), []);
+  const [choice, setChoice] = useState<ProviderChoice | undefined>(saved === "gemini" && !hasGeminiKey ? undefined : saved);
+  const [cursor, setCursor] = useState(saved === "gemini" ? 1 : 0);
+  const [enteringKey, setEnteringKey] = useState(saved === "gemini" && !hasGeminiKey);
+  const [apiKey, setApiKey] = useState("");
+  const [checkingKey, setCheckingKey] = useState(false);
+  const [notice, setNotice] = useState("");
   const { exit } = useApp();
+
+  const select = (selected: ProviderChoice, remember = false): void => {
+    if (!launch.provider || remember) {
+      try { saveProviderChoice(selected); }
+      catch { setNotice("Could not save the provider choice."); return; }
+    }
+    setChoice(selected);
+  };
+
+  const submitKey = async (): Promise<void> => {
+    const key = apiKey.trim();
+    if (!key) { setNotice("Paste your Gemini API key first."); return; }
+    setCheckingKey(true);
+    setNotice("Checking Gemini 3.5 Flash-Lite access...");
+    try {
+      await validateGeminiApiKey(key);
+      saveGeminiApiKey(key);
+      setApiKey("");
+      select("gemini", true);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not save the Gemini key.");
+    } finally { setCheckingKey(false); }
+  };
 
   useInput((character, key) => {
     if (choice) return;
     if (key.ctrl && character === "c") { exit(); return; }
+    if (checkingKey) return;
+    if (enteringKey) {
+      if (key.escape) { setEnteringKey(false); setNotice(""); return; }
+      if (key.return) { void submitKey(); return; }
+      if (key.backspace || key.delete) { setApiKey(value => value.slice(0, -1)); return; }
+      if (character && !key.ctrl && !key.meta) {
+        setApiKey(value => value + character.replace(/[\r\n\x00-\x1f\x7f]/g, ""));
+        setNotice("");
+      }
+      return;
+    }
     if (key.upArrow || key.leftArrow) { setCursor(0); return; }
     if (key.downArrow || key.rightArrow) { setCursor(1); return; }
     if (!key.return) return;
     const selected: ProviderChoice = cursor === 0 ? "codex" : "gemini";
-    if (selected === "gemini" && !process.env.GEMINI_API_KEY?.trim()) {
-      setNotice("Set GEMINI_API_KEY in your environment, then restart Solar Harness. No key is stored in settings.");
+    if (selected === "gemini" && !loadGeminiApiKey()) {
+      setEnteringKey(true);
+      setNotice("");
       return;
     }
-    if (!launch.provider) {
-      try { saveProviderChoice(selected); }
-      catch (error) { setNotice(`Could not save provider choice: ${error instanceof Error ? error.message : String(error)}`); return; }
-    }
-    setChoice(selected);
+    select(selected);
   });
 
   const harness = useMemo(() => choice ? new SolarHarness({
     task: "", cwd: launch.cwd, reasoning: launch.reasoning, provider: choice,
-    model: launch.model ?? (choice === "gemini" ? "gemini-3.8-flash" : "gpt-6-luna")
+    model: choice === "gemini" ? GEMINI_MODEL : (launch.model ?? "gpt-6-luna")
   }) : undefined, [choice, launch.cwd, launch.reasoning, launch.model]);
   if (!choice || !harness) return <Box flexDirection="column" marginTop={2} paddingX={4}>
     <Text color={theme.pulse}>       \  |  /</Text>
     <Text color={theme.pulse}>     --  O  --</Text>
     <Text color={theme.pulse}>       /  |  \</Text>
     <Box marginTop={1}><Text bold color={theme.primary}>S O L A R   H A R N E S S</Text></Box>
-    <Text color={theme.secondary}>Choose how Solar should work in this setup:</Text>
-    <Box marginTop={1} flexDirection="column">
+    <Text color={theme.secondary}>{enteringKey ? "Paste your Gemini API key:" : "Choose how Solar should work in this setup:"}</Text>
+    {enteringKey ? <Box marginTop={1} flexDirection="column">
+      <Text color={theme.primary}>Gemini 3.5 Flash-Lite · API key</Text>
+      <Text color={theme.accent}>{checkingKey ? "Checking..." : apiKey ? "•".repeat(Math.min(apiKey.length, 48)) : "Paste key here"}</Text>
+      <Text color={theme.subtle}>Saved for this Windows user after verification.</Text>
+    </Box> : <Box marginTop={1} flexDirection="column">
       <Text color={cursor === 0 ? theme.primary : theme.secondary}>{cursor === 0 ? "›" : " "} Existing Codex ecosystem · use your current sign-in</Text>
-      <Text color={cursor === 1 ? theme.primary : theme.secondary}>{cursor === 1 ? "›" : " "} Gemini API key · use GEMINI_API_KEY</Text>
-    </Box>
+      <Text color={cursor === 1 ? theme.primary : theme.secondary}>{cursor === 1 ? "›" : " "} Gemini 3.5 Flash-Lite · paste an API key</Text>
+    </Box>}
     {notice && <Box marginTop={1}><Text color={theme.warning}>{notice}</Text></Box>}
-    <Box marginTop={1}><Text color={theme.subtle}>↑↓ choose · Enter continue</Text></Box>
+    <Box marginTop={1}><Text color={theme.subtle}>{enteringKey ? "Enter verify and continue · Esc back" : "↑↓ choose · Enter continue"}</Text></Box>
   </Box>;
-  return <SolarApp harness={harness} model={launch.model ?? (choice === "gemini" ? "gemini-3.8-flash" : "gpt-6-luna")} reasoning={launch.reasoning} initialSplash={Boolean(saved)} />;
+  return <SolarApp harness={harness} model={choice === "gemini" ? GEMINI_MODEL : (launch.model ?? "gpt-6-luna")} reasoning={launch.reasoning} initialSplash={Boolean(saved)} />;
 }
 
 export function startSolarUi(launch: LaunchOptions): void {

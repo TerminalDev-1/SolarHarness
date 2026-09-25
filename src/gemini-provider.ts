@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { parseHostToolCall } from "./host-tool-call.js";
 import { requestedSubAgentCount } from "./codex-provider.js";
 import { SolarWorkspaceTool, type WorkspaceCommandInput } from "./workspace-tool.js";
+import { loadGeminiApiKey } from "./gemini-key-store.js";
 import type { CodexRunOptions, CodexRunResult, DelegationPlan, SolarModelProvider } from "./types.js";
 
 type Content = { role: "user" | "model"; parts: Record<string, unknown>[] };
@@ -13,14 +14,15 @@ type GeminiReply = {
 };
 
 const endpoint = "https://generativelanguage.googleapis.com/v1beta/models";
+export const GEMINI_MODEL = "gemini-3.5-flash-lite";
 const maxAgentActions = 30;
 
-/** Gemini API-backed Solar sessions. API keys stay in the process environment. */
+/** Gemini API-backed Solar sessions. API keys stay local to this user's process. */
 export class GeminiApiProvider implements SolarModelProvider {
   private readonly sessions = new Map<string, Content[]>();
   private readonly workspaces = new Map<string, SolarWorkspaceTool>();
 
-  constructor(private readonly apiKey = process.env.GEMINI_API_KEY ?? "", private readonly request: typeof fetch = fetch) {}
+  constructor(private readonly apiKey = loadGeminiApiKey() ?? "", private readonly request: typeof fetch = fetch) {}
 
   async createPlan(task: string, context: string | undefined, options: CodexRunOptions): Promise<DelegationPlan> {
     const count = requestedSubAgentCount(task);
@@ -61,7 +63,7 @@ export class GeminiApiProvider implements SolarModelProvider {
   }
 
   private async turn(sessionId: string, prompt: string, options: CodexRunOptions, extraArgs: string[]): Promise<CodexRunResult> {
-    if (!this.apiKey.trim()) throw new Error("Gemini needs GEMINI_API_KEY in the environment. Set it and restart Solar Harness.");
+    if (!this.apiKey.trim()) throw new Error("Gemini needs an API key. Enter it in setup or set GEMINI_API_KEY, then restart Solar Harness.");
     const schemaIndex = extraArgs.indexOf("--output-schema");
     const schema = schemaIndex >= 0 && extraArgs[schemaIndex + 1]
       ? await readFile(extraArgs[schemaIndex + 1], "utf8") : undefined;
@@ -119,6 +121,24 @@ export class GeminiApiProvider implements SolarModelProvider {
     history.push({ role: "user", parts: [{ text: input }] }, { role: "model", parts: modelContent!.parts! });
     options.onUsage?.(body.usageMetadata?.promptTokenCount ?? 0, (body.usageMetadata?.candidatesTokenCount ?? 0) + (body.usageMetadata?.thoughtsTokenCount ?? 0));
     return text;
+  }
+}
+
+/** Check that the key can access the selected model without consuming generation tokens. */
+export async function validateGeminiApiKey(key: string, request: typeof fetch = fetch): Promise<void> {
+  let response: Response;
+  try {
+    response = await request(`${endpoint}/${GEMINI_MODEL}`, {
+      headers: { "x-goog-api-key": key.trim() },
+      signal: AbortSignal.timeout(15_000)
+    });
+  } catch {
+    throw new Error("Could not reach the Gemini API. Check your connection and try again.");
+  }
+  if (!response.ok) {
+    if (response.status === 400 || response.status === 401 || response.status === 403)
+      throw new Error("Gemini rejected this API key or it cannot access Gemini 3.5 Flash-Lite.");
+    throw new Error(`Gemini model check failed (HTTP ${response.status}).`);
   }
 }
 
