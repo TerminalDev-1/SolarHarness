@@ -57,4 +57,12 @@ export interface HarnessOptions {
   model: string;
   reasoning: ReasoningEffort;
   cwd: string;
+  provider?: "codex" | "gemini";
+}
+
+export interface SolarModelProvider {
+  run(prompt: string, options: CodexRunOptions, extraArgs?: string[]): Promise<CodexRunResult>;
+  resume(sessionId: string, prompt: string, options: CodexRunOptions, extraArgs?: string[]): Promise<CodexRunResult>;
+  createPlan(task: string, context: string | undefined, options: CodexRunOptions): Promise<DelegationPlan>;
+  close?(): Promise<void>;
 }

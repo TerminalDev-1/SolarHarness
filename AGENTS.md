@@ -64,8 +64,9 @@ sub-agents, and sub-delegates run with workspace-write access.
   pages before opening them in the browser. If a local HTML browser navigation is
   refused, Solar calls `serve` and retries the page using its returned URL.
   Solar can also use its Codex workspace tools.
-  Browser and web turns use the Codex CLI's output schema to require a
-  structured host tool request before their needed actions are complete.
+  Browser and web turns require a structured host tool request before their
+  needed actions are complete. Codex uses the CLI output schema; Gemini uses
+  JSON responses validated by the same host protocol.
   Model-issued host tool requests are parsed as JSON and their results are fed
   back into the same session. If Solar emits only a control line, the harness
   asks it to continue the task before returning a failure to the user.
@@ -127,9 +128,9 @@ sub-agents, and sub-delegates run with workspace-write access.
 
 ## Model defaults
 
-The default is GPT-6 Luna with Light reasoning. Light is translated to the
-Codex CLI's `low` reasoning setting. Solar and sub-agents inherit the
-selected default. Every new sub-delegate starts pinned to Light regardless of
+Codex defaults to GPT-6 Luna and Gemini defaults to Gemini 3.8 Flash, both with
+Light reasoning. Light maps to Codex CLI `low` and Gemini thinking level `low`.
+Solar and sub-agents inherit the selected default. Every new sub-delegate starts pinned to Light regardless of
 its parent's setting. A sub-agent cannot raise its sub-delegate above Light;
 only an explicit adjustment by Solar can authorize that increase.
 
@@ -179,10 +180,16 @@ same text-safe spinner and solid activity color treatment.
 The main activity copy names the current action, such as opening YouTube,
 searching for a query, or running a command. Do not show a generic Thinking label
 when a concrete action is known.
-Both `npm run dev` and the built CLI open with a short, text-safe Solar splash.
-It clears automatically after 1.8 seconds; a keypress dismisses it immediately
-and printable input is kept for the chat prompt. Keep startup non-blocking and
-avoid emoji-capable glyphs in the splash, as in the activity indicator.
+First-time startup shows a text-safe provider choice: the existing Codex
+ecosystem or a Gemini API key supplied through `GEMINI_API_KEY`. Persist only
+the selected provider in the user's Solar settings, never the key. Gemini runs
+Solar and named agents through the Gemini API; agent workspace actions must be
+executed and reported from real tool results. Existing setups still open with
+the short text-safe Solar splash. It clears after 1.8 seconds; a keypress
+dismisses it immediately and printable input is kept for the chat prompt.
+Keep startup non-blocking and avoid emoji-capable glyphs.
+`/provider <codex|gemini>` updates the saved choice for the next launch; the
+current session keeps its active provider.
 Activity labels must stay short. Use a mentioned file name when available (for
 example, `Working on index.html`) and never echo the user's full prompt into the
 status line. The `/pets` command selects a text-safe animated cat, dog, or fox
@@ -194,7 +201,7 @@ setting. Pass Fast through Codex CLI's `service_tier` for every new main and
 sub-agent turn. Keep speed separate from reasoning effort and describe rate
 changes according to current official Codex documentation.
 `/stats` shows Solar Harness local chats, prompts, completed prompts, tracked
-Codex CLI input/output tokens, favorite model, and achievements. Persist these
+provider input/output tokens, favorite model, and achievements. Persist these
 counts in the user's home directory, outside the `/new` workspace cleanup.
 Award achievements from recorded activity, and label local token counts so they
 are not mistaken for account-wide usage or remaining credit.
@@ -203,11 +210,13 @@ column, compact transcript rows, and one expressive input frame. Avoid full-widt
 message cards or repeated status panels; those made the interface look like a
 chat app with excessive empty space. Keep commands and approval flows accessible.
 The preview starts in the dark theme on the terminal's native background.
-A dark-to-white rail appears in the header, and compact block
+`/theme light` restores the earlier light palette; `/theme dark` restores the
+dark palette. Do not bring back the metallic silver palette. A dark-to-white rail
+appears in the header, and compact block
 markers distinguish transcript speakers without message cards. The sole message
 frame retains the earlier cyan-to-blue-to-violet rainbow rails and royal-blue
-interior, independent of the dark theme; keep that colorful treatment through
-idle, busy, and approval states. The silver theme and `/theme` selector are retired.
+interior, independent of the active theme; keep that colorful treatment through
+idle, busy, and approval states.
 Typing `/` at the chat prompt opens a filtered list of supported slash commands.
 Up and Down select a command, Tab or Enter inserts it into the prompt, and Esc
 closes the list. Selecting a command never executes it; Enter on the filled

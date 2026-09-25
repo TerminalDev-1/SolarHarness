@@ -1,6 +1,7 @@
 import { AgentManager } from "./agent-manager.js";
 import { SolarBrowser, type BrowserInput, type BrowserResult } from "./browser-tool.js";
 import { CodexCliProvider } from "./codex-provider.js";
+import { GeminiApiProvider } from "./gemini-provider.js";
 import { SolarWebSearchHeadless, type WebSearchHeadlessInput, type WebSearchHeadlessResult } from "./web-search-headless.js";
 import { parseHostToolCall } from "./host-tool-call.js";
 import { decodeHostTurn, writeHostTurnSchema } from "./host-turn.js";
@@ -10,11 +11,11 @@ import { readdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { SOLAR_SYSTEM_PROMPT } from "./system-prompt.js";
 import { registerHarnessTools, type AdjustSubEffortLevelInput, type AutoPermissionsState, type RuntimeOperation, type RuntimeOperationsInput, type SetAutoPermissionsInput, type SpawnSubAgentInput, type ToolRegistry } from "./tool-registry.js";
-import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type HarnessOptions, type ReasoningEffort } from "./types.js";
+import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type HarnessOptions, type ReasoningEffort, type SolarModelProvider } from "./types.js";
 import { StatsStore } from "./stats.js";
 
 export class SolarHarness {
-  readonly provider = new CodexCliProvider();
+  readonly provider: SolarModelProvider;
   readonly manager: AgentManager;
   readonly tools: ToolRegistry;
   readonly browser: SolarBrowser;
@@ -28,6 +29,7 @@ export class SolarHarness {
   private unlocked: string[] = [];
 
   constructor(private readonly options: HarnessOptions) {
+    this.provider = options.provider === "gemini" ? new GeminiApiProvider() : new CodexCliProvider();
     this.browser = new SolarBrowser(options.cwd);
     this.workspace = new SolarWorkspaceTool(options.cwd);
     this.manager = new AgentManager(this.provider, { ...options, onUsage: (input, output) => this.stats.recordUsage(input, output) });
@@ -77,7 +79,7 @@ export class SolarHarness {
     const visibleBrowserRequested = browserRequested(message);
     const requireInitialTool = visibleBrowserRequested || runtimeHistoryRequested || Boolean(youtubeQuery || webQuery);
     const hostArgs = async (requireTool: boolean): Promise<string[]> => ["--output-schema", await writeHostTurnSchema(this.options.cwd, requireTool)];
-    const normalizeHostResponse = async (initial: Awaited<ReturnType<CodexCliProvider["run"]>>, requireTool: boolean) => {
+    const normalizeHostResponse = async (initial: Awaited<ReturnType<SolarModelProvider["run"]>>, requireTool: boolean) => {
       let next = initial;
       this.mainSessionId = next.sessionId ?? this.mainSessionId;
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -308,6 +310,7 @@ export class SolarHarness {
 
   setFast(enabled: boolean): void { this.fast = enabled; this.manager.setFast(enabled); }
   getFast(): boolean { return this.fast; }
+  isGemini(): boolean { return this.options.provider === "gemini"; }
   takeAchievements(): string[] { const unlocked = this.unlocked; this.unlocked = []; return unlocked; }
 
   setAutoPermissions(enabled: boolean): AutoPermissionsState {
@@ -320,6 +323,7 @@ export class SolarHarness {
   }
 
   resetConversation(): void {
+    void this.provider.close?.();
     this.stats.startChat();
     void this.browser.close();
     void this.workspace.close();

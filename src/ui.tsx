@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import { SolarHarness } from "./harness.js";
+import { loadProviderChoice, saveProviderChoice, type ProviderChoice } from "./provider-settings.js";
 import { actionStatus, activityDetail, initialActivity } from "./activity.js";
 import { PET_NAMES, petSprite, type PetSelection } from "./pets.js";
 import { formatStats } from "./stats.js";
@@ -12,14 +13,15 @@ type PendingPlan = { plan: DelegationPlan; request: string; context: string; sel
 type PendingEffort = { cursor: number };
 type PendingSpeed = { cursor: number };
 type PendingNew = { cursor: number };
+type ThemeName = "dark" | "light";
 type Theme = {
   accent: string; accentStrong: string; primary: string; secondary: string;
   subtle: string; success: string; warning: string; error: string;
   rail: readonly string[];
-  pulse: string;
+  pulse: string; background?: string;
 };
 
-const theme: Theme = {
+const darkTheme: Theme = {
   accent: "#aeb8c5",
   accentStrong: "#d5dce5",
   primary: "#e8eaed",
@@ -31,6 +33,16 @@ const theme: Theme = {
   rail: ["#647181", "#aeb8c5", "#eef2f6", "#ffffff", "#cbd5e1", "#647181"],
   pulse: "#d97757"
 };
+
+const lightTheme: Theme = {
+  accent: "#185abc", accentStrong: "#673ab7", primary: "#202124",
+  secondary: "#5f6368", subtle: "#80868b", success: "#137333",
+  warning: "#b06000", error: "#b3261e", pulse: "#b45309",
+  rail: ["#27364b", "#536780", "#869bb1", "#dbe5ee", "#ffffff", "#b7c9d9"],
+  background: "#f8f9fa"
+};
+const themes: Record<ThemeName, Theme> = { dark: darkTheme, light: lightTheme };
+let theme = darkTheme;
 
 // The rainbow-blue input stays independent of the dark interface palette.
 const rainbowInput = {
@@ -50,6 +62,8 @@ const slashCommands = [
   { command: "/help", detail: "Show available controls", insert: "/help" },
   { command: "/new", detail: "Start a fresh session", insert: "/new" },
   { command: "/auto-approve", detail: "Set plan approval on or off", insert: "/auto-approve " },
+  { command: "/provider", detail: "Choose Codex or Gemini for next launch", insert: "/provider " },
+  { command: "/theme", detail: "Choose dark or light", insert: "/theme " },
   { command: "/pets", detail: "Choose a pet or turn it off", insert: "/pets " },
   { command: "/speed", detail: "Select Standard or Fast", insert: "/speed" },
   { command: "/fast", detail: "Turn Fast mode on or off", insert: "/fast " },
@@ -67,9 +81,10 @@ interface SolarAppProps {
   harness: SolarHarness;
   model: string;
   reasoning: ReasoningEffort;
+  initialSplash: boolean;
 }
 
-function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Element {
+function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): React.JSX.Element {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [input, setInput] = useState("");
@@ -88,6 +103,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
   const [autoApprove, setAutoApprove] = useState(harness.getAutoPermissions().enabled);
+  const [themeName, setThemeName] = useState<ThemeName>("dark");
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [currentActivity, setCurrentActivity] = useState("working on your request");
@@ -96,13 +112,14 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const [petTick, setPetTick] = useState(0);
   const [fast, setFast] = useState(harness.getFast());
   const [elapsed, setElapsed] = useState(0);
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(initialSplash);
 
   useEffect(() => {
     harness.stats.startChat();
+    if (!initialSplash) return;
     const timer = setTimeout(() => setShowSplash(false), splashDurationMs);
     return () => clearTimeout(timer);
-  }, []);
+  }, [initialSplash]);
 
   useEffect(() => {
     const timer = setInterval(() => setPetTick(value => value + 1), 240);
@@ -227,10 +244,22 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   };
 
   const changeSpeed = (enabled: boolean): void => {
+    if (harness.isGemini()) {
+      addMessage({ role: "solar", text: "Fast mode is a Codex setting and is unavailable with the Gemini API backend." });
+      setPendingSpeed(null);
+      return;
+    }
     harness.setFast(enabled);
     setFast(enabled);
     setPendingSpeed(null);
     addMessage({ role: "solar", text: `Speed is now ${enabled ? "Fast" : "Standard"}. New Codex turns will use this setting.` });
+  };
+
+  const changeTheme = (nextTheme: ThemeName): void => {
+    theme = themes[nextTheme];
+    applyTerminalTheme(stdout, nextTheme);
+    setThemeName(nextTheme);
+    addMessage({ role: "solar", text: `Theme changed to ${nextTheme}.` });
   };
 
   const finishNewSession = async (confirmed: boolean): Promise<void> => {
@@ -270,7 +299,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
+        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /provider <codex|gemini> · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
       } else if (line === "/auto-approve") {
@@ -283,8 +312,20 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
           setAutoApprove(enabled);
           addMessage({ role: "solar", text: `Auto-approve is now ${setting}. ${enabled ? "Future sub-agent plans will launch immediately without the review screen." : "Future sub-agent plans will wait for your review before launch."}` });
         } else addMessage({ role: "error", text: "Usage: /auto-approve <on|off>" });
-      } else if (line === "/theme" || line.startsWith("/theme ")) {
-        addMessage({ role: "solar", text: "Solar Harness now uses the dark theme. Theme switching has been retired." });
+      } else if (line === "/provider") {
+        addMessage({ role: "solar", text: `Current provider: ${harness.isGemini() ? "gemini" : "codex"}. Usage: /provider <codex|gemini> (applies on next launch).` });
+      } else if (line.startsWith("/provider ")) {
+        const selected = line.slice(10).trim();
+        if (selected === "codex" || selected === "gemini") {
+          saveProviderChoice(selected);
+          addMessage({ role: "solar", text: `${selected === "gemini" ? "Gemini" : "Codex"} will be used on the next launch.${selected === "gemini" ? " Set GEMINI_API_KEY in the environment before starting Solar Harness." : ""}` });
+        } else addMessage({ role: "error", text: "Usage: /provider <codex|gemini>" });
+      } else if (line === "/theme") {
+        addMessage({ role: "solar", text: `Current theme: ${themeName}. Usage: /theme <dark|light>` });
+      } else if (line.startsWith("/theme ")) {
+        const selected = line.slice(7).trim();
+        if (selected === "dark" || selected === "light") changeTheme(selected);
+        else addMessage({ role: "error", text: "Usage: /theme <dark|light>" });
       } else if (line === "/pets") {
         addMessage({ role: "solar", text: `Current pet: ${pet}. Choose with /pets <cat|dog|fox|off>.` });
       } else if (line.startsWith("/pets ")) {
@@ -431,7 +472,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
   const latestStep = activityLog.at(-1);
   const latestStepLabel = latestStep ? activityDetail(latestStep) ?? latestStep : undefined;
   return (
-    <Box width={terminalWidth - 1} justifyContent="center">
+    <Box key={themeName} width={terminalWidth - 1} justifyContent="center">
     <Box width={contentWidth} flexDirection="column">
       <Header compact={compact} workspace={workspace} width={contentWidth} />
 
@@ -475,7 +516,7 @@ function SolarApp({ harness, model, reasoning }: SolarAppProps): React.JSX.Eleme
         busy={busy}
       />
 
-      <Footer compact={compact} model={model} reasoning={currentReasoning} autoApprove={autoApprove} fast={fast} />
+      <Footer compact={compact} model={model} reasoning={currentReasoning} autoApprove={autoApprove} fast={fast} themeName={themeName} />
     </Box>
     </Box>
   );
@@ -711,11 +752,11 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
   );
 }
 
-function Footer({ compact, model, reasoning, autoApprove, fast }: { compact: boolean; model: string; reasoning: ReasoningEffort; autoApprove: boolean; fast: boolean }): React.JSX.Element {
+function Footer({ compact, model, reasoning, autoApprove, fast, themeName }: { compact: boolean; model: string; reasoning: ReasoningEffort; autoApprove: boolean; fast: boolean; themeName: ThemeName }): React.JSX.Element {
   return (
     <Box paddingX={1} marginTop={1} justifyContent="space-between">
       <Text color={theme.subtle}>Enter send · ↑↓ history · /help</Text>
-      {!compact && <Text color={theme.subtle}>{model} · {reasoning} · {fast ? "Fast" : "Standard"} · dark · auto {autoApprove ? "on" : "off"}</Text>}
+      {!compact && <Text color={theme.subtle}>{model} · {reasoning} · {fast ? "Fast" : "Standard"} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>}
     </Box>
   );
 }
@@ -730,12 +771,61 @@ function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): str
   return "";
 }
 
-export function startSolarUi(harness: SolarHarness, model: string, reasoning: ReasoningEffort): void {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("Solar Harness Preview requires an interactive terminal.");
-  restoreTerminalColors(process.stdout);
-  render(<SolarApp harness={harness} model={model} reasoning={reasoning} />, { exitOnCtrlC: false });
+type LaunchOptions = { cwd: string; model?: string; reasoning: ReasoningEffort; provider?: ProviderChoice };
+
+function StartupApp({ launch }: { launch: LaunchOptions }): React.JSX.Element {
+  const saved = useMemo(() => launch.provider ?? loadProviderChoice(), [launch.provider]);
+  const [choice, setChoice] = useState<ProviderChoice | undefined>(saved === "gemini" && !process.env.GEMINI_API_KEY ? undefined : saved);
+  const [cursor, setCursor] = useState(0);
+  const [notice, setNotice] = useState(saved === "gemini" && !process.env.GEMINI_API_KEY ? "Gemini needs GEMINI_API_KEY. Set it in your environment and restart." : "");
+  const { exit } = useApp();
+
+  useInput((character, key) => {
+    if (choice) return;
+    if (key.ctrl && character === "c") { exit(); return; }
+    if (key.upArrow || key.leftArrow) { setCursor(0); return; }
+    if (key.downArrow || key.rightArrow) { setCursor(1); return; }
+    if (!key.return) return;
+    const selected: ProviderChoice = cursor === 0 ? "codex" : "gemini";
+    if (selected === "gemini" && !process.env.GEMINI_API_KEY?.trim()) {
+      setNotice("Set GEMINI_API_KEY in your environment, then restart Solar Harness. No key is stored in settings.");
+      return;
+    }
+    if (!launch.provider) {
+      try { saveProviderChoice(selected); }
+      catch (error) { setNotice(`Could not save provider choice: ${error instanceof Error ? error.message : String(error)}`); return; }
+    }
+    setChoice(selected);
+  });
+
+  const harness = useMemo(() => choice ? new SolarHarness({
+    task: "", cwd: launch.cwd, reasoning: launch.reasoning, provider: choice,
+    model: launch.model ?? (choice === "gemini" ? "gemini-3.8-flash" : "gpt-6-luna")
+  }) : undefined, [choice, launch.cwd, launch.reasoning, launch.model]);
+  if (!choice || !harness) return <Box flexDirection="column" marginTop={2} paddingX={4}>
+    <Text color={theme.pulse}>       \  |  /</Text>
+    <Text color={theme.pulse}>     --  O  --</Text>
+    <Text color={theme.pulse}>       /  |  \</Text>
+    <Box marginTop={1}><Text bold color={theme.primary}>S O L A R   H A R N E S S</Text></Box>
+    <Text color={theme.secondary}>Choose how Solar should work in this setup:</Text>
+    <Box marginTop={1} flexDirection="column">
+      <Text color={cursor === 0 ? theme.primary : theme.secondary}>{cursor === 0 ? "›" : " "} Existing Codex ecosystem · use your current sign-in</Text>
+      <Text color={cursor === 1 ? theme.primary : theme.secondary}>{cursor === 1 ? "›" : " "} Gemini API key · use GEMINI_API_KEY</Text>
+    </Box>
+    {notice && <Box marginTop={1}><Text color={theme.warning}>{notice}</Text></Box>}
+    <Box marginTop={1}><Text color={theme.subtle}>↑↓ choose · Enter continue</Text></Box>
+  </Box>;
+  return <SolarApp harness={harness} model={launch.model ?? (choice === "gemini" ? "gemini-3.8-flash" : "gpt-6-luna")} reasoning={launch.reasoning} initialSplash={Boolean(saved)} />;
 }
 
-function restoreTerminalColors(stdout: NodeJS.WriteStream): void {
-  stdout.write("\x1b]110\x07\x1b]111\x07\x1b[0m\x1b[2J\x1b[H");
+export function startSolarUi(launch: LaunchOptions): void {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("Solar Harness Preview requires an interactive terminal.");
+  theme = darkTheme;
+  applyTerminalTheme(process.stdout, "dark");
+  render(<StartupApp launch={launch} />, { exitOnCtrlC: false });
+}
+
+function applyTerminalTheme(stdout: NodeJS.WriteStream, selected: ThemeName): void {
+  if (selected === "dark") stdout.write("\x1b]110\x07\x1b]111\x07\x1b[0m\x1b[2J\x1b[H");
+  else stdout.write(`\x1b]10;${lightTheme.primary}\x07\x1b]11;${lightTheme.background}\x07\x1b[0m\x1b[2J\x1b[H`);
 }

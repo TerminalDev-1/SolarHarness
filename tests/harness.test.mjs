@@ -15,6 +15,8 @@ import { SOLAR_SYSTEM_PROMPT } from "../dist/system-prompt.js";
 import { SolarWebSearchHeadless } from "../dist/web-search-headless.js";
 import { SolarWorkspaceTool, runWorkspaceCommand } from "../dist/workspace-tool.js";
 import { StatsStore, formatStats } from "../dist/stats.js";
+import { GeminiApiProvider } from "../dist/gemini-provider.js";
+import { loadProviderChoice, saveProviderChoice } from "../dist/provider-settings.js";
 
 process.env.SOLAR_STATS_PATH = join(tmpdir(), `solar-harness-test-stats-${process.pid}.json`);
 test.after(async () => { await rm(process.env.SOLAR_STATS_PATH, { force: true }); });
@@ -40,6 +42,76 @@ test("pets have shaded idle frames for each selection", () => {
     assert.notDeepEqual(petSprite(pet, 0), petSprite(pet, 2));
   }
   assert.deepEqual(petSprite("off", 0), []);
+});
+
+test("first-run provider choice stores no Gemini key", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-provider-"));
+  try {
+    const path = join(root, "settings.json");
+    assert.equal(loadProviderChoice(path), undefined);
+    saveProviderChoice("gemini", path);
+    assert.equal(loadProviderChoice(path), "gemini");
+    assert.deepEqual(JSON.parse(await readFile(path, "utf8")), { provider: "gemini" });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("Gemini API backend keeps session context and reports token usage", async () => {
+  const calls = [];
+  const reply = text => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text, thoughtSignature: "signature-example" }] } }], usageMetadata: { promptTokenCount: 7, candidatesTokenCount: 3 } }), { status: 200 });
+  const provider = new GeminiApiProvider("private-test-key", async (_url, init) => {
+    calls.push(init);
+    return reply(calls.length === 1 ? "First reply" : "Second reply");
+  });
+  const usage = [];
+  const options = { model: "gemini-3.8-flash", reasoning: "light", cwd: process.cwd(), role: "main-agent", onUsage: (...tokens) => usage.push(tokens) };
+  const first = await provider.run("Hello", options);
+  const second = await provider.resume(first.sessionId, "Continue", options);
+  assert.equal(second.text, "Second reply");
+  assert.equal(calls[0].headers["x-goog-api-key"], "private-test-key");
+  assert.equal(JSON.parse(calls[1].body).contents.length, 3);
+  assert.equal(JSON.parse(calls[1].body).contents[1].parts[0].thoughtSignature, "signature-example");
+  assert.equal(JSON.parse(calls[0].body).generationConfig.thinkingConfig.thinkingLevel, "low");
+  assert.deepEqual(usage, [[7, 3], [7, 3]]);
+  await provider.close();
+});
+
+test("Gemini sub-agents can use the workspace command before reporting", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-gemini-agent-"));
+  const requests = [];
+  const responses = [
+    'SOLAR_TOOL: workspace_command {"action":"run","command":"node -p 2+2"}',
+    "I ran the command and observed 4."
+  ];
+  const provider = new GeminiApiProvider("private-test-key", async (_url, init) => {
+    requests.push(JSON.parse(init.body));
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: responses.shift() }] } }] }), { status: 200 });
+  });
+  try {
+    const result = await provider.run("Check arithmetic in the workspace", { model: "gemini-3.8-flash", reasoning: "medium", cwd: root, role: "sub-agent" });
+    assert.match(result.text, /observed 4/);
+    assert.match(requests[1].contents.at(-1).parts[0].text, /"stdout":"4/);
+  } finally { await provider.close(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("Gemini main turns execute Solar host tools and resume with their results", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-gemini-main-"));
+  const oldKey = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = "private-test-key";
+  try {
+    const harness = new SolarHarness({ task: "", model: "gemini-3.8-flash", provider: "gemini", reasoning: "light", cwd: root });
+    const replies = [
+      { kind: "tool", tool: "workspace_command", input: JSON.stringify({ action: "run", command: "node -p 2+2" }), reply: "" },
+      { kind: "answer", tool: "none", input: "", reply: "The command returned 4." }
+    ];
+    harness.provider.request = async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(replies.shift()) }] } }] }), { status: 200 });
+    const result = await harness.converse("Run a workspace command to check 2+2");
+    assert.match(result.reply, /returned 4/);
+    assert.equal(harness.tools.getOperations({ tool: "workspace_command" })[0].status, "succeeded");
+    await harness.provider.close();
+  } finally {
+    if (oldKey === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = oldKey;
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("resetIntoTestWorkspace clears contents but keeps the test directory", async () => {

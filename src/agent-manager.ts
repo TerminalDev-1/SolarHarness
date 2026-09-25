@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { CodexCliProvider } from "./codex-provider.js";
-import type { AgentRecord, AgentTask, CodexRunOptions, ReasoningEffort } from "./types.js";
+import type { AgentRecord, AgentTask, CodexRunOptions, ReasoningEffort, SolarModelProvider } from "./types.js";
 import type { OrchestrateInput, SpawnSubAgentInput } from "./tool-registry.js";
 
 const MAX_CONCURRENT_AGENTS = 8;
@@ -18,7 +17,7 @@ export class AgentManager {
   private readonly records = new Map<string, AgentRecord>();
   private readonly aborters = new Map<string, AbortController>();
 
-  constructor(private readonly provider: CodexCliProvider, private readonly options: CodexRunOptions) {}
+  constructor(private readonly provider: SolarModelProvider, private readonly options: CodexRunOptions) {}
 
   setFast(enabled: boolean): void { this.options.fast = enabled; }
 

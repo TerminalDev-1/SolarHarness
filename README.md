@@ -14,6 +14,7 @@ for independent scopes.
 SolarHarness uses a centered terminal layout with a compact conversation and
 one blocky input frame. It opens in the dark theme on the terminal's native
 background, with a monochrome header rail and a rainbow-blue message frame.
+`/theme light` restores the earlier light palette while keeping the input frame.
 Its welcome view highlights browsing, file inspection, tool
 use, and creation.
 
@@ -54,14 +55,14 @@ use, and creation.
 - Select Standard or Fast processing with `/speed` or `/fast on|off|status`.
 - Keep a shaded cat, dog, or fox moving across the terminal while idle or working;
   choose one with `/pets` or hide it with `/pets off`.
-- View local chats, completed prompts, tracked Codex token usage, favorite model,
+- View local chats, completed prompts, tracked provider token usage, favorite model,
   and milestones with `/stats`. Stats are saved under `~/.solarharness/stats.json`.
 - Adjust a particular sub-agent's next-exchange effort through a command or a
   natural-language request to Solar.
 - Display the nested agent tree, reasoning pins, live state, elapsed time, recent
   commands, and a Claude Code-like activity pulse while work is running.
-- Display the dark interface on the terminal's native background while keeping
-  the rainbow-blue input frame and active workspace visible.
+- Switch between dark and light interface palettes while keeping the rainbow-blue
+  input frame and active workspace visible.
 - Find the native Codex executable installed with the Codex desktop app even when
   its versioned directory is missing from the terminal's `PATH`.
 
@@ -93,7 +94,8 @@ only the sub-agents launched for the current approved plan.
 ## Requirements
 
 - Node.js 20 or newer.
-- An authenticated Codex CLI or Codex desktop installation.
+- An authenticated Codex CLI or Codex desktop installation for Codex mode, or a
+  Gemini API key in `GEMINI_API_KEY` for Gemini mode.
 - Playwright and its managed Chromium browser, or Microsoft Edge as a fallback.
 
 SolarHarness first honors `SOLAR_CODEX_PATH`, then checks `PATH`, the Windows Codex
@@ -115,8 +117,10 @@ Run `npm run test:browser-live` to verify the visible cursor, page clicks, and
 key presses against a local test page.
 
 `chat` is the default command, so `npm run dev` opens the interface directly.
-Startup shows a brief Solar splash before the chat prompt; press any key to
-continue immediately. The same splash appears with `npm start` after building.
+On first launch, choose the existing Codex ecosystem or Gemini API key. For Gemini,
+set `$env:GEMINI_API_KEY="..."` before launch; Solar never saves the key. The
+choice is saved in `~/.solarharness/settings.json`. Later launches show the brief
+Solar splash before chat; press any key to continue immediately.
 For a compiled production run:
 
 ```powershell
@@ -124,11 +128,12 @@ npm run build
 npm run start -- chat
 ```
 
-GPT-6 Luna with Light reasoning is the default. These can be overridden at
-launch:
+Codex uses GPT-6 Luna by default; Gemini uses Gemini 3.8 Flash. Light reasoning
+is the Solar default. Override the provider, model, or reasoning at launch:
 
 ```powershell
 npm run dev -- chat --model gpt-6-luna --reasoning max
+npm run dev -- chat --provider gemini --model gemini-3.8-flash
 ```
 
 ## Delegation workflow
@@ -161,8 +166,10 @@ Enter to insert it. Press Enter again to run it, or Esc to close the list.
 | `/new` | Opens a destructive-action confirmation with **No** selected by default. **Yes** resets context, stops and clears agents, deletes everything inside `test`, and activates the empty folder. |
 | `/auto-approve on` | Treats subsequent plans as pre-approved and launches them immediately. |
 | `/auto-approve off` | Restores the plan review screen. |
+| `/provider <codex|gemini>` | Saves the provider for the next launch. Gemini requires `GEMINI_API_KEY` in the environment. |
 | `/effort` | Opens the effort selector: Light, Medium, High, XHigh, or Max. |
 | `/effort <level>` | Changes Solar's effort and the default for newly launched top-level sub-agents. New sub-delegates still start pinned to Light. |
+| `/theme dark` or `/theme light` | Switches the interface palette; the rainbow input stays the same. |
 | `/agents` | Shows whether sub-agents are currently assigned. |
 | `/agent <id-or-name> reasoning <level>` | Solar authorizes a sub-agent or sub-delegate's next-exchange effort. |
 | `/agent <id-or-name> context <message>` | Sends additional context to a sub-agent or sub-delegate; a completed agent resumes its session. |
@@ -197,9 +204,12 @@ the explicit `/new` workspace-deletion confirmation.
 
 ## Architecture
 
-SolarHarness invokes `codex exec --json` and consumes its JSONL event stream. The
+SolarHarness invokes `codex exec --json` in Codex mode and consumes its JSONL
+event stream. Gemini mode calls the Gemini API directly with the environment key;
+its agents can use workspace commands and receive their actual results. The
 Solar session is stored and resumed between conversational turns and
-after sub-agent synthesis. Planning uses a constrained JSON schema, and a plan may
+after sub-agent synthesis. Codex planning uses a constrained JSON schema;
+Gemini plans are validated before launch. A plan may
 contain one to eight independent tasks.
 
 The runtime `ToolRegistry` exposes these main capabilities:
@@ -254,7 +264,7 @@ The corrected implementation renders the activity label as one solid ANSI
 color from the active theme and animates only an adjacent text-safe sequence:
 `·`, `✦`, `✧`, `✦`. Frames advance every 240 ms. This preserves the calm
 Claude Code-like feel without per-character color cycling, emoji substitution, or
-green flashes. The dark theme uses terracotta.
+green flashes. Dark uses terracotta; light uses amber.
 
 An animated text pet moves across the interface while Solar is idle or working. The cat is
 selected by default; use `/pets cat`, `/pets dog`, `/pets fox`, or `/pets off`
