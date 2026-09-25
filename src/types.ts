@@ -57,7 +57,6 @@ export interface HarnessOptions {
   model: string;
   reasoning: ReasoningEffort;
   cwd: string;
-  provider?: "codex" | "gemini";
 }
 
 export interface SolarModelProvider {

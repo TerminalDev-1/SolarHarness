@@ -1,7 +1,6 @@
 import { AgentManager } from "./agent-manager.js";
 import { SolarBrowser, type BrowserInput, type BrowserResult } from "./browser-tool.js";
 import { CodexCliProvider } from "./codex-provider.js";
-import { GeminiApiProvider } from "./gemini-provider.js";
 import { SolarWebSearchHeadless, type WebSearchHeadlessInput, type WebSearchHeadlessResult } from "./web-search-headless.js";
 import { parseHostToolCall } from "./host-tool-call.js";
 import { decodeHostTurn, writeHostTurnSchema } from "./host-turn.js";
@@ -29,7 +28,7 @@ export class SolarHarness {
   private unlocked: string[] = [];
 
   constructor(private readonly options: HarnessOptions) {
-    this.provider = options.provider === "gemini" ? new GeminiApiProvider() : new CodexCliProvider();
+    this.provider = new CodexCliProvider();
     this.browser = new SolarBrowser(options.cwd);
     this.workspace = new SolarWorkspaceTool(options.cwd);
     this.manager = new AgentManager(this.provider, { ...options, onUsage: (input, output) => this.stats.recordUsage(input, output) });
@@ -310,12 +309,6 @@ export class SolarHarness {
 
   setFast(enabled: boolean): void { this.fast = enabled; this.manager.setFast(enabled); }
   getFast(): boolean { return this.fast; }
-  isGemini(): boolean { return this.options.provider === "gemini"; }
-
-  replaceGeminiApiKey(key: string): void {
-    if (!(this.provider instanceof GeminiApiProvider)) throw new Error("API key changes are available only with Gemini.");
-    this.provider.replaceApiKey(key);
-  }
   takeAchievements(): string[] { const unlocked = this.unlocked; this.unlocked = []; return unlocked; }
 
   setAutoPermissions(enabled: boolean): AutoPermissionsState {

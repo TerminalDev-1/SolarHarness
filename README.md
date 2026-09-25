@@ -55,7 +55,7 @@ use, and creation.
 - Select Standard or Fast processing with `/speed` or `/fast on|off|status`.
 - Keep a shaded cat, dog, or fox moving across the terminal while idle or working;
   choose one with `/pets` or hide it with `/pets off`.
-- View local chats, completed prompts, tracked provider token usage, favorite model,
+- View local chats, completed prompts, tracked Codex token usage, favorite model,
   and milestones with `/stats`. Stats are saved under `~/.solarharness/stats.json`.
 - Adjust a particular sub-agent's next-exchange effort through a command or a
   natural-language request to Solar.
@@ -86,7 +86,7 @@ is grouped into fewer assignments when additional sub-agents add no value. Each
 sub-agent can own a different directory, allowing directory trees to be created at
 once instead of sequentially.
 
-Sub-agents are separate model sessions but share the same `test` workspace. Give
+Sub-agents are separate Codex sessions but share the same `test` workspace. Give
 parallel sub-agents non-overlapping directory or file ownership when possible. Solar
 includes shared context in each assignment, and the final response synthesizes
 only the sub-agents launched for the current approved plan.
@@ -94,8 +94,7 @@ only the sub-agents launched for the current approved plan.
 ## Requirements
 
 - Node.js 20 or newer.
-- An authenticated Codex CLI or Codex desktop installation for Codex mode, or a
-  Gemini API key for Gemini mode.
+- An authenticated Codex CLI or Codex desktop installation.
 - Playwright and its managed Chromium browser, or Microsoft Edge as a fallback.
 
 SolarHarness first honors `SOLAR_CODEX_PATH`, then checks `PATH`, the Windows Codex
@@ -117,19 +116,8 @@ Run `npm run test:browser-live` to verify the visible cursor, page clicks, and
 key presses against a local test page.
 
 `chat` is the default command, so `npm run dev` opens the interface directly.
-On first launch, choose the existing Codex ecosystem or Gemini 3.5 Flash-Lite.
-Paste your Gemini API key into the masked setup input and press Enter. Solar checks
-generation access, remembers the key for your Windows user in a DPAPI protected file at
-`~/.solarharness/gemini-key.dpapi`, and selects Gemini immediately. You can also
-set `GEMINI_API_KEY` instead. The provider choice is saved separately in
-`~/.solarharness/settings.json`. Later launches show the brief
-Solar splash before chat; press any key to continue immediately.
-If Google later rejects the project or key, run `npm run dev -- chat --setup`
-to reopen setup and enter another key. HTTP 403 requires checking the key or
-project access in Google AI Studio.
-While Gemini is selected, `/change-api-key` opens the masked key screen and
-updates the active key without clearing the chat. `/rsetup` reopens the full
-Codex/Gemini chooser and starts a fresh Solar conversation after selection.
+Startup shows a brief Solar splash before chat; press any key to continue
+immediately.
 For a compiled production run:
 
 ```powershell
@@ -137,12 +125,11 @@ npm run build
 npm run start -- chat
 ```
 
-Codex uses GPT-6 Luna by default; Gemini uses Gemini 3.5 Flash-Lite. Light reasoning
-is the Solar default. Override the provider, Codex model, or reasoning at launch:
+Solar uses GPT-6 Luna with Light reasoning by default. Override the Codex model
+or reasoning at launch:
 
 ```powershell
 npm run dev -- chat --model gpt-6-luna --reasoning max
-npm run dev -- chat --provider gemini
 ```
 
 ## Delegation workflow
@@ -175,9 +162,6 @@ Enter to insert it. Press Enter again to run it, or Esc to close the list.
 | `/new` | Opens a destructive-action confirmation with **No** selected by default. **Yes** resets context, stops and clears agents, deletes everything inside `test`, and activates the empty folder. |
 | `/auto-approve on` | Treats subsequent plans as pre-approved and launches them immediately. |
 | `/auto-approve off` | Restores the plan review screen. |
-| `/provider <codex|gemini>` | Saves the provider for the next launch. Gemini setup asks for a key if none is saved. |
-| `/change-api-key` | In Gemini mode, reopens the masked key screen and uses the verified replacement immediately. Esc keeps the current key. |
-| `/rsetup` | Reopens the full provider chooser and starts a fresh conversation after selection. |
 | `/effort` | Opens the effort selector: Light, Medium, High, XHigh, or Max. |
 | `/effort <level>` | Changes Solar's effort and the default for newly launched top-level sub-agents. New sub-delegates still start pinned to Light. |
 | `/theme dark` or `/theme light` | Switches the interface palette; the rainbow input stays the same. |
@@ -218,12 +202,9 @@ the explicit `/new` workspace-deletion confirmation.
 
 ## Architecture
 
-SolarHarness invokes `codex exec --json` in Codex mode and consumes its JSONL
-event stream. Gemini mode calls the Gemini API directly with the saved key or `GEMINI_API_KEY`;
-its agents can use workspace commands and receive their actual results. The
+SolarHarness invokes `codex exec --json` and consumes its JSONL event stream. The
 Solar session is stored and resumed between conversational turns and
-after sub-agent synthesis. Codex planning uses a constrained JSON schema;
-Gemini plans are validated before launch. A plan may
+after sub-agent synthesis. Planning uses a constrained JSON schema; a plan may
 contain one to eight independent tasks.
 
 The runtime `ToolRegistry` exposes these main capabilities:
@@ -249,7 +230,7 @@ conversation turn, regardless of the wording of the request. Closing the
 visible browser window does not end the Solar session; the next open action
 launches a new window.
 
-Each agent receives its own model session and assignment while sharing the test
+Each agent receives its own Codex session and assignment while sharing the test
 workspace. A top-level sub-agent can return a structured sub-delegate request; the
 harness runs those named children at Light reasoning, sends their reports back to
 the parent session for integration, and keeps the complete tree visible to
