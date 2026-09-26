@@ -39,17 +39,7 @@ export class CodexCliProvider {
   }
 
   async run(prompt: string, options: CodexRunOptions, extraArgs: string[] = []): Promise<CodexRunResult> {
-    const sandbox = options.role === "planner" ? "read-only" : "workspace-write";
-    const args = [
-      "exec", "--json", "--sandbox", sandbox,
-      "--model", options.model,
-      "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`,
-      "-c", `service_tier=\"${options.fast ? "fast" : "default"}\"`,
-      ...(options.fast ? ["-c", "features.fast_mode=true"] : []),
-      "-c", "agents.enabled=false",
-      ...extraArgs,
-      prompt
-    ];
+    const args = buildCodexRunArgs(prompt, options, extraArgs);
     // Never use a shell here: Windows cmd.exe splits a multi-word prompt into CLI arguments.
     // Codex also reads piped stdin in addition to the prompt argument. Close the default
     // child stdin pipe immediately or it will wait forever for more input.
@@ -99,11 +89,7 @@ export class CodexCliProvider {
   }
 
   async resume(sessionId: string, prompt: string, options: CodexRunOptions, extraArgs: string[] = []): Promise<CodexRunResult> {
-    const args = ["exec", "resume", "--json", "--model", options.model,
-      "-c", 'sandbox_mode="workspace-write"',
-      "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`, "-c", `service_tier=\"${options.fast ? "fast" : "default"}\"`,
-      ...(options.fast ? ["-c", "features.fast_mode=true"] : []),
-      "-c", "agents.enabled=false", ...extraArgs, sessionId, prompt];
+    const args = buildCodexResumeArgs(sessionId, prompt, options, extraArgs);
     return this.runWithArgs(args, options);
   }
 
@@ -165,6 +151,28 @@ export class CodexCliProvider {
       });
     });
   }
+}
+
+export function buildCodexRunArgs(prompt: string, options: CodexRunOptions, extraArgs: string[] = []): string[] {
+  const sandbox = options.role === "planner" ? "read-only" : "workspace-write";
+  return [
+    "exec", "--json", "--skip-git-repo-check", "--sandbox", sandbox,
+    "--model", options.model,
+    "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`,
+    "-c", `service_tier=\"${options.fast ? "fast" : "default"}\"`,
+    ...(options.fast ? ["-c", "features.fast_mode=true"] : []),
+    "-c", "agents.enabled=false",
+    ...extraArgs,
+    prompt
+  ];
+}
+
+export function buildCodexResumeArgs(sessionId: string, prompt: string, options: CodexRunOptions, extraArgs: string[] = []): string[] {
+  return ["exec", "resume", "--json", "--skip-git-repo-check", "--model", options.model,
+    "-c", 'sandbox_mode="workspace-write"',
+    "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`, "-c", `service_tier=\"${options.fast ? "fast" : "default"}\"`,
+    ...(options.fast ? ["-c", "features.fast_mode=true"] : []),
+    "-c", "agents.enabled=false", ...extraArgs, sessionId, prompt];
 }
 
 /** Resolve the native CLI even when the Codex desktop app has not amended PATH. */

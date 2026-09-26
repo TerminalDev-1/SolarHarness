@@ -7,7 +7,7 @@ import { AgentManager } from "../dist/agent-manager.js";
 import { actionStatus, activityDetail, initialActivity } from "../dist/activity.js";
 import { petFrame, petSprite } from "../dist/pets.js";
 import { SolarBrowser } from "../dist/browser-tool.js";
-import { CodexCliProvider, requestedSubAgentCount } from "../dist/codex-provider.js";
+import { CodexCliProvider, buildCodexResumeArgs, buildCodexRunArgs, requestedSubAgentCount } from "../dist/codex-provider.js";
 import { SolarHarness } from "../dist/harness.js";
 import { parseHostToolCall } from "../dist/host-tool-call.js";
 import { decodeHostTurn, writeHostTurnSchema } from "../dist/host-turn.js";
@@ -43,22 +43,31 @@ test("pets have shaded idle frames for each selection", () => {
   assert.deepEqual(petSprite("off", 0), []);
 });
 
-test("new session keeps the active workspace and its files", async () => {
+test("resetIntoTestWorkspace clears contents but keeps the test directory", async () => {
   const root = await mkdtemp(join(tmpdir(), "solar-harness-reset-"));
+  const workspace = join(root, "test");
   try {
-    await mkdir(join(root, "nested"), { recursive: true });
-    await writeFile(join(root, "top.txt"), "project file");
-    await writeFile(join(root, "nested", "child.txt"), "nested project file");
+    await mkdir(join(workspace, "nested"), { recursive: true });
+    await writeFile(join(workspace, "top.txt"), "old session");
+    await writeFile(join(workspace, "nested", "child.txt"), "old sub-agent");
 
     const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: root });
-    await harness.startNewSession();
-    assert.equal(harness.getWorkspace(), root);
-    assert.equal(await readFile(join(root, "top.txt"), "utf8"), "project file");
-    assert.equal(await readFile(join(root, "nested", "child.txt"), "utf8"), "nested project file");
-    assert.deepEqual((await readdir(root)).sort(), ["nested", "top.txt"]);
+    assert.equal(await harness.resetIntoTestWorkspace(), workspace);
+    assert.deepEqual(await readdir(workspace), []);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("Codex starts and resumes outside Git repositories", () => {
+  const options = { model: "gpt-6-luna", reasoning: "light", cwd: "C:\\temporary\\test", role: "main-agent" };
+  const runArgs = buildCodexRunArgs("hello", options, ["--output-schema", "schema.json"]);
+  const resumeArgs = buildCodexResumeArgs("session-id", "continue", options, ["--output-schema", "schema.json"]);
+  assert.deepEqual(runArgs.slice(0, 3), ["exec", "--json", "--skip-git-repo-check"]);
+  assert.deepEqual(resumeArgs.slice(0, 4), ["exec", "resume", "--json", "--skip-git-repo-check"]);
+  assert.ok(runArgs.includes("--output-schema"));
+  assert.ok(resumeArgs.includes("--output-schema"));
+  assert.equal(buildCodexRunArgs("plan", { ...options, role: "planner" })[4], "read-only");
 });
 
 test("working sun expands and contracts in fixed-width text-safe frames", () => {

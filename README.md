@@ -27,8 +27,8 @@ use, and creation.
   plan with one to eight sub-agents based on genuinely parallel scopes.
 - Honor an explicit request for one to eight agents, including when the same
   message also asks Solar to browse a page.
-- Create multiple directories and their contents in parallel in the active
-  workspace. For example, eight approved sub-agents can own separate folders.
+- Create multiple directories and their contents in parallel inside `test`. For
+  example, eight approved sub-agents can own separate folders there.
 - Give sub-agents memorable names instead of presenting only generated IDs.
 - Let a sub-agent delegate independent scopes to direct sub-delegates, then integrate
   their reports. Solar controls the full tree; each sub-agent controls its children.
@@ -48,8 +48,8 @@ use, and creation.
   or allow `/auto-approve on` to launch future plans without pausing.
 - Retain Solar's context across user turns, planning, sub-agent execution, and
   final report synthesis.
-- Start a fresh session with `/new`, clearing conversation and sub-agent records
-  while keeping workspace files.
+- Start a genuinely clean session with `/new`, including clearing old sub-agent
+  records and deleting all contents of the `test` workspace.
 - Change Solar's default reasoning effort at runtime from Light through Max.
 - Select Standard or Fast processing with `/speed` or `/fast on|off|status`.
 - Keep a shaded cat, dog, or fox moving across the terminal while idle or working;
@@ -67,9 +67,9 @@ use, and creation.
 
 ## Workspace and parallel directories
 
-SolarHarness uses the directory from which `solar` is launched. Its absolute path
-appears in the header. Sub-agents share that directory and may create separate
-top-level or nested directories during the same delegation run.
+SolarHarness creates and uses a `test` directory under the directory from which
+`solar` is launched. Its absolute path appears in the header. Sub-agents share
+that workspace and may create separate top-level or nested directories there.
 
 For example, a request such as:
 
@@ -84,7 +84,7 @@ is grouped into fewer assignments when additional sub-agents add no value. Each
 sub-agent can own a different directory, allowing directory trees to be created at
 once instead of sequentially.
 
-Sub-agents are separate Codex sessions but share the active workspace. Give
+Sub-agents are separate Codex sessions but share the same `test` workspace. Give
 parallel sub-agents non-overlapping directory or file ownership when possible. Solar
 includes shared context in each assignment, and the final response synthesizes
 only the sub-agents launched for the current approved plan.
@@ -110,7 +110,8 @@ solar
 ```
 
 `npm link` installs the `solar` command on this machine. Run it once from the
-SolarHarness source directory, then launch Solar from any project directory.
+SolarHarness source directory, then launch Solar from any directory. Solar uses
+that directory's `test` folder, even when the parent is not a Git repository.
 For source development, use:
 
 ```powershell
@@ -168,7 +169,7 @@ Enter to insert it. Press Enter again to run it, or Esc to close the list.
 | Command | Behavior |
 | --- | --- |
 | `/help` | Shows available interaction controls. |
-| `/new` | Opens a confirmation with **No** selected by default. **Yes** resets the conversation and agents while keeping workspace files. |
+| `/new` | Opens a destructive-action confirmation with **No** selected by default. **Yes** resets context, stops and clears agents, deletes everything inside `test`, and activates the empty folder. |
 | `/auto-approve on` | Treats subsequent plans as pre-approved and launches them immediately. |
 | `/auto-approve off` | Restores the plan review screen. |
 | `/effort` | Opens the effort selector: Light, Medium, High, XHigh, or Max. |
@@ -191,23 +192,29 @@ before applying the adjustment.
 
 Solar also has a registered `set-auto-permissions` tool, so a natural
 request such as “turn auto permissions on” updates the same state as
-`/auto-approve on`. This only pre-approves future sub-agent plans.
+`/auto-approve on`. This only pre-approves future sub-agent plans; it cannot bypass
+the explicit `/new` workspace-deletion confirmation.
 
 ## Session and workspace safety
 
 - Solar can implement directly with workspace-write access. Delegation planning
   remains read-only, and sub-agent plans still follow the chosen approval setting.
-- Approved sub-agents run with workspace-write access rooted in the active workspace.
+- Approved sub-agents run with workspace-write access rooted in the visible `test`
+  workspace.
 - Rejected tasks never launch.
-- `/new` defaults to **No** and shows the current workspace path. Confirming it
-  stops sub-agents and clears session context without deleting project files.
-- Generated `.solarharness` schemas are excluded from source control.
+- `/new` defaults to **No**, explains both context and folder deletion, and shows
+  the exact workspace path before anything destructive happens.
+- Confirming `/new` aborts active sub-agents, clears their records, resets the
+  Solar transcript and model session ID, deletes every entry inside the
+  validated `test` directory, recreates it when necessary, and starts there.
+- Generated `.solarharness` schemas and `test/agent-*` experiment output are
+  excluded from source control.
 
 ## Architecture
 
-SolarHarness invokes `codex exec --json` and consumes its JSONL event stream. The
-Solar session is stored and resumed between conversational turns and
-after sub-agent synthesis. Planning uses a constrained JSON schema; a plan may
+SolarHarness invokes `codex exec --json --skip-git-repo-check` and consumes its
+JSONL event stream. The Solar session is stored and resumed between
+conversational turns and after sub-agent synthesis. Planning uses a constrained JSON schema; a plan may
 contain one to eight independent tasks.
 
 The runtime `ToolRegistry` exposes these main capabilities:

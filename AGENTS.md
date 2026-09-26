@@ -32,11 +32,13 @@ sub-agents, and sub-delegates run with workspace-write access.
 ## Runtime behavior
 
 - Solar retains one Codex session across turns and sub-agent synthesis.
-- The `solar` command runs in the directory from which it is invoked. Solar and
-  sub-agents use that directory as their workspace; no `test` folder is created.
-- `/new` asks for confirmation with No selected by default. Selecting Yes and
-  pressing Enter discards Solar's session and transcript and stops and clears
-  agent records. It keeps the current workspace and all its files in place.
+- The `solar` command can be launched from any directory. Solar creates and runs
+  inside that directory's `test` workspace by default.
+- `/new` asks for confirmation with No selected by default and explicitly warns
+  about both kinds of deletion. Only selecting Yes and pressing Enter discards
+  Solar's session and transcript, stops and clears agent records,
+  deletes every entry inside the `test` workspace, recreates it if needed, and
+  activates the empty folder for the fresh session.
 - Up to eight agent processes may run concurrently across the full tree.
   Plans may contain up to eight sub-agents. A sub-agent may request up to eight
   direct sub-delegates, subject to the global concurrency limit. Sub-delegates
@@ -63,6 +65,10 @@ sub-agents, and sub-delegates run with workspace-write access.
   pages before opening them in the browser. If a local HTML browser navigation is
   refused, Solar calls `serve` and retries the page using its returned URL.
   Solar can also use its Codex workspace tools.
+- Every `codex exec` and `codex exec resume` launch includes
+  `--skip-git-repo-check`, so the test workspace works when its parent is not a
+  Git repository. This flag permits startup only; sandbox and approval settings
+  remain controlled separately.
   Browser and web turns use the Codex CLI output schema to require a
   structured host tool request before their needed actions are complete.
   Model-issued host tool requests are parsed as JSON and their results are fed
