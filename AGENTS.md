@@ -167,12 +167,14 @@ concise and avoid turning routine maintenance into release-note noise.
 ## Claude Code-style activity indicator
 
 The Windows Terminal green-hue bug came from the `✳` spinner frame being
-promoted to a full-color green emoji. The working indicator uses fixed-width
-ASCII sun frames that expand from a central point to a broad ray shape and
-contract again, with a warm gold color at each stage. Frames advance every
-240 ms. Keep the activity label as one solid color span and avoid emoji-capable
-spinner characters and per-character ANSI styling; those can recreate color
-bleed. The sun also appears on the recent-command activity line.
+promoted to a full-color green emoji. The working indicator uses five-row,
+eleven-column ASCII sun frames with a closed disk and horizontal, vertical, and
+diagonal rays. The disk and rays expand from a central point and contract again,
+with a warm gold color at each stage. The activity label sits beside the middle
+row. Frames advance every 240 ms. Keep the label as one solid color span and
+avoid emoji-capable spinner characters and per-character ANSI styling; those
+can recreate color bleed. The sun's middle row also appears on the recent-command
+activity line.
 
 Codex command events are surfaced as compact terminal lines beneath the activity
 indicator. Command activity may change the status copy, but it must reuse the

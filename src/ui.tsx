@@ -480,11 +480,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
 
       {busy && (
         <Box marginTop={1} flexDirection="column" paddingX={1}>
-          <Box>
-            <Sun tick={spinner} />
-            <ActivityText text={phaseInfo} />
-            <Text color={theme.subtle}> · {elapsed}s</Text>
-          </Box>
+          <SunActivity tick={spinner} activity={phaseInfo} elapsed={elapsed} />
           {latestStepLabel && latestStepLabel.toLowerCase() !== phaseInfo.toLowerCase() && <Text color={theme.subtle}>  {latestStepLabel}</Text>}
         </Box>
       )}
@@ -645,9 +641,14 @@ function ActivityText({ text }: { text: string }): React.JSX.Element {
   return <Text color={theme.pulse}>{text}</Text>;
 }
 
-function Sun({ tick }: { tick: number }): React.JSX.Element {
+export function SunActivity({ tick, activity, elapsed }: { tick: number; activity: string; elapsed: number }): React.JSX.Element {
   const frame = tick % sunFrames.length;
-  return <Text color={sunColors[frame]}>{sunFrames[frame]} </Text>;
+  return <Box flexDirection="column">
+    {sunFrames[frame].map((line, row) => <Box key={row}>
+      <Box width={12}><Text color={sunColors[frame]}>{line}</Text></Box>
+      {row === 2 && <><ActivityText text={activity} /><Text color={theme.subtle}> · {elapsed}s</Text></>}
+    </Box>)}
+  </Box>;
 }
 
 function Header({ compact, workspace, width }: { compact: boolean; workspace: string; width: number }): React.JSX.Element {
@@ -730,7 +731,7 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
   const running = agents.some(agent => agent.status === "running" && agent.latestActivity.startsWith("Running command:"));
   return (
     <Box flexDirection="column" marginTop={1} paddingX={1}>
-      <Text color={running ? sunColors[spinner % sunColors.length] : theme.secondary}>{running ? sunFrames[spinner % sunFrames.length] : "   .   "} Recent commands</Text>
+      <Text color={running ? sunColors[spinner % sunColors.length] : theme.secondary}>{running ? sunFrames[spinner % sunFrames.length][2] : "     *     "} Recent commands</Text>
       {commands.map((command, index) => {
         const completed = command.activity.startsWith("Command completed:");
         const text = command.activity.replace(/^(Running command|Command completed):\s*/, "");

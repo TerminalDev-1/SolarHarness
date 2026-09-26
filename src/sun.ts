@@ -1,12 +1,48 @@
-// Fixed-width ASCII frames keep the sun steady in Windows Terminal. Its rays
-// spread from the center and return without invoking the emoji renderer.
+// A five-line disk and rays grow together, then contract. All rows stay eleven
+// columns wide so the adjacent activity text never moves in Windows Terminal.
 export const sunFrames = [
-  "   .   ",
-  "  (o)  ",
-  " -(O)- ",
-  "\\-(O)-/",
-  " -(O)- ",
-  "  (o)  "
+  [
+    "           ",
+    "           ",
+    "     *     ",
+    "           ",
+    "           "
+  ],
+  [
+    "     |     ",
+    "    .-.    ",
+    " ---|*|--- ",
+    "    '-'    ",
+    "     |     "
+  ],
+  [
+    "  \\  |  /  ",
+    "   .---.   ",
+    " --|***|-- ",
+    "   '---'   ",
+    "  /  |  \\  "
+  ],
+  [
+    "\\    |    /",
+    "  .-----.  ",
+    "--|*****|--",
+    "  '-----'  ",
+    "/    |    \\"
+  ],
+  [
+    "  \\  |  /  ",
+    "   .---.   ",
+    " --|***|-- ",
+    "   '---'   ",
+    "  /  |  \\  "
+  ],
+  [
+    "     |     ",
+    "    .-.    ",
+    " ---|*|--- ",
+    "    '-'    ",
+    "     |     "
+  ]
 ] as const;
 
 export const sunColors = [

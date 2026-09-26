@@ -3,6 +3,8 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import React from "react";
+import { renderToString } from "ink";
 import { AgentManager } from "../dist/agent-manager.js";
 import { actionStatus, activityDetail, initialActivity } from "../dist/activity.js";
 import { petFrame, petSprite } from "../dist/pets.js";
@@ -16,6 +18,7 @@ import { SolarWebSearchHeadless } from "../dist/web-search-headless.js";
 import { SolarWorkspaceTool, runWorkspaceCommand } from "../dist/workspace-tool.js";
 import { StatsStore, formatStats } from "../dist/stats.js";
 import { sunColors, sunFrames } from "../dist/sun.js";
+import { SunActivity } from "../dist/ui.js";
 
 process.env.SOLAR_STATS_PATH = join(tmpdir(), `solar-harness-test-stats-${process.pid}.json`);
 test.after(async () => { await rm(process.env.SOLAR_STATS_PATH, { force: true }); });
@@ -72,10 +75,19 @@ test("Codex starts and resumes outside Git repositories", () => {
 
 test("working sun expands and contracts in fixed-width text-safe frames", () => {
   assert.equal(sunFrames.length, sunColors.length);
-  assert.ok(sunFrames.every(frame => frame.length === 7 && /^[\\/().oO -]+$/.test(frame)));
-  assert.equal(sunFrames[0], "   .   ");
-  assert.equal(sunFrames[3], "\\-(O)-/");
+  assert.ok(sunFrames.every(frame => frame.length === 5 && frame.every(line => line.length === 11 && /^[\\/|.*' -]+$/.test(line))));
+  assert.deepEqual(sunFrames[3], ["\\    |    /", "  .-----.  ", "--|*****|--", "  '-----'  ", "/    |    \\"]);
   assert.deepEqual(sunFrames.slice(1, 3), [...sunFrames.slice(4, 6)].reverse());
+  assert.deepEqual(sunFrames.map(frame => (frame[2].match(/\*/g) ?? []).length), [1, 1, 3, 5, 3, 1]);
+});
+
+test("sun and activity render as one aligned five-row unit", () => {
+  const output = renderToString(React.createElement(SunActivity, { tick: 3, activity: "Working", elapsed: 2 }), { columns: 80 });
+  const lines = output.split("\n");
+  assert.equal(lines.length, 5);
+  assert.ok(lines[0].includes("\\    |    /"));
+  assert.ok(lines[2].includes("--|*****|-- Working · 2s"));
+  assert.ok(lines[4].includes("/    |    \\"));
 });
 
 test("the main agent tool can turn auto permissions on and off", async () => {

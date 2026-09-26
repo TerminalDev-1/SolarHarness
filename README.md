@@ -266,9 +266,9 @@ color. Changing the palette could not fix an emoji renderer overriding that
 palette, which is why the green flash survived several color adjustments.
 
 The current implementation renders the activity label as one solid ANSI color
-and animates an adjacent fixed-width ASCII sun. It grows from a point to a wide
-ray shape and contracts again, with gold tones tracking its size. Frames advance
-every 240 ms without emoji substitution or per-character style resets.
+beside a five-row ASCII sun. Its disk and rays grow from a point and contract
+again, with gold tones tracking its size. Frames advance every 240 ms without
+emoji substitution or per-character style resets.
 
 An animated text pet moves across the interface while Solar is idle or working. The cat is
 selected by default; use `/pets cat`, `/pets dog`, `/pets fox`, or `/pets off`
