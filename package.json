@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "bin": {
+    "solar": "./dist/index.js",
     "solar-harness": "./dist/index.js"
   },
   "scripts": {

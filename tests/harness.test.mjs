@@ -15,6 +15,7 @@ import { SOLAR_SYSTEM_PROMPT } from "../dist/system-prompt.js";
 import { SolarWebSearchHeadless } from "../dist/web-search-headless.js";
 import { SolarWorkspaceTool, runWorkspaceCommand } from "../dist/workspace-tool.js";
 import { StatsStore, formatStats } from "../dist/stats.js";
+import { sunColors, sunFrames } from "../dist/sun.js";
 
 process.env.SOLAR_STATS_PATH = join(tmpdir(), `solar-harness-test-stats-${process.pid}.json`);
 test.after(async () => { await rm(process.env.SOLAR_STATS_PATH, { force: true }); });
@@ -42,20 +43,30 @@ test("pets have shaded idle frames for each selection", () => {
   assert.deepEqual(petSprite("off", 0), []);
 });
 
-test("resetIntoTestWorkspace clears contents but keeps the test directory", async () => {
+test("new session keeps the active workspace and its files", async () => {
   const root = await mkdtemp(join(tmpdir(), "solar-harness-reset-"));
-  const workspace = join(root, "test");
   try {
-    await mkdir(join(workspace, "nested"), { recursive: true });
-    await writeFile(join(workspace, "top.txt"), "old session");
-    await writeFile(join(workspace, "nested", "child.txt"), "old sub-agent");
+    await mkdir(join(root, "nested"), { recursive: true });
+    await writeFile(join(root, "top.txt"), "project file");
+    await writeFile(join(root, "nested", "child.txt"), "nested project file");
 
     const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: root });
-    assert.equal(await harness.resetIntoTestWorkspace(), workspace);
-    assert.deepEqual(await readdir(workspace), []);
+    await harness.startNewSession();
+    assert.equal(harness.getWorkspace(), root);
+    assert.equal(await readFile(join(root, "top.txt"), "utf8"), "project file");
+    assert.equal(await readFile(join(root, "nested", "child.txt"), "utf8"), "nested project file");
+    assert.deepEqual((await readdir(root)).sort(), ["nested", "top.txt"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("working sun expands and contracts in fixed-width text-safe frames", () => {
+  assert.equal(sunFrames.length, sunColors.length);
+  assert.ok(sunFrames.every(frame => frame.length === 7 && /^[\\/().oO -]+$/.test(frame)));
+  assert.equal(sunFrames[0], "   .   ");
+  assert.equal(sunFrames[3], "\\-(O)-/");
+  assert.deepEqual(sunFrames.slice(1, 3), [...sunFrames.slice(4, 6)].reverse());
 });
 
 test("the main agent tool can turn auto permissions on and off", async () => {

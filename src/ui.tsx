@@ -4,6 +4,7 @@ import { SolarHarness } from "./harness.js";
 import { actionStatus, activityDetail, initialActivity } from "./activity.js";
 import { PET_NAMES, petSprite, type PetSelection } from "./pets.js";
 import { formatStats } from "./stats.js";
+import { sunColors, sunFrames } from "./sun.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type ReasoningEffort } from "./types.js";
 
 type UiPhase = "idle" | "thinking" | "browsing" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating";
@@ -53,9 +54,6 @@ const rainbowInput = {
   rail: ["#00dcff", "#22bdff", "#348cff", "#75c7ff", "#ecfaff", "#528cff", "#4162ff", "#6158f6", "#a970ff"]
 } as const;
 
-// Avoid emoji-capable glyphs such as ✳, which Windows Terminal renders as a
-// green full-color emoji regardless of the requested ANSI foreground color.
-const spinnerFrames = ["·", "✦", "✧", "✦"];
 const splashDurationMs = 1_800;
 const slashCommands = [
   { command: "/help", detail: "Show available controls", insert: "/help" },
@@ -102,7 +100,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
   const [autoApprove, setAutoApprove] = useState(harness.getAutoPermissions().enabled);
   const [themeName, setThemeName] = useState<ThemeName>("dark");
-  const [workspace, setWorkspace] = useState(harness.getWorkspace());
+  const [workspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [currentActivity, setCurrentActivity] = useState("working on your request");
   const [spinner, setSpinner] = useState(0);
@@ -127,7 +125,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
   useEffect(() => {
     if (!busy) return;
     setElapsed(0);
-    // Animate only the adjacent glyph; the activity text remains one color span.
+    // Animate only the adjacent ASCII sun; the activity text remains one color span.
     const spinnerTimer = setInterval(() => setSpinner(value => value + 1), 240);
     const elapsedTimer = setInterval(() => setElapsed(value => value + 1), 1_000);
     return () => { clearInterval(spinnerTimer); clearInterval(elapsedTimer); };
@@ -262,15 +260,14 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
       return;
     }
     try {
-      const nextWorkspace = await harness.resetIntoTestWorkspace();
-      setWorkspace(nextWorkspace);
+      await harness.startNewSession();
       setAgents([]);
       setBrief([]);
       setPendingPlan(null);
       setPendingEffort(null);
-      setConversation([{ role: "solar", text: `Started a completely fresh Solar session. The test workspace was cleared and is now empty: ${nextWorkspace}` }]);
+      setConversation([{ role: "solar", text: `Started a fresh Solar session in ${workspace}. Project files were kept.` }]);
     } catch (error) {
-      addMessage({ role: "error", text: `Unable to start the test workspace: ${error instanceof Error ? error.message : String(error)}` });
+      addMessage({ role: "error", text: `Unable to start a new session: ${error instanceof Error ? error.message : String(error)}` });
     }
   };
 
@@ -478,12 +475,12 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
       {pendingEffort && <EffortPicker pending={pendingEffort} current={currentReasoning} />}
       {pendingSpeed && <SpeedPicker pending={pendingSpeed} fast={fast} model={model} />}
 
-      {pendingNew && <NewSessionConfirmation pending={pendingNew} workspace={harness.getTestWorkspace()} />}
+      {pendingNew && <NewSessionConfirmation pending={pendingNew} workspace={workspace} />}
 
       {busy && (
         <Box marginTop={1} flexDirection="column" paddingX={1}>
           <Box>
-            <Text color={theme.pulse}>{spinnerFrames[spinner % spinnerFrames.length]} </Text>
+            <Sun tick={spinner} />
             <ActivityText text={phaseInfo} />
             <Text color={theme.subtle}> · {elapsed}s</Text>
           </Box>
@@ -495,7 +492,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
 
       <RainbowInput
         width={contentWidth}
-        value={pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
+        value={pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
         entered={Boolean(input) && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
         cursor={!busy && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
         busy={busy}
@@ -628,9 +625,8 @@ function NewSessionConfirmation({ pending, workspace }: { pending: PendingNew; w
     <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.warning} paddingX={1}>
       <Text bold color={theme.warning}>Start a completely fresh session?</Text>
       <Text color={theme.secondary}>This discards the Solar conversation, stops all sub-agents, and clears their records.</Text>
-      <Text color={theme.error}>Every file and folder inside this test workspace will also be deleted:</Text>
-      <Text color={theme.primary}>{workspace}</Text>
-      <Text color={theme.subtle}>The empty test folder is kept and becomes the new session workspace. This cannot be undone by Solar Harness.</Text>
+      <Text color={theme.primary}>Workspace: {workspace}</Text>
+      <Text color={theme.subtle}>Project files stay in place. Solar's previous conversation cannot be restored here.</Text>
       <Box marginTop={1}>
         <Text color={pending.cursor === 0 ? theme.success : theme.secondary}>{pending.cursor === 0 ? "› " : "  "}[ Yes ]</Text>
         <Text>  </Text>
@@ -645,6 +641,11 @@ function ActivityText({ text }: { text: string }): React.JSX.Element {
   // Keep this as one ANSI color span. Per-character bold/reset sequences can
   // briefly restore the terminal's default (often green) foreground on Windows.
   return <Text color={theme.pulse}>{text}</Text>;
+}
+
+function Sun({ tick }: { tick: number }): React.JSX.Element {
+  const frame = tick % sunFrames.length;
+  return <Text color={sunColors[frame]}>{sunFrames[frame]} </Text>;
 }
 
 function Header({ compact, workspace, width }: { compact: boolean; workspace: string; width: number }): React.JSX.Element {
@@ -727,7 +728,7 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
   const running = agents.some(agent => agent.status === "running" && agent.latestActivity.startsWith("Running command:"));
   return (
     <Box flexDirection="column" marginTop={1} paddingX={1}>
-      <Text color={running ? theme.pulse : theme.secondary}>{running ? spinnerFrames[spinner % spinnerFrames.length] : "·"} Recent commands</Text>
+      <Text color={running ? sunColors[spinner % sunColors.length] : theme.secondary}>{running ? sunFrames[spinner % sunFrames.length] : "   .   "} Recent commands</Text>
       {commands.map((command, index) => {
         const completed = command.activity.startsWith("Command completed:");
         const text = command.activity.replace(/^(Running command|Command completed):\s*/, "");

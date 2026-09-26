@@ -32,12 +32,11 @@ sub-agents, and sub-delegates run with workspace-write access.
 ## Runtime behavior
 
 - Solar retains one Codex session across turns and sub-agent synthesis.
-- Solar creates and runs inside the project `test` workspace by default.
-- `/new` asks for confirmation with No selected by default and explicitly warns
-  about both kinds of deletion. Only selecting Yes and pressing Enter discards
-  Solar's session and transcript, stops and clears agent records,
-  deletes every entry inside the `test` workspace, recreates it if needed, and
-  activates the empty folder for the fresh session.
+- The `solar` command runs in the directory from which it is invoked. Solar and
+  sub-agents use that directory as their workspace; no `test` folder is created.
+- `/new` asks for confirmation with No selected by default. Selecting Yes and
+  pressing Enter discards Solar's session and transcript and stops and clears
+  agent records. It keeps the current workspace and all its files in place.
 - Up to eight agent processes may run concurrently across the full tree.
   Plans may contain up to eight sub-agents. A sub-agent may request up to eight
   direct sub-delegates, subject to the global concurrency limit. Sub-delegates
@@ -161,20 +160,17 @@ concise and avoid turning routine maintenance into release-note noise.
 
 ## Claude Code-style activity indicator
 
-The Windows Terminal green-hue bug is fixed. It was not an orchestration or ANSI
-palette problem: the `✳` spinner frame was promoted to a full-color green emoji,
-ignoring the requested foreground color. The activity indicator now uses only
-text-safe frames (`·`, `✦`, `✧`, `✦`) and one solid ANSI color per theme.
-The dark theme uses terracotta.
-Activity text is rendered as a single color span, while only the adjacent glyph
-animates at a calm 240 ms cadence. Do not reintroduce emoji-capable spinner
-characters or per-character ANSI styling; those can recreate green flashes and
-color bleed. The resulting status treatment intentionally resembles Claude Code
-without copying an emoji-rendered spinner.
+The Windows Terminal green-hue bug came from the `✳` spinner frame being
+promoted to a full-color green emoji. The working indicator uses fixed-width
+ASCII sun frames that expand from a central point to a broad ray shape and
+contract again, with a warm gold color at each stage. Frames advance every
+240 ms. Keep the activity label as one solid color span and avoid emoji-capable
+spinner characters and per-character ANSI styling; those can recreate color
+bleed. The sun also appears on the recent-command activity line.
 
 Codex command events are surfaced as compact terminal lines beneath the activity
 indicator. Command activity may change the status copy, but it must reuse the
-same text-safe spinner and solid activity color treatment.
+same text-safe sun and solid activity color treatment.
 The main activity copy names the current action, such as opening YouTube,
 searching for a query, or running a command. Do not show a generic Thinking label
 when a concrete action is known.

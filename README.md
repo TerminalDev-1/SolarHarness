@@ -27,9 +27,8 @@ use, and creation.
   plan with one to eight sub-agents based on genuinely parallel scopes.
 - Honor an explicit request for one to eight agents, including when the same
   message also asks Solar to browse a page.
-- Create multiple directories and their contents in parallel inside `test`. For
-  example, eight approved sub-agents can create `test/agent-1` through
-  `test/agent-8` during the same run.
+- Create multiple directories and their contents in parallel in the active
+  workspace. For example, eight approved sub-agents can own separate folders.
 - Give sub-agents memorable names instead of presenting only generated IDs.
 - Let a sub-agent delegate independent scopes to direct sub-delegates, then integrate
   their reports. Solar controls the full tree; each sub-agent controls its children.
@@ -49,8 +48,8 @@ use, and creation.
   or allow `/auto-approve on` to launch future plans without pausing.
 - Retain Solar's context across user turns, planning, sub-agent execution, and
   final report synthesis.
-- Start a genuinely clean session with `/new`, including clearing old sub-agent
-  records and deleting all contents of the `test` workspace.
+- Start a fresh session with `/new`, clearing conversation and sub-agent records
+  while keeping workspace files.
 - Change Solar's default reasoning effort at runtime from Light through Max.
 - Select Standard or Fast processing with `/speed` or `/fast on|off|status`.
 - Keep a shaded cat, dog, or fox moving across the terminal while idle or working;
@@ -60,7 +59,7 @@ use, and creation.
 - Adjust a particular sub-agent's next-exchange effort through a command or a
   natural-language request to Solar.
 - Display the nested agent tree, reasoning pins, live state, elapsed time, recent
-  commands, and a Claude Code-like activity pulse while work is running.
+  commands, and an expanding golden sun while work is running.
 - Switch between dark and light interface palettes while keeping the rainbow-blue
   input frame and active workspace visible.
 - Find the native Codex executable installed with the Codex desktop app even when
@@ -68,10 +67,9 @@ use, and creation.
 
 ## Workspace and parallel directories
 
-SolarHarness creates and uses the project's `test` directory by default. Its
-absolute path appears in the header, and a compact workspace label appears in the
-footer. Sub-agents may create separate top-level or nested directories there during
-the same delegation run.
+SolarHarness uses the directory from which `solar` is launched. Its absolute path
+appears in the header. Sub-agents share that directory and may create separate
+top-level or nested directories during the same delegation run.
 
 For example, a request such as:
 
@@ -86,7 +84,7 @@ is grouped into fewer assignments when additional sub-agents add no value. Each
 sub-agent can own a different directory, allowing directory trees to be created at
 once instead of sequentially.
 
-Sub-agents are separate Codex sessions but share the same `test` workspace. Give
+Sub-agents are separate Codex sessions but share the active workspace. Give
 parallel sub-agents non-overlapping directory or file ownership when possible. Solar
 includes shared context in each assignment, and the final response synthesizes
 only the sub-agents launched for the current approved plan.
@@ -105,6 +103,17 @@ fails, the displayed error explains how to configure the executable explicitly.
 
 ```powershell
 npm install
+npm run build
+npm link
+cd C:\path\to\your\project
+solar
+```
+
+`npm link` installs the `solar` command on this machine. Run it once from the
+SolarHarness source directory, then launch Solar from any project directory.
+For source development, use:
+
+```powershell
 npm run dev
 ```
 
@@ -159,7 +168,7 @@ Enter to insert it. Press Enter again to run it, or Esc to close the list.
 | Command | Behavior |
 | --- | --- |
 | `/help` | Shows available interaction controls. |
-| `/new` | Opens a destructive-action confirmation with **No** selected by default. **Yes** resets context, stops and clears agents, deletes everything inside `test`, and activates the empty folder. |
+| `/new` | Opens a confirmation with **No** selected by default. **Yes** resets the conversation and agents while keeping workspace files. |
 | `/auto-approve on` | Treats subsequent plans as pre-approved and launches them immediately. |
 | `/auto-approve off` | Restores the plan review screen. |
 | `/effort` | Opens the effort selector: Light, Medium, High, XHigh, or Max. |
@@ -182,23 +191,17 @@ before applying the adjustment.
 
 Solar also has a registered `set-auto-permissions` tool, so a natural
 request such as “turn auto permissions on” updates the same state as
-`/auto-approve on`. This only pre-approves future sub-agent plans; it cannot bypass
-the explicit `/new` workspace-deletion confirmation.
+`/auto-approve on`. This only pre-approves future sub-agent plans.
 
 ## Session and workspace safety
 
 - Solar can implement directly with workspace-write access. Delegation planning
   remains read-only, and sub-agent plans still follow the chosen approval setting.
-- Approved sub-agents run with workspace-write access rooted in the visible `test`
-  workspace.
+- Approved sub-agents run with workspace-write access rooted in the active workspace.
 - Rejected tasks never launch.
-- `/new` defaults to **No**, explains both context and folder deletion, and shows
-  the exact workspace path before anything destructive happens.
-- Confirming `/new` aborts active sub-agents, clears their records, resets the
-  Solar transcript and model session ID, deletes every entry inside the
-  validated `test` directory, recreates it when necessary, and starts there.
-- Generated `.solarharness` schemas and `test/agent-*` experiment output are
-  excluded from source control.
+- `/new` defaults to **No** and shows the current workspace path. Confirming it
+  stops sub-agents and clears session context without deleting project files.
+- Generated `.solarharness` schemas are excluded from source control.
 
 ## Architecture
 
@@ -241,8 +244,8 @@ for the role and runtime contract.
 
 ## Claude Code-style activity indicator
 
-SolarHarness uses a compact activity treatment inspired by Claude Code: a small
-animated symbol, a concrete status such as `Opening YouTube` or
+SolarHarness uses a compact activity treatment: an expanding golden sun,
+a concrete status such as `Opening YouTube` or
 `Working on index.html`, and
 elapsed time on one line.
 It is an approximation designed for this Ink-based terminal UI rather than a copy
@@ -255,11 +258,10 @@ was promoted to a full-color green emoji that ignored the requested orange ANSI
 color. Changing the palette could not fix an emoji renderer overriding that
 palette, which is why the green flash survived several color adjustments.
 
-The corrected implementation renders the activity label as one solid ANSI
-color from the active theme and animates only an adjacent text-safe sequence:
-`·`, `✦`, `✧`, `✦`. Frames advance every 240 ms. This preserves the calm
-Claude Code-like feel without per-character color cycling, emoji substitution, or
-green flashes. Dark uses terracotta; light uses amber.
+The current implementation renders the activity label as one solid ANSI color
+and animates an adjacent fixed-width ASCII sun. It grows from a point to a wide
+ray shape and contracts again, with gold tones tracking its size. Frames advance
+every 240 ms without emoji substitution or per-character style resets.
 
 An animated text pet moves across the interface while Solar is idle or working. The cat is
 selected by default; use `/pets cat`, `/pets dog`, `/pets fox`, or `/pets off`

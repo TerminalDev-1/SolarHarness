@@ -5,9 +5,8 @@ import { SolarWebSearchHeadless, type WebSearchHeadlessInput, type WebSearchHead
 import { parseHostToolCall } from "./host-tool-call.js";
 import { decodeHostTurn, writeHostTurnSchema } from "./host-turn.js";
 import { SolarWorkspaceTool, type WorkspaceCommandInput, type WorkspaceCommandResult } from "./workspace-tool.js";
-import { mkdir, readdir, rm } from "node:fs/promises";
 import { readdirSync, statSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { join } from "node:path";
 import { SOLAR_SYSTEM_PROMPT } from "./system-prompt.js";
 import { registerHarnessTools, type AdjustSubEffortLevelInput, type AutoPermissionsState, type RuntimeOperation, type RuntimeOperationsInput, type SetAutoPermissionsInput, type SpawnSubAgentInput, type ToolRegistry } from "./tool-registry.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type HarnessOptions, type ReasoningEffort, type SolarModelProvider } from "./types.js";
@@ -60,7 +59,7 @@ export class SolarHarness {
         ? "The user requested delegation. Explain the intended sub-agent scope and mark READY. The harness will prepare the sub-agent plan after this turn, honoring any requested agent count and otherwise choosing the smallest useful number. Do not implement the delegated task yourself."
         : "You are Solar. Carry out the user's request yourself using your workspace tools. Work alone. Do not propose sub-agents or ask whether the user wants delegation or how many agents to use. Finish with DISCOVER. Browser actions can be handled directly. Ask other clarifying questions only when a missing answer materially changes the work.",
       "The main-agent host tool adjust-sub-effort-level changes a specific existing sub-agent or sub-delegate's effort. Example input: {\"agentId\":\"name-or-id\",\"effortLevel\":\"light\"}. An effort adjustment does not request new delegation.",
-      `The host tool set-auto-permissions changes sub-agent plan approval only and never bypasses the /new deletion confirmation. Example input: {"enabled":true}. Auto permissions are currently ${this.autoPermissions ? "enabled" : "disabled"}.`,
+      `The host tool set-auto-permissions changes sub-agent plan approval only and does not affect /new session confirmation. Example input: {"enabled":true}. Auto permissions are currently ${this.autoPermissions ? "enabled" : "disabled"}.`,
       'Use workspace_command to inspect, create, run, and verify local projects. Input {"action":"run","command":"..."} runs a bounded command; action "start" launches a long-running process. The host sends command results back to this same session. You may also use your built-in workspace tools.',
       'For a standalone HTML page in the active workspace, call workspace_command with {"action":"serve"}. It returns a listening localhost base URL; append the file name and call browser open with that URL. Do not assume a spawned process is listening merely because it has a PID.',
       'When asked what tool operations happened earlier, call runtime_operations with {} to inspect the host operation log. Use recorded status and results rather than a previous model claim. The log covers host tools, not unrecorded Codex built-in file edits.',
@@ -335,26 +334,10 @@ export class SolarHarness {
     return this.options.cwd;
   }
 
-  getTestWorkspace(): string {
-    const current = resolve(this.options.cwd);
-    return basename(current).toLowerCase() === "test" ? current : join(current, "test");
-  }
-
-  async resetIntoTestWorkspace(): Promise<string> {
-    const workspace = this.getTestWorkspace();
-    if (basename(resolve(workspace)).toLowerCase() !== "test") {
-      throw new Error(`Refusing to clear a workspace that is not named test: ${workspace}`);
-    }
+  async startNewSession(): Promise<void> {
     await this.browser.close();
     await this.workspace.close();
     this.resetConversation();
-    await mkdir(workspace, { recursive: true });
-    const entries = await readdir(workspace);
-    await Promise.all(entries.map(entry => rm(join(workspace, entry), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })));
-    this.options.cwd = workspace;
-    this.browser.setWorkspace(workspace);
-    this.workspace.setWorkspace(workspace);
-    return workspace;
   }
 
   async plan(request: string, context: string, onActivity?: (message: string) => void): Promise<DelegationPlan> {
