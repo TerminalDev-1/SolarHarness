@@ -32,16 +32,16 @@ Solar's workspace.
 The top of the screen shows which Solar you are running:
 
 ```text
-▣ Solar Harness v1.1 build e5f94e8
+▣ Solar Harness v1.1 build 36b877c
 ```
 
 - **`v1.1`** is the release. It changes only for a new release, not for every fix
   or feature.
-- **`build e5f94e8`** is the commit your copy was built from. Each change to Solar
+- **`build 36b877c`** is the commit your copy was built from. Each change to Solar
   gets a new build, so this tells you exactly which code you have. You can look it
   up at `github.com/TerminalDev-1/SolarHarness/commit/<build>`.
 
-`solar --version` prints the same thing, for example `1.1 build e5f94e8`.
+`solar --version` prints the same thing, for example `1.1 build 36b877c`.
 
 To update to the latest build, run these in the SolarHarness folder:
 
@@ -53,14 +53,14 @@ npm run build
 
 The build shown only changes after `npm run build`, so it always matches the code
 that is actually running. When you report a problem, include the whole line, such
-as `v1.1 build e5f94e8`.
+as `v1.1 build 36b877c`.
 
 ## The interface
 
 ![The Solar welcome screen](docs/images/welcome.png)
 
 ```text
- ▣ Solar Harness v1.1 build e5f94e8       ← version and the commit it was built from
+ ▣ Solar Harness v1.1 build 36b877c       ← version and the commit it was built from
                                           ← your workspace folder is shown below
  C:\Users\you\projects\portfolio
  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
