@@ -1,6 +1,8 @@
 # SolarHarness
 
-> **v1.0:** SolarHarness is out of preview. This is the first stable release.
+> **v1.1:** add images with Tab or paste them with Ctrl+V / Alt+V, and see them as
+> previews right in the terminal; pick GPT-6 Luna or GPT-5.6 Luna with `/model`.
+> v1.0 was the first stable release.
 
 **First committed:** 20 September 2026.
 
@@ -30,16 +32,16 @@ Solar's workspace.
 The top of the screen shows which Solar you are running:
 
 ```text
-▣ Solar Harness v1.0 build 974504f
+▣ Solar Harness v1.1 build e5f94e8
 ```
 
-- **`v1.0`** is the release. It changes only for a new release, not for every fix
+- **`v1.1`** is the release. It changes only for a new release, not for every fix
   or feature.
-- **`build 974504f`** is the commit your copy was built from. Each change to Solar
+- **`build e5f94e8`** is the commit your copy was built from. Each change to Solar
   gets a new build, so this tells you exactly which code you have. You can look it
   up at `github.com/TerminalDev-1/SolarHarness/commit/<build>`.
 
-`solar --version` prints the same thing, for example `1.0 build 974504f`.
+`solar --version` prints the same thing, for example `1.1 build e5f94e8`.
 
 To update to the latest build, run these in the SolarHarness folder:
 
@@ -51,14 +53,14 @@ npm run build
 
 The build shown only changes after `npm run build`, so it always matches the code
 that is actually running. When you report a problem, include the whole line, such
-as `v1.0 build 974504f`.
+as `v1.1 build e5f94e8`.
 
 ## The interface
 
 ![The Solar welcome screen](docs/images/welcome.png)
 
 ```text
- ▣ Solar Harness v1.0 build 7c110d6       ← version and the commit it was built from
+ ▣ Solar Harness v1.1 build e5f94e8       ← version and the commit it was built from
                                           ← your workspace folder is shown below
  C:\Users\you\projects\portfolio
  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄

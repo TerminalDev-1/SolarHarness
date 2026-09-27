@@ -1195,7 +1195,7 @@ test("a full terminal is not cleared on idle redraws, so scrolling stays where t
     assert.match(writes.join(""), /Controls: \/ultra <task>/);
     const { execFileSync } = await import("node:child_process");
     const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"]).toString().trim();
-    assert.match(writes.join("").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""), new RegExp(`▣ Solar Harness v1\\.0 build ${commit}\\n`));
+    assert.match(writes.join("").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""), new RegExp(`▣ Solar Harness v1\\.1 build ${commit}\\n`));
     writes = [];
     await sleep(1_000);
     assert.ok(writes.length > 0, "the pet should keep animating while idle");
