@@ -1139,3 +1139,33 @@ test("file change steps name the file and the edited lines", async () => {
     assert.equal(activityDetail("File: Created index.html (3 lines)"), "created index.html (3 lines)");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("elapsed time shows minutes and hours only once they are reached", async () => {
+  const { formatElapsed } = await import("../dist/activity.js");
+  assert.equal(formatElapsed(42), "42s");
+  assert.equal(formatElapsed(242), "4m 02s");
+  assert.equal(formatElapsed(3725), "1h 02m 05s");
+});
+
+test("reasoning summaries are requested and shown as short thinking labels", () => {
+  const options = { model: "gpt-6-luna", reasoning: "max", cwd: process.cwd(), role: "planner" };
+  assert.ok(buildCodexRunArgs("x", options).includes('model_reasoning_summary="detailed"'));
+  assert.ok(buildCodexResumeArgs("s", "x", options).includes('model_reasoning_summary="detailed"'));
+  assert.equal(activityDetail("Thinking: Setting up the !8 sum"), "Setting up the !8 sum");
+});
+
+test("Solar replies render Markdown headings, lists, bold, and code", async () => {
+  const { parseMarkdown, plainText } = await import("../dist/markdown.js");
+  const { MarkdownView } = await import("../dist/ui.js");
+  const text = "## Goal\n\nBuild **fast** with `vite`.\n- one\n  - nested\n1. first\n```\nnpm run dev\n```";
+  assert.deepEqual(parseMarkdown(text).map(line => line.kind), ["heading", "blank", "text", "bullet", "bullet", "numbered", "code"]);
+  assert.equal(parseMarkdown(text)[4].indent, 1);
+  assert.equal(plainText("**Checking files**"), "Checking files");
+  const output = renderToString(React.createElement(MarkdownView, { text }), { columns: 80 }).replace(/\x1b\[[0-9;]*m/g, "");
+  assert.match(output, /^Goal$/m);
+  assert.match(output, /Build fast with vite\./);
+  assert.match(output, /• one/);
+  assert.match(output, /1\. first/);
+  assert.match(output, /npm run dev/);
+  assert.doesNotMatch(output, /\*\*|```|##/);
+});

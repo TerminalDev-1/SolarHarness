@@ -5,6 +5,7 @@ import { solarDirectory } from "./solar-dir.js";
 import { join } from "node:path";
 import type { CodexRunOptions, CodexRunResult, DelegationPlan, ReasoningEffort } from "./types.js";
 import { SOLAR_SYSTEM_PROMPT } from "./system-prompt.js";
+import { plainText } from "./markdown.js";
 import { FileChangeTracker, unwrapShellCommand, type FileChange } from "./file-changes.js";
 
 type CodexEvent = {
@@ -69,7 +70,7 @@ export class CodexCliProvider {
           const item = event.item;
           for (const step of fileChangeSteps(event, fileChanges)) options.onEvent?.(`File: ${step}`);
           if (item?.type === "agent_message" && item.text) finalMessages.push(item.text);
-          const activity = commandActivity(item) ?? (item?.type === "agent_message" ? undefined : item?.text) ?? (typeof event.error === "string" ? event.error : event.error?.message);
+          const activity = commandActivity(item) ?? itemActivity(item) ?? (typeof event.error === "string" ? event.error : event.error?.message);
           if (activity) options.onEvent?.(activity.slice(0, 180));
         } catch {
           options.onEvent?.(line.slice(0, 180));
@@ -138,7 +139,7 @@ export class CodexCliProvider {
         }
         for (const step of fileChangeSteps(event, fileChanges)) options.onEvent?.(`File: ${step}`);
         if (event.item?.type === "agent_message" && event.item.text) messages.push(event.item.text);
-        const activity = commandActivity(event.item) ?? (event.item?.type === "agent_message" ? undefined : event.item?.text);
+        const activity = commandActivity(event.item) ?? itemActivity(event.item);
         if (activity) options.onEvent?.(activity.slice(0, 180));
       } catch { if (line) options.onEvent?.(line.slice(0, 180)); }
     };
@@ -166,7 +167,7 @@ export function buildCodexRunArgs(prompt: string, options: CodexRunOptions, extr
     "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`,
     "-c", `service_tier=\"${options.fast ? "fast" : "default"}\"`,
     ...(options.fast ? ["-c", "features.fast_mode=true"] : []),
-    "-c", "agents.enabled=false",
+    "-c", "agents.enabled=false", "-c", 'model_reasoning_summary="detailed"',
     ...extraArgs,
     prompt
   ];
@@ -177,7 +178,7 @@ export function buildCodexResumeArgs(sessionId: string, prompt: string, options:
     "-c", `sandbox_mode="${options.role === "planner" ? "read-only" : "workspace-write"}"`,
     "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`, "-c", `service_tier=\"${options.fast ? "fast" : "default"}\"`,
     ...(options.fast ? ["-c", "features.fast_mode=true"] : []),
-    "-c", "agents.enabled=false", ...extraArgs, sessionId, prompt];
+    "-c", "agents.enabled=false", "-c", 'model_reasoning_summary="detailed"', ...extraArgs, sessionId, prompt];
 }
 
 /** Resolve the native CLI even when the Codex desktop app has not amended PATH. */
@@ -249,6 +250,14 @@ function commandActivity(item: CodexEvent["item"]): string | undefined {
   const command = unwrapShellCommand(item.command);
   if (!command) return undefined;
   return item.status === "completed" ? `Command completed: ${command}` : `Running command: ${command}`;
+}
+
+/** Reasoning summaries become `Thinking: <title>`; agent messages are replies, not activity. */
+function itemActivity(item: CodexEvent["item"]): string | undefined {
+  if (!item?.text || item.type === "agent_message") return undefined;
+  if (item.type !== "reasoning") return item.text;
+  const title = plainText(item.text.split(/\r?\n/).find(line => line.trim()) ?? "");
+  return title ? `Thinking: ${title}` : undefined;
 }
 
 function fileChangeSteps(event: CodexEvent, tracker: FileChangeTracker): string[] {

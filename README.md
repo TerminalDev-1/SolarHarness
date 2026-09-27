@@ -71,6 +71,13 @@ use, and creation.
   and milestones with `/stats`. Stats are saved under `~/.solarharness/stats.json`.
 - Adjust a particular sub-agent's next-exchange effort through a command or a
   natural-language request to Solar.
+- Show Codex's reasoning summaries (for example "Verifying the count") as the
+  activity label while Solar thinks, with elapsed time as seconds, then minutes,
+  then hours once an hour has passed.
+- Render Solar's replies as Markdown: headings, bold, inline code, lists, quotes,
+  and code blocks.
+- While `/ultraplan` or `/ultrareview` runs, the footer shows Max effort and the
+  input frame becomes an animated full-spectrum rainbow.
 - Show what Solar is doing as it works: files created (with line counts), files
   edited (with the changed lines), files deleted, and commands run. Each reply is
   preceded by a short list of the files it changed.

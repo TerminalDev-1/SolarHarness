@@ -54,10 +54,22 @@ export function activityDetail(event: string): string | undefined {
   }
   if (event.startsWith("Command completed:")) return "checking command output";
   if (event.startsWith("Designing a named sub-agent plan")) return "drafting the sub-agent plan";
+  const thinking = event.match(/^Thinking: (.+)$/);
+  if (thinking) return thinking[1].length > 70 ? `${thinking[1].slice(0, 67)}...` : thinking[1];
   const file = event.match(/^File: (.+)$/);
   if (file) return file[1].charAt(0).toLowerCase() + file[1].slice(1);
   const stage = event.match(/^(?:Plan|Review): (.+)$/);
   if (stage) return stage[1];
   if (event.startsWith("Synthesizing sub-agent reports")) return "reviewing sub-agent reports";
   return undefined;
+}
+
+/** 42s, then 3m 05s, and hours only once an hour has passed: 1h 02m 05s. */
+export function formatElapsed(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const rest = String(seconds % 60).padStart(2, "0");
+  if (hours) return `${hours}h ${String(minutes).padStart(2, "0")}m ${rest}s`;
+  return minutes ? `${minutes}m ${rest}s` : `${seconds}s`;
 }

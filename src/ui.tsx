@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import { SolarHarness } from "./harness.js";
-import { actionStatus, activityDetail, initialActivity } from "./activity.js";
+import { actionStatus, activityDetail, formatElapsed, initialActivity } from "./activity.js";
+import { parseMarkdown, type Inline } from "./markdown.js";
 import { PET_NAMES, petSprite, type PetSelection } from "./pets.js";
 import { formatStats } from "./stats.js";
 import { instructionPaths } from "./instructions.js";
@@ -55,6 +56,10 @@ const rainbowInput = {
   placeholder: "#b4e8ff",
   rail: ["#00dcff", "#22bdff", "#348cff", "#75c7ff", "#ecfaff", "#528cff", "#4162ff", "#6158f6", "#a970ff"]
 } as const;
+
+// Ultra commands swap in a full-spectrum rail that rotates each sun tick.
+const ultraRail = ["#ff3b5c", "#ff8a1f", "#ffd21f", "#5cff6b", "#1fe0ff", "#3b7bff", "#9b5cff", "#ff4fd8"] as const;
+const ultraInputBackground = "#1c0b45";
 
 const splashDurationMs = 1_800;
 const slashCommands = [
@@ -110,6 +115,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [steps, setSteps] = useState<string[]>([]);
+  const [ultra, setUltra] = useState<"ultraplan" | "ultrareview" | null>(null);
   const stepsRef = useRef<string[]>([]);
   const [currentActivity, setCurrentActivity] = useState("working on your request");
   const [spinner, setSpinner] = useState(0);
@@ -351,6 +357,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
     const reviewCommand = line.match(/^\/ultrareview(?:\s+([\s\S]*))?$/);
     if (planCommand) setCurrentActivity(planCommand[1] === "ultraplan" ? "drafting an ultraplan" : "drafting a plan");
     if (reviewCommand) setCurrentActivity("starting the ultrareview");
+    setUltra(planCommand?.[1] === "ultraplan" && planCommand[2]?.trim() ? "ultraplan" : reviewCommand ? "ultrareview" : null);
     setPhase(line === "/delegate" || planCommand ? "planning" : reviewCommand ? "reviewing" : line.startsWith("/agent ") ? "updating" : "thinking");
 
     try {
@@ -432,6 +439,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
     } finally {
       setBusy(false);
       setPhase("idle");
+      setUltra(null);
     }
   };
 
@@ -571,13 +579,15 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
 
       <RainbowInput
         width={contentWidth}
-        value={pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
+        value={ultra && busy && !input ? `Solar is running ${ultra} at max effort…` : pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
         entered={Boolean(input) && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
         cursor={!busy && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
         busy={busy}
+        ultra={Boolean(ultra && busy)}
+        tick={spinner}
       />
 
-      <Footer compact={compact} model={model} reasoning={currentReasoning} autoApprove={autoApprove} fast={fast} themeName={themeName} />
+      <Footer compact={compact} model={model} reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast} themeName={themeName} />
     </Box>
     </Box>
   );
@@ -621,24 +631,27 @@ function SlashCommandMenu({ matches, selected }: { matches: readonly SlashComman
   );
 }
 
-function RainbowInput({ width, value, entered, cursor, busy }: { width: number; value: string; entered: boolean; cursor: boolean; busy: boolean }): React.JSX.Element {
+function RainbowInput({ width, value, entered, cursor, busy, ultra = false, tick = 0 }: { width: number; value: string; entered: boolean; cursor: boolean; busy: boolean; ultra?: boolean; tick?: number }): React.JSX.Element {
+  const offset = tick % ultraRail.length;
+  const rail: readonly string[] = ultra ? [...ultraRail.slice(offset), ...ultraRail.slice(0, offset)] : rainbowInput.rail;
+  const background = ultra ? ultraInputBackground : rainbowInput.background;
   const available = Math.max(1, width - 7);
   const visibleValue = entered ? value.slice(-available) : value.slice(0, available);
   const remaining = Math.max(0, width - 2 - 3 - visibleValue.length - Number(cursor));
   return (
     <Box flexDirection="column" marginTop={1} width={width}>
-      <GradientRail width={width} glyph="▄" colors={rainbowInput.rail} />
+      <GradientRail width={width} glyph="▄" colors={rail} />
       <Box width={width}>
-        <Text color={rainbowInput.rail[0]}>▌</Text>
-        <Text backgroundColor={rainbowInput.background}>
+        <Text color={rail[0]}>▌</Text>
+        <Text backgroundColor={background}>
           <Text color={rainbowInput.prompt}> › </Text>
           <Text color={entered ? rainbowInput.primary : busy ? rainbowInput.secondary : rainbowInput.placeholder}>{visibleValue}</Text>
           {cursor && <Text inverse> </Text>}
           {" ".repeat(remaining)}
         </Text>
-        <Text color={rainbowInput.rail.at(-1)}>▐</Text>
+        <Text color={rail.at(-1)}>▐</Text>
       </Box>
-      <GradientRail width={width} glyph="▀" colors={[...rainbowInput.rail].reverse()} />
+      <GradientRail width={width} glyph="▀" colors={[...rail].reverse()} />
     </Box>
   );
 }
@@ -748,7 +761,7 @@ export function SunActivity({ tick, activity, elapsed }: { tick: number; activit
   return <Box flexDirection="column">
     {sunFrames[frame].map((line, row) => <Box key={row}>
       <Box width={12}><Text color={sunColors[frame]}>{line}</Text></Box>
-      {row === 2 && <><ActivityText text={activity} /><Text color={theme.subtle}> · {elapsed}s</Text></>}
+      {row === 2 && <><ActivityText text={activity} /><Text color={theme.subtle}> · {formatElapsed(elapsed)}</Text></>}
     </Box>)}
   </Box>;
 }
@@ -795,9 +808,37 @@ function Message({ message }: { message: ChatMessage }): React.JSX.Element {
     <Box marginBottom={1} paddingX={1}>
       <Text color={color}>▌ </Text>
       <Box width={8}><Text bold color={color}>{label}</Text></Box>
-      <Box flexGrow={1}><Text color={message.role === "error" ? theme.error : theme.primary}>{message.text}</Text></Box>
+      <Box flexGrow={1} flexDirection="column">{message.role === "solar"
+        ? <MarkdownView text={message.text} />
+        : <Text color={message.role === "error" ? theme.error : theme.primary}>{message.text}</Text>}</Box>
     </Box>
   );
+}
+
+function InlineText({ parts, color }: { parts: Inline[]; color: string }): React.JSX.Element {
+  return <Text color={color}>{parts.map((part, index) => part.code
+    ? <Text key={index} color={theme.pulse}>{part.text}</Text>
+    : <Text key={index} bold={part.bold} italic={part.italic}>{part.text}</Text>)}</Text>;
+}
+
+export function MarkdownView({ text }: { text: string }): React.JSX.Element {
+  return <Box flexDirection="column">
+    {parseMarkdown(text).map((line, index) => {
+      switch (line.kind) {
+        case "blank": return <Text key={index}> </Text>;
+        case "rule": return <Text key={index} color={theme.subtle}>{"─".repeat(24)}</Text>;
+        case "code": return <Text key={index} color={theme.accent}>  {line.text || " "}</Text>;
+        case "heading": return <Text key={index} bold color={line.level <= 2 ? theme.pulse : theme.accentStrong}><InlineText parts={line.inline} color={line.level <= 2 ? theme.pulse : theme.accentStrong} /></Text>;
+        case "quote": return <Box key={index}><Text color={theme.subtle}>│ </Text><InlineText parts={line.inline} color={theme.secondary} /></Box>;
+        case "bullet":
+        case "numbered": return <Box key={index} paddingLeft={line.indent * 2}>
+          <Box flexShrink={0}><Text color={theme.pulse}>{line.marker} </Text></Box>
+          <InlineText parts={line.inline} color={theme.primary} />
+        </Box>;
+        default: return <InlineText key={index} parts={line.inline} color={theme.primary} />;
+      }
+    })}
+  </Box>;
 }
 
 function PlanApproval({ pending }: { pending: PendingPlan }): React.JSX.Element {
