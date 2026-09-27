@@ -76,6 +76,15 @@ const scenes = [];
   solar.close();
 }
 
+// Model picker.
+{
+  const solar = await startSolar(scratch);
+  await solar.type("/model", false);
+  await solar.type("\r");
+  scenes.push(["model", solar.output()]);
+  solar.close();
+}
+
 // 3 and 4. Solar at work, then the finished turn.
 {
   const solar = await startSolar(scratch);

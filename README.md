@@ -125,6 +125,7 @@ command, and Esc closes the menu. Press Enter again to run the command.
 | `/ultrareview [target]` | Reviews your code with three reviewers (correctness, security, design) working in parallel, then re-checks every finding and drops false alarms. With no target it reviews your uncommitted changes. |
 | `/effort` | Opens a picker to change effort for this session: Light, Medium, High, XHigh, or Max. `/effort high` sets it directly. |
 | `/default-effort <level>` | Changes the effort every new session starts with. It starts as Max. |
+| `/model` | Opens a picker to switch between **GPT-6 Luna** and **GPT-5.6 Luna**. `/model gpt-5.6-luna` switches directly. |
 | `/speed` | Opens a picker for Standard or Fast. `/fast on`, `/fast off`, and `/fast status` also work. Fast uses more credits. |
 | `/memory` | Shows which `SOLAR.md` instruction files are loaded. |
 | `/delegate` | Prepares a team of sub-agents for your last request. |
@@ -159,6 +160,21 @@ you choose **Execute**. **Keep planning** (or Esc) leaves everything as it is.
 rainbow frame turns deep purple and spins twice as fast, and the footer shows `max`
 and `Fast`. Your usual settings come back afterwards. `/ultraplan` and
 `/ultrareview` use the same look.
+
+### Choosing a model
+
+![The model picker](docs/images/model.png)
+
+`/model` opens a picker with the two Codex models Solar offers:
+
+- **GPT-6 Luna** (the default): fast and affordable, for everyday tasks.
+- **GPT-5.6 Luna**: the older fast and efficient model.
+
+Up and Down choose a model, Enter switches to it, and Esc keeps the current one.
+The conversation carries on with the new model, so Solar still remembers what you
+were working on, and new sub-agents use it too. The footer shows the current model.
+Both models support every effort level and Fast mode. Each new session starts on
+GPT-6 Luna.
 
 ### Effort
 
@@ -238,7 +254,8 @@ Files Solar keeps:
 
 You rarely need these. Everything else is done from inside Solar.
 
-- `solar --model <name>` uses a different Codex model (the default is `gpt-6-luna`).
+- `solar --model <name>` starts on any Codex model your account has, including
+  ones not in the `/model` picker.
 - `solar --reasoning <level>` starts one session at a different effort.
 - `solar --version` prints the version.
 - If Solar can't find Codex, set the `SOLAR_CODEX_PATH` environment variable to the

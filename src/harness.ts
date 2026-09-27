@@ -326,6 +326,10 @@ export class SolarHarness {
   }
 
   setFast(enabled: boolean): void { this.fast = enabled; this.manager.setFast(enabled); }
+
+  /** Later turns, plans, reviews, and new sub-agents use this model; the conversation continues on it. */
+  setModel(model: string): void { this.options.model = model; this.manager.setModel(model); }
+  getModel(): string { return this.options.model; }
   getFast(): boolean { return this.fast; }
   takeAchievements(): string[] { const unlocked = this.unlocked; this.unlocked = []; return unlocked; }
 

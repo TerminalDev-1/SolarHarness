@@ -21,6 +21,7 @@ export class AgentManager {
   constructor(private readonly provider: SolarModelProvider, private readonly options: CodexRunOptions) {}
 
   setFast(enabled: boolean): void { this.options.fast = enabled; }
+  setModel(model: string): void { this.options.model = model; }
 
   async spawn(input: SpawnSubAgentInput): Promise<AgentRecord> {
     const parent = input.parentId ? this.records.get(input.parentId) : undefined;

@@ -1361,3 +1361,42 @@ test("keystrokes that arrive faster than the screen redraws are all kept", async
     assert.match(output.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""), /You\s+\/help\n/);
   } finally { app.unmount(); }
 });
+
+test("the /model picker switches between GPT-6 Luna and GPT-5.6 Luna", async () => {
+  const { PassThrough } = await import("node:stream");
+  const { render } = await import("ink");
+  const { SolarApp } = await import("../dist/ui.js");
+  const stdout = Object.assign(new PassThrough(), { isTTY: true, rows: 40, columns: 100 });
+  let output = "";
+  stdout.on("data", data => { output += data.toString(); });
+  const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const models = [];
+  harness.provider.run = async (_prompt, options) => {
+    models.push(options.model);
+    return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "Done." }), sessionId: "model" };
+  };
+  const app = render(React.createElement(SolarApp, { harness, model: "gpt-6-luna", reasoning: "light", initialSplash: false }), { stdout, stdin, exitOnCtrlC: false, patchConsole: false });
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const press = async keys => { for (const key of keys) { stdin.write(key); await sleep(30); } };
+  const screen = () => output.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+  try {
+    await sleep(150);
+    await press([..."/model", "\r", "\r"]);
+    await sleep(100);
+    assert.match(screen(), /› GPT-6 Luna \(current\) · Fast and affordable/);
+    assert.match(screen(), /GPT-5\.6 Luna · Older fast and efficient model/);
+    await press(["\x1b[B", "\r"]);
+    await sleep(100);
+    assert.equal(harness.getModel(), "gpt-5.6-luna");
+    assert.equal(harness.manager.options.model, "gpt-5.6-luna");
+    assert.match(screen(), /Model is now GPT-5\.6 Luna/);
+    assert.match(screen(), /gpt-5\.6-luna · light · Standard/);
+    await press([..."hello", "\r"]);
+    await sleep(200);
+    assert.deepEqual(models, ["gpt-5.6-luna"]);
+    await press([..."/model gpt-6-luna", "\r"]);
+    await sleep(100);
+    assert.equal(harness.getModel(), "gpt-6-luna");
+  } finally { app.unmount(); }
+});

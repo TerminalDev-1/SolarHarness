@@ -6,6 +6,7 @@ import { parseMarkdown, plainText, type Inline } from "./markdown.js";
 import { PET_NAMES, petSprite, type PetSelection } from "./pets.js";
 import { formatStats } from "./stats.js";
 import { SOLAR_VERSION_LABEL } from "./version.js";
+import { SOLAR_MODELS, modelName } from "./models.js";
 import { loadDefaultEffort, saveDefaultEffort } from "./settings.js";
 import { instructionPaths } from "./instructions.js";
 import { sunColors, sunFrames } from "./sun.js";
@@ -16,6 +17,7 @@ type ChatMessage = { role: "user" | "solar" | "error" | "steps"; text: string };
 type PendingPlan = { plan: DelegationPlan; request: string; context: string; selected: boolean[]; cursor: number };
 type PendingEffort = { cursor: number };
 type PendingSpeed = { cursor: number };
+type PendingModel = { cursor: number };
 type PendingNew = { cursor: number };
 type PendingTaskPlan = { request: string; plan: string; ultra: boolean; cursor: number };
 type ThemeName = "dark" | "light";
@@ -69,6 +71,7 @@ const slashCommands = [
   { command: "/auto-approve", detail: "Set plan approval on or off", insert: "/auto-approve " },
   { command: "/theme", detail: "Choose dark or light", insert: "/theme " },
   { command: "/pets", detail: "Choose a pet or turn it off", insert: "/pets " },
+  { command: "/model", detail: "Choose GPT-6 Luna or GPT-5.6 Luna", insert: "/model" },
   { command: "/speed", detail: "Select Standard or Fast", insert: "/speed" },
   { command: "/fast", detail: "Turn Fast mode on or off", insert: "/fast " },
   { command: "/stats", detail: "Show usage and achievements", insert: "/stats" },
@@ -114,6 +117,8 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
   const [pendingPlan, setPendingPlan] = useState<PendingPlan | null>(null);
   const [pendingEffort, setPendingEffort] = useState<PendingEffort | null>(null);
   const [pendingSpeed, setPendingSpeed] = useState<PendingSpeed | null>(null);
+  const [pendingModel, setPendingModel] = useState<PendingModel | null>(null);
+  const [currentModel, setCurrentModel] = useState(model);
   const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
   const [pendingTaskPlan, setPendingTaskPlan] = useState<PendingTaskPlan | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
@@ -298,6 +303,13 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
     addMessage({ role: "solar", text: `Speed is now ${enabled ? "Fast" : "Standard"}. New Codex turns will use this setting.` });
   };
 
+  const changeModel = (id: string): void => {
+    harness.setModel(id);
+    setCurrentModel(id);
+    setPendingModel(null);
+    addMessage({ role: "solar", text: `Model is now ${modelName(id)}. The conversation continues on it, and new sub-agents use it too.` });
+  };
+
   const changeTheme = (nextTheme: ThemeName): void => {
     theme = themes[nextTheme];
     applyTerminalTheme(stdout, nextTheme);
@@ -387,7 +399,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /ultra <task> · /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /default-effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
+        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /ultra <task> · /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /model · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /default-effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
       } else if (planCommand) {
         const request = planCommand[2]?.trim();
         if (!request) addMessage({ role: "error", text: `Usage: /${planCommand[1]} <task to plan>` });
@@ -434,6 +446,13 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
           setPet(selection as PetSelection);
           addMessage({ role: "solar", text: selection === "off" ? "Pet hidden." : `${selection[0].toUpperCase()}${selection.slice(1)} is exploring the interface.` });
         } else addMessage({ role: "error", text: "Usage: /pets <cat|dog|fox|off>" });
+      } else if (line === "/model") {
+        setPendingModel({ cursor: Math.max(0, SOLAR_MODELS.findIndex(item => item.id === currentModel)) });
+      } else if (line.startsWith("/model ")) {
+        const choice = line.slice(7).trim().toLowerCase();
+        const match = SOLAR_MODELS.find(item => item.id === choice || item.name.toLowerCase() === choice);
+        if (match) changeModel(match.id);
+        else addMessage({ role: "error", text: `Usage: /model <${SOLAR_MODELS.map(item => item.id).join("|")}>, or /model to choose from a list` });
       } else if (line === "/speed") {
         setPendingSpeed({ cursor: fast ? 1 : 0 });
       } else if (line === "/fast" || line === "/fast status") {
@@ -509,6 +528,13 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
       if (key.upArrow) { setPendingEffort(value => value && ({ cursor: Math.max(0, value.cursor - 1) })); return; }
       if (key.downArrow) { setPendingEffort(value => value && ({ cursor: Math.min(REASONING_EFFORTS.length - 1, value.cursor + 1) })); return; }
       if (key.return) { changeEffort(REASONING_EFFORTS[pendingEffort.cursor]); return; }
+      return;
+    }
+    if (pendingModel) {
+      if (key.escape) { setPendingModel(null); return; }
+      if (key.upArrow) { setPendingModel(value => value && ({ cursor: Math.max(0, value.cursor - 1) })); return; }
+      if (key.downArrow) { setPendingModel(value => value && ({ cursor: Math.min(SOLAR_MODELS.length - 1, value.cursor + 1) })); return; }
+      if (key.return) { changeModel(SOLAR_MODELS[pendingModel.cursor].id); return; }
       return;
     }
     if (pendingSpeed) {
@@ -599,7 +625,8 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
       {pendingPlan && <PlanApproval pending={pendingPlan} />}
 
       {pendingEffort && <EffortPicker pending={pendingEffort} current={currentReasoning} />}
-      {pendingSpeed && <SpeedPicker pending={pendingSpeed} fast={fast} model={model} />}
+      {pendingSpeed && <SpeedPicker pending={pendingSpeed} fast={fast} model={currentModel} />}
+      {pendingModel && <ModelPicker pending={pendingModel} current={currentModel} />}
 
       {pendingTaskPlan && <TaskPlanApproval pending={pendingTaskPlan} />}
 
@@ -617,15 +644,15 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
 
       <RainbowInput
         width={contentWidth}
-        value={ultra && busy && !input ? `Solar is running ${ultra} at max effort${ultra === "ultra" ? " with Fast on" : ""}…` : pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
-        entered={Boolean(input) && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
-        cursor={!busy && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
+        value={ultra && busy && !input ? `Solar is running ${ultra} at max effort${ultra === "ultra" ? " with Fast on" : ""}…` : pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingModel ? "Choose a model above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
+        entered={Boolean(input) && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingModel && !pendingNew}
+        cursor={!busy && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingModel && !pendingNew}
         busy={busy}
         ultra={Boolean(ultra && busy)}
         tick={petTick}
       />
 
-      <Footer compact={compact} model={model} reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast || (ultra === "ultra" && busy)} themeName={themeName} />
+      <Footer compact={compact} model={currentModel}reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast || (ultra === "ultra" && busy)} themeName={themeName} />
     </Box>
     </Box>
     </Box>
@@ -740,6 +767,19 @@ function SpeedPicker({ pending, fast, model }: { pending: PendingSpeed; fast: bo
     <Text bold color={theme.warning}>Speed</Text>
     <Text color={pending.cursor === 0 ? theme.primary : theme.secondary}>{pending.cursor === 0 ? "›" : " "} Standard{!fast ? " (current)" : ""}</Text>
     <Text color={pending.cursor === 1 ? theme.primary : theme.secondary}>{pending.cursor === 1 ? "›" : " "} Fast{fast ? " (current)" : ""} · {fastDescription(model)}</Text>
+    <Text color={theme.subtle}>↑↓ select · Enter apply · Esc cancel</Text>
+  </Box>;
+}
+
+function ModelPicker({ pending, current }: { pending: PendingModel; current: string }): React.JSX.Element {
+  return <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.warning} paddingX={1}>
+    <Text bold color={theme.warning}>Model</Text>
+    {SOLAR_MODELS.map((item, index) => (
+      <Text key={item.id} color={index === pending.cursor ? theme.primary : theme.secondary}>
+        <Text color={index === pending.cursor ? theme.warning : theme.subtle}>{index === pending.cursor ? "›" : " "} </Text>
+        {item.name}{item.id === current ? " (current)" : ""}<Text color={theme.subtle}> · {item.detail}</Text>
+      </Text>
+    ))}
     <Text color={theme.subtle}>↑↓ select · Enter apply · Esc cancel</Text>
   </Box>;
 }
