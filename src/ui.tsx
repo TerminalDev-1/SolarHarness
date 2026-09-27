@@ -7,6 +7,8 @@ import { PET_NAMES, petSprite, type PetSelection } from "./pets.js";
 import { formatStats } from "./stats.js";
 import { SOLAR_VERSION_LABEL } from "./version.js";
 import { SOLAR_MODELS, modelName } from "./models.js";
+import { pasteClipboardImages, pickImageFiles } from "./attachments.js";
+import { basename } from "node:path";
 import { loadDefaultEffort, saveDefaultEffort } from "./settings.js";
 import { instructionPaths } from "./instructions.js";
 import { sunColors, sunFrames } from "./sun.js";
@@ -59,6 +61,7 @@ const rainbowInput = {
   secondary: "#c8e7ff",
   prompt: "#effbff",
   placeholder: "#b4e8ff",
+  plus: "#ffd21f",
   // Full-spectrum rail that rotates by default; ultra commands spin it twice as fast on deep purple.
   rail: ["#ff3b5c", "#ff8a1f", "#ffd21f", "#5cff6b", "#1fe0ff", "#3b7bff", "#9b5cff", "#ff4fd8"]
 } as const;
@@ -99,9 +102,13 @@ interface SolarAppProps {
   model: string;
   reasoning: ReasoningEffort;
   initialSplash: boolean;
+  /** Where + and paste get images; tests replace the real file picker and clipboard. */
+  imageSources?: { pick: () => Promise<string[]>; paste: (workspace: string) => Promise<string[]> };
 }
 
-export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): React.JSX.Element {
+const systemImageSources = { pick: pickImageFiles, paste: pasteClipboardImages };
+
+export function SolarApp({ harness, model, reasoning, initialSplash, imageSources = systemImageSources }: SolarAppProps): React.JSX.Element {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [input, setInput] = useState("");
@@ -178,6 +185,26 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
     slashMenuOpenRef.current = menuOpen;
     setInput(next);
     setSlashMenuOpen(menuOpen);
+  };
+
+  // Images added with Ctrl+O / Tab (file picker) or pasted with Ctrl+V / Alt+V, sent with the next message.
+  const [attachments, setAttachmentsState] = useState<string[]>([]);
+  const [attaching, setAttaching] = useState<"picker" | "clipboard" | null>(null);
+  const attachmentsRef = useRef<string[]>([]);
+  const setAttachments = (next: string[]): void => {
+    attachmentsRef.current = next;
+    setAttachmentsState(next);
+  };
+  const addAttachments = async (source: "picker" | "clipboard"): Promise<void> => {
+    if (attaching) return;
+    setAttaching(source);
+    try {
+      const found = source === "picker" ? await imageSources.pick() : await imageSources.paste(harness.getWorkspace());
+      if (found.length) setAttachments([...new Set([...attachmentsRef.current, ...found])].slice(0, 8));
+      else if (source === "clipboard") addMessage({ role: "error", text: "There's no image on the clipboard. Copy an image or an image file, then press Ctrl+V or Alt+V." });
+    } catch (error) {
+      addMessage({ role: "error", text: `Couldn't add the image: ${error instanceof Error ? error.message : String(error)}` });
+    } finally { setAttaching(null); }
   };
 
   const chooseSlashCommand = (item: SlashCommand): void => {
@@ -340,14 +367,14 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
     }
   };
 
-  const runConversation = async (line: string, approvedPlan?: string, ultraTask = false): Promise<void> => {
+  const runConversation = async (line: string, approvedPlan?: string, ultraTask = false, images: string[] = []): Promise<void> => {
     const nextBrief = [line];
     setBrief(nextBrief);
     const response = approvedPlan
       ? await harness.executeTaskPlan(line, approvedPlan, reportActivity)
       : ultraTask
-      ? await harness.converseUltra(line, reportActivity)
-      : await harness.converse(line, reportActivity);
+      ? await harness.converseUltra(line, reportActivity, images)
+      : await harness.converse(line, reportActivity, undefined, images);
     setAutoApprove(harness.getAutoPermissions().enabled);
     setAgents(harness.manager.list());
     addReply(response.reply);
@@ -376,15 +403,20 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
   };
 
   const submit = async (): Promise<void> => {
-    const line = inputRef.current.trim();
+    const typed = inputRef.current.trim();
+    // Attached images go with an ordinary message or /ultra; other commands leave them waiting.
+    const takesImages = !typed.startsWith("/") || /^\/ultra(?:\s|$)/.test(typed);
+    const images = takesImages ? attachmentsRef.current : [];
+    const line = typed || (images.length ? `Take a look at the attached image${images.length === 1 ? "" : "s"}.` : "");
     if (!line || busy) return;
     updateInput("", false);
     setSlashSelection(0);
     setHistoryIndex(-1);
-    setInputHistory(current => [...current, line]);
+    if (typed) setInputHistory(current => [...current, typed]);
     if (line === "/quit" || line === "/exit") { exit(); return; }
+    if (images.length) setAttachments([]);
 
-    addMessage({ role: "user", text: line });
+    addMessage({ role: "user", text: images.length ? `${line}\n${images.map(image => `+ ${basename(image)}`).join("  ")}` : line });
     setActivityLog(["Sending your request to Solar"]);
     resetSteps();
     setCurrentActivity(initialActivity(line));
@@ -410,9 +442,9 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
           setPendingTaskPlan({ request, plan, ultra, cursor: 0 });
         }
       } else if (ultraCommand) {
-        const task = ultraCommand[1]?.trim();
+        const task = ultraCommand[1]?.trim() || (images.length ? "Take a look at the attached images." : "");
         if (!task) addMessage({ role: "error", text: "Usage: /ultra <task>" });
-        else await runConversation(task, undefined, true);
+        else await runConversation(task, undefined, true, images);
       } else if (reviewCommand) {
         addReply(await harness.ultraReview(reviewCommand[1]?.trim() ?? "", reportActivity));
       } else if (line === "/memory") {
@@ -489,7 +521,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
           await preparePlan(brief.join("\n"), brief.join("\n"));
         }
       } else {
-        await runConversation(line);
+        await runConversation(line, undefined, false, images);
       }
     } catch (error) {
       addMessage({ role: "error", text: error instanceof Error ? error.message : String(error) });
@@ -567,8 +599,12 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
       if (key.downArrow) { setSlashSelection(value => (value + 1) % menu.length); return; }
       if (key.tab || key.return) { chooseSlashCommand(menu[Math.min(slashSelection, menu.length - 1)]); return; }
     }
+    // The + button: Ctrl+O, or Tab on an empty box, opens the image picker; Ctrl+V or Alt+V pastes one.
+    if ((key.ctrl && character === "o") || (key.tab && !inputRef.current)) { void addAttachments("picker"); return; }
+    if ((key.ctrl || key.meta) && character === "v") { void addAttachments("clipboard"); return; }
     if (key.return) { void submit(); return; }
     if (key.backspace || key.delete) {
+      if (!inputRef.current && attachmentsRef.current.length) { setAttachments(attachmentsRef.current.slice(0, -1)); return; }
       updateInput(inputRef.current.slice(0, -1));
       setSlashSelection(0);
       return;
@@ -642,9 +678,14 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
 
       {slashMatches.length > 0 && <SlashCommandMenu matches={slashMatches} selected={slashSelection} />}
 
+      {attachments.length > 0 && <AttachmentLine names={attachments.map(image => basename(image))} />}
+
       <RainbowInput
         width={contentWidth}
-        value={ultra && busy && !input ? `Solar is running ${ultra} at max effort${ultra === "ultra" ? " with Fast on" : ""}…` : pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingModel ? "Choose a model above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
+        value={ultra && busy && !input ? `Solar is running ${ultra} at max effort${ultra === "ultra" ? " with Fast on" : ""}…`
+          : attaching === "picker" ? "Choose images in the file picker…"
+          : attaching === "clipboard" ? "Pasting the image from your clipboard…"
+          : attachments.length && !input && !busy ? `Ask about the image${attachments.length === 1 ? "" : "s"}, or press Enter to send` : pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingModel ? "Choose a model above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
         entered={Boolean(input) && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingModel && !pendingNew}
         cursor={!busy && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingModel && !pendingNew}
         busy={busy}
@@ -652,7 +693,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
         tick={petTick}
       />
 
-      <Footer compact={compact} model={currentModel}reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast || (ultra === "ultra" && busy)} themeName={themeName} />
+      <Footer compact={compact} model={currentModel} reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast || (ultra === "ultra" && busy)} themeName={themeName} />
     </Box>
     </Box>
     </Box>
@@ -701,16 +742,18 @@ function RainbowInput({ width, value, entered, cursor, busy, ultra = false, tick
   const offset = (ultra ? tick * 2 : tick) % rainbowInput.rail.length;
   const rail: readonly string[] = [...rainbowInput.rail.slice(offset), ...rainbowInput.rail.slice(0, offset)];
   const background = ultra ? ultraInputBackground : rainbowInput.background;
-  const available = Math.max(1, width - 7);
+  // Row layout: "▌ + › value▐". The + marks where images are added (Ctrl+O, Tab, Ctrl+V, Alt+V).
+  const available = Math.max(1, width - 9);
   const visibleValue = entered ? value.slice(-available) : value.slice(0, available);
-  const remaining = Math.max(0, width - 2 - 3 - visibleValue.length - Number(cursor));
+  const remaining = Math.max(0, width - 2 - 5 - visibleValue.length - Number(cursor));
   return (
     <Box flexDirection="column" marginTop={1} width={width}>
       <GradientRail width={width} glyph="▄" colors={rail} />
       <Box width={width}>
         <Text color={rail[0]}>▌</Text>
         <Text backgroundColor={background}>
-          <Text color={rainbowInput.prompt}> › </Text>
+          <Text bold color={rainbowInput.plus}> + </Text>
+          <Text color={rainbowInput.prompt}>› </Text>
           <Text color={entered ? rainbowInput.primary : busy ? rainbowInput.secondary : rainbowInput.placeholder}>{visibleValue}</Text>
           {cursor && <Text inverse> </Text>}
           {" ".repeat(remaining)}
@@ -720,6 +763,15 @@ function RainbowInput({ width, value, entered, cursor, busy, ultra = false, tick
       <GradientRail width={width} glyph="▀" colors={[...rail].reverse()} />
     </Box>
   );
+}
+
+function AttachmentLine({ names }: { names: string[] }): React.JSX.Element {
+  return <Box marginTop={1} paddingX={1}>
+    <Text color={theme.secondary}>
+      {names.map((name, index) => <Text key={`${index}-${name}`}><Text color={rainbowInput.plus}>+ </Text>{name}{"   "}</Text>)}
+      <Text color={theme.subtle}>Backspace removes the last image</Text>
+    </Text>
+  </Box>;
 }
 
 function GradientRail({ width, glyph, colors }: { width: number; glyph: string; colors: readonly string[] }): React.JSX.Element {
@@ -1008,7 +1060,7 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
 function Footer({ compact, model, reasoning, autoApprove, fast, themeName }: { compact: boolean; model: string; reasoning: ReasoningEffort; autoApprove: boolean; fast: boolean; themeName: ThemeName }): React.JSX.Element {
   return (
     <Box paddingX={1} marginTop={1} justifyContent="space-between">
-      <Text color={theme.subtle}>Enter send · ↑↓ history · /help</Text>
+      <Text color={theme.subtle}>Enter send · Ctrl+O image · /help</Text>
       {!compact && <Text color={theme.subtle}>{model} · {reasoning} · {fast ? "Fast" : "Standard"} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>}
     </Box>
   );

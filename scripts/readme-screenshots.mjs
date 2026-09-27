@@ -29,14 +29,14 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const answer = reply => ({ text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply }), sessionId: "demo" });
 
 /** Starts a fresh Solar UI on a fake terminal; `record` collects every byte Ink writes. */
-async function startSolar(workspace) {
+async function startSolar(workspace, imageSources) {
   const stdout = Object.assign(new PassThrough(), { isTTY: true, rows: ROWS, columns: COLUMNS });
   const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
   let record = "";
   stdout.on("data", data => { record += data.toString(); });
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "max", cwd: workspace });
   harness.getWorkspace = () => DISPLAY_WORKSPACE;
-  const app = render(React.createElement(SolarApp, { harness, model: "gpt-6-luna", reasoning: "max", initialSplash: false }), { stdout, stdin, exitOnCtrlC: false, patchConsole: false });
+  const app = render(React.createElement(SolarApp, { harness, model: "gpt-6-luna", reasoning: "max", initialSplash: false, ...(imageSources ? { imageSources } : {}) }), { stdout, stdin, exitOnCtrlC: false, patchConsole: false });
   await sleep(300);
   return {
     harness,
@@ -115,6 +115,19 @@ const scenes = [];
   turn.release();
   await sleep(700);
   scenes.push(["finished", solar.output()]);
+  solar.close();
+}
+
+// Images added with the + shortcuts, waiting above the box while a question is typed.
+{
+  await mkdir(join(scratch, "screenshots"), { recursive: true });
+  const shots = ["home.png", "mobile.png"].map(name => join(scratch, "screenshots", name));
+  for (const shot of shots) await writeFile(shot, "png");
+  const solar = await startSolar(scratch, { pick: async () => [shots[0]], paste: async () => [shots[1]] });
+  await solar.type("\x0f", false);
+  await solar.type("\x1bv", false);
+  await solar.type("why does the menu overlap on mobile?", false);
+  scenes.push(["attach", solar.output()]);
   solar.close();
 }
 

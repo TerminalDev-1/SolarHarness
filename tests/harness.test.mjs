@@ -1400,3 +1400,55 @@ test("the /model picker switches between GPT-6 Luna and GPT-5.6 Luna", async () 
     assert.equal(harness.getModel(), "gpt-6-luna");
   } finally { app.unmount(); }
 });
+
+test("images added with Ctrl+O, Tab, Ctrl+V, or Alt+V go with the next message", async () => {
+  const { PassThrough } = await import("node:stream");
+  const { render } = await import("ink");
+  const { SolarApp } = await import("../dist/ui.js");
+  const root = await mkdtemp(join(tmpdir(), "solar-attach-"));
+  const stdout = Object.assign(new PassThrough(), { isTTY: true, rows: 40, columns: 100 });
+  let output = "";
+  stdout.on("data", data => { output += data.toString(); });
+  const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: root });
+  const sent = [];
+  harness.provider.run = async (prompt, _options, args) => {
+    sent.push({ prompt, images: args.filter(arg => arg.startsWith("--image=")).map(arg => arg.slice(8)) });
+    return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "I see it." }), sessionId: "attach" };
+  };
+  harness.provider.resume = async (_session, prompt, options, args) => harness.provider.run(prompt, options, args);
+  const picked = join(root, "mockup.png");
+  const pasted = join(root, "clipboard-1.png");
+  await writeFile(picked, "png");
+  await writeFile(pasted, "png");
+  let pastes = 0;
+  const imageSources = { pick: async () => [picked], paste: async () => (pastes++ ? [] : [pasted]) };
+  const app = render(React.createElement(SolarApp, { harness, model: "gpt-6-luna", reasoning: "light", initialSplash: false, imageSources }), { stdout, stdin, exitOnCtrlC: false, patchConsole: false });
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const press = async keys => { for (const key of keys) { stdin.write(key); await sleep(40); } };
+  const screen = () => output.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+  try {
+    await sleep(150);
+    assert.match(screen(), /▌ \+ › Ask Solar anything/);
+    await press(["\x0f"]);            // Ctrl+O opens the picker
+    await press(["\x1bv"]);           // Alt+V pastes from the clipboard
+    await sleep(100);
+    assert.match(screen(), /\+ mockup\.png\s+\+ clipboard-1\.png\s+Backspace removes the last image/);
+    await press(["\x7f"]);            // Backspace on an empty box removes the last image
+    await press(["\t"]);              // Tab on an empty box opens the picker again (no duplicate)
+    await press(["\x16"]);            // Ctrl+V with nothing on the clipboard
+    await sleep(100);
+    assert.match(screen(), /no image on the clipboard/);
+    await press([..."what is wrong here?", "\r"]);
+    await sleep(300);
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0].images, [picked]);
+    assert.match(sent[0].prompt, /User: what is wrong here\?/);
+    assert.match(sent[0].prompt, /attached 1 image/);
+    assert.match(screen(), /You\s+what is wrong here\?\n\s+\+ mockup\.png/);
+    await press(["\x0f", "\r"]);      // An image alone, with no text, still sends
+    await sleep(300);
+    assert.equal(sent.length, 2);
+    assert.match(sent[1].prompt, /User: Take a look at the attached image\./);
+  } finally { app.unmount(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+});

@@ -58,17 +58,18 @@ as `v1.0 build 974504f`.
 ![The Solar welcome screen](docs/images/welcome.png)
 
 ```text
- ▣ Solar Harness v1.0 build fb241f7       ← version and the commit it was built from
+ ▣ Solar Harness v1.0 build 7c110d6       ← version and the commit it was built from
                                           ← your workspace folder is shown below
  C:\Users\you\projects\portfolio
  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
    (conversation)                         ← your messages, Solar's steps and replies
    (pet)                                  ← a cat, dog, or fox; /pets changes it
    (sun and activity)                     ← appears while Solar is working
+   + home.png                             ← images you've added, waiting to send
  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄         ← the rainbow input frame
- ▌ › Ask Solar anything             ▐
+ ▌ + › Ask Solar anything           ▐     ← + adds images (Ctrl+O, Ctrl+V, Alt+V)
  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
- Enter send · ↑↓ history · /help     gpt-6-luna · max · Standard · dark · auto off
+ Enter send · Ctrl+O image · /help   gpt-6-luna · max · Standard · dark · auto off
                                      ↑ model · effort · speed · theme · auto-approve
 ```
 
@@ -99,12 +100,30 @@ scrollback, so you can scroll up through a long session.
 
 ### Showing Solar an image
 
-![Solar looking at a screenshot the user mentioned](docs/images/vision.png)
+![Two images added above the box while a question is typed](docs/images/attach.png)
 
-Mention an image file in your message, such as `home.png`, `@screenshots/home.png`,
-or a full path in quotes. You can also drag a file into Windows Terminal to paste
-its path. Solar attaches the image, looks at it, and shows `@ Viewed <file>` in its
-steps. PNG, JPEG, GIF, WebP, and BMP work, up to eight per message.
+The `+` at the start of the box is where images come in:
+
+| Keys | What happens |
+| --- | --- |
+| **Ctrl+O**, or **Tab** in an empty box | Opens a file picker. Choose one or more images. |
+| **Ctrl+V** or **Alt+V** | Pastes the image on your clipboard: a screenshot or copied picture, or image files copied in File Explorer. |
+| **Backspace** in an empty box | Removes the last image you added. |
+
+Added images wait above the box. Type your question and press Enter, and they go
+with it. You can also press Enter with no text to just send the images.
+
+Windows Terminal normally keeps Ctrl+V for pasting text, and when the clipboard
+holds only a picture it passes nothing on to Solar. If Ctrl+V doesn't add your
+screenshot, use **Alt+V**. Pasted pictures are saved as PNG files in the
+workspace's `.solarharness/pasted` folder, which Git ignores.
+
+![Solar looking at an image](docs/images/vision.png)
+
+You can also name an image in your message, such as `home.png`,
+`@screenshots/home.png`, or a full path in quotes. Dragging a file into Windows
+Terminal pastes its path, which works too. Solar shows `@ Viewed <file>` for each
+image it looks at. PNG, JPEG, GIF, WebP, and BMP work, up to eight per message.
 
 Solar also looks at its own browser screenshots, so it reports what a page actually
 shows.
@@ -248,7 +267,7 @@ Files Solar keeps:
 | --- | --- |
 | `~/.solarharness/settings.json` | The saved default effort. Other keys in the file are preserved. |
 | `~/.solarharness/stats.json` | Chat, prompt, token, and achievement counts for `/stats`. |
-| `<workspace>/.solarharness/` | Structured-output schemas and browser screenshots. It contains its own `.gitignore`, so Git ignores it without changes to your project. |
+| `<workspace>/.solarharness/` | Structured-output schemas, browser screenshots, and images pasted from the clipboard. It contains its own `.gitignore`, so Git ignores it without changes to your project. |
 
 ### Advanced
 

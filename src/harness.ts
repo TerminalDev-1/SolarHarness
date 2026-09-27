@@ -47,8 +47,11 @@ export class SolarHarness {
     });
   }
 
-  /** `approvedPlan` is sent to the model but kept out of the wording heuristics, which read only `message`. */
-  async converse(message: string, onActivity?: (message: string) => void, approvedPlan?: string): Promise<{ reply: string; readyToDelegate: boolean }> {
+  /**
+   * `approvedPlan` is sent to the model but kept out of the wording heuristics, which read only `message`.
+   * `attachedImages` come from the + picker or a clipboard paste, alongside any image paths in the message.
+   */
+  async converse(message: string, onActivity?: (message: string) => void, approvedPlan?: string, attachedImages: readonly string[] = []): Promise<{ reply: string; readyToDelegate: boolean }> {
     const startedAt = Date.now();
     const standaloneAutoPermissions = standaloneAutoPermissionRequest(message);
     if (standaloneAutoPermissions !== undefined) {
@@ -60,7 +63,7 @@ export class SolarHarness {
     const agentRoster = this.manager.list().map(agent => `${agent.depth ? "  sub-delegate" : "sub-agent"} ${agent.name} [${agent.id}]: ${agent.title} (${agent.status}, ${agent.reasoning}${agent.reasoningPinned ? ", pinned" : ""})`).join("\n") || "No sub-agents exist yet.";
     const hostToolManifest = JSON.stringify(this.tools.list().filter(tool => ["browser", "workspace_command", "web_search_headless", "runtime_operations", "set-auto-permissions", "adjust-sub-effort-level"].includes(tool.name)));
     const wantsDelegation = delegationRequested(message);
-    const images = findImagePaths(message, this.options.cwd);
+    const images = [...new Set([...attachedImages, ...findImagePaths(message, this.options.cwd)])].slice(0, 8);
     for (const image of images) onActivity?.(`Image: ${displayPath(this.options.cwd, image)}`);
     const instructions = workspaceInstructions(this.options.cwd);
     const instructionsChanged = Boolean(this.mainSessionId) && instructions !== (this.sessionInstructions ?? "");
@@ -469,12 +472,12 @@ export class SolarHarness {
   }
 
   /** /ultra: runs one task at max effort with Fast on, then restores the previous settings. */
-  async converseUltra(message: string, onActivity?: (message: string) => void): Promise<{ reply: string; readyToDelegate: boolean }> {
+  async converseUltra(message: string, onActivity?: (message: string) => void, attachedImages: readonly string[] = []): Promise<{ reply: string; readyToDelegate: boolean }> {
     const reasoning = this.options.reasoning;
     const fast = this.fast;
     this.setReasoning("max");
     this.setFast(true);
-    try { return await this.converse(message, onActivity); }
+    try { return await this.converse(message, onActivity, undefined, attachedImages); }
     finally {
       this.setReasoning(reasoning);
       this.setFast(fast);
