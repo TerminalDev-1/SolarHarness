@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
+import { solarDirectory } from "./solar-dir.js";
 import { join } from "node:path";
 import type { CodexRunOptions, CodexRunResult, DelegationPlan, ReasoningEffort } from "./types.js";
 import { SOLAR_SYSTEM_PROMPT } from "./system-prompt.js";
@@ -94,8 +95,7 @@ export class CodexCliProvider {
   }
 
   private async writePlanSchema(cwd: string, requestedCount?: number): Promise<string> {
-    const directory = join(cwd, ".solarharness", "schemas");
-    await mkdir(directory, { recursive: true });
+    const directory = await solarDirectory(cwd, "schemas");
     const path = join(directory, "delegation-plan.json");
     await writeFile(path, JSON.stringify({
       type: "object",

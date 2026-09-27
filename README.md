@@ -220,8 +220,8 @@ the explicit `/new` workspace-deletion confirmation.
 - Confirming `/new` aborts active sub-agents, clears their records, resets the
   Solar transcript and model session ID, and deletes files only when the
   workspace is a directory named `test`. Any other directory is left untouched.
-- Generated `.solarharness` schemas and `test/agent-*` experiment output are
-  excluded from source control.
+- Solar's generated `.solarharness` folder contains its own `.gitignore`, so Git
+  ignores it in any project without editing that project's `.gitignore`.
 
 ## Architecture
 

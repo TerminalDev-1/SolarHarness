@@ -1,12 +1,12 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { solarDirectory } from "./solar-dir.js";
 
 const HOST_TOOLS = ["browser", "web_search_headless", "workspace_command", "runtime_operations", "set-auto-permissions", "adjust-sub-effort-level"] as const;
 
 /** Codex CLI can require a tool request as its final structured response. */
 export async function writeHostTurnSchema(cwd: string, requireTool: boolean): Promise<string> {
-  const directory = join(cwd, ".solarharness", "schemas");
-  await mkdir(directory, { recursive: true });
+  const directory = await solarDirectory(cwd, "schemas");
   const path = join(directory, requireTool ? "host-tool-required.json" : "host-tool-or-answer.json");
   await writeFile(path, JSON.stringify({
     type: "object",

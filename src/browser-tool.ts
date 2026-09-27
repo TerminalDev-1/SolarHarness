@@ -1,8 +1,8 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { solarDirectory } from "./solar-dir.js";
 
 export type BrowserInput = {
   action: "open" | "search" | "youtube_search" | "snapshot" | "screenshot" | "move" | "click" | "fill" | "press" | "scroll" | "back" | "forward" | "close";
@@ -77,8 +77,7 @@ export class SolarBrowser {
       }
       case "snapshot": break;
       case "screenshot": {
-        const directory = join(this.workspace, ".solarharness", "screenshots");
-        await mkdir(directory, { recursive: true });
+        const directory = await solarDirectory(this.workspace, "screenshots");
         const screenshotPath = join(directory, `browser-${Date.now()}-${randomUUID().slice(0, 8)}.png`);
         await page.screenshot({ path: screenshotPath, fullPage: input.fullPage ?? true });
         return { ...await this.describe(page), screenshotPath };

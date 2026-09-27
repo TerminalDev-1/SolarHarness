@@ -1102,3 +1102,16 @@ test("/new inside a test directory still empties it", async () => {
     assert.deepEqual(await readdir(workspace), []);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("Solar's generated .solarharness folder ignores itself in Git", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-gitignore-"));
+  try {
+    await writeHostTurnSchema(root, false);
+    await writeFile(join(root, ".solarharness", ".gitignore"), "custom\n");
+    await writeHostTurnSchema(root, true);
+    assert.equal(await readFile(join(root, ".solarharness", ".gitignore"), "utf8"), "custom\n");
+    await rm(join(root, ".solarharness", ".gitignore"));
+    await writeHostTurnSchema(root, true);
+    assert.match(await readFile(join(root, ".solarharness", ".gitignore"), "utf8"), /^\*$/m);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
