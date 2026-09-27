@@ -1330,3 +1330,32 @@ test("a browser screenshot is sent back to the model as an image", async () => {
   assert.ok(resumes[0].args.includes(`--image=${shot}`));
   assert.match(resumes[0].prompt, /screenshot is attached/);
 });
+
+test("keystrokes that arrive faster than the screen redraws are all kept", async () => {
+  const { PassThrough } = await import("node:stream");
+  const { render } = await import("ink");
+  const { SolarApp } = await import("../dist/ui.js");
+  const stdout = Object.assign(new PassThrough(), { isTTY: true, rows: 40, columns: 100 });
+  let output = "";
+  stdout.on("data", data => { output += data.toString(); });
+  const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const received = [];
+  harness.provider.run = async prompt => {
+    received.push(prompt.match(/User: (.*)/)?.[1]);
+    return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "Got it." }), sessionId: "fast" };
+  };
+  const app = render(React.createElement(SolarApp, { harness, model: "gpt-6-luna", reasoning: "light", initialSplash: false }), { stdout, stdin, exitOnCtrlC: false, patchConsole: false });
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  try {
+    await sleep(150);
+    // Keys 1 ms apart arrive as separate events, faster than Ink redraws.
+    const press = async keys => { for (const key of keys) { stdin.write(key); await sleep(1); } };
+    await press([..."fix the header spacing", "\r"]);
+    await sleep(400);
+    assert.deepEqual(received, ["fix the header spacing"]);
+    await press([..."/hel", "\x7f", ..."lp", "\r", "\r"]);
+    await sleep(300);
+    assert.match(output.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""), /You\s+\/help\n/);
+  } finally { app.unmount(); }
+});

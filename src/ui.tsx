@@ -87,6 +87,10 @@ const slashCommands = [
 ] as const;
 type SlashCommand = (typeof slashCommands)[number];
 
+function matchSlashCommands(input: string, menuOpen: boolean): readonly SlashCommand[] {
+  return menuOpen && /^\/[^\s]*$/.test(input) ? slashCommands.filter(item => item.command.startsWith(input)) : [];
+}
+
 interface SolarAppProps {
   harness: SolarHarness;
   model: string;
@@ -158,13 +162,21 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
 
   const activeSubAgents = agents.filter(agent => agent.status === "running").length;
   const phaseInfo = phaseCopy(phase, activeSubAgents, currentActivity);
-  const slashMatches = slashMenuOpen && /^\/[^\s]*$/.test(input)
-    ? slashCommands.filter(item => item.command.startsWith(input))
-    : [];
+  const slashMatches = matchSlashCommands(input, slashMenuOpen);
+
+  // Keys can arrive faster than React re-renders, so the key handler reads and writes the
+  // input through refs; reading the rendered `input` there would drop keystrokes.
+  const inputRef = useRef("");
+  const slashMenuOpenRef = useRef(false);
+  const updateInput = (next: string, menuOpen = next.startsWith("/") && !next.includes(" ")): void => {
+    inputRef.current = next;
+    slashMenuOpenRef.current = menuOpen;
+    setInput(next);
+    setSlashMenuOpen(menuOpen);
+  };
 
   const chooseSlashCommand = (item: SlashCommand): void => {
-    setInput(item.insert);
-    setSlashMenuOpen(false);
+    updateInput(item.insert, false);
     setSlashSelection(0);
     setHistoryIndex(-1);
   };
@@ -352,10 +364,9 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
   };
 
   const submit = async (): Promise<void> => {
-    const line = input.trim();
+    const line = inputRef.current.trim();
     if (!line || busy) return;
-    setInput("");
-    setSlashMenuOpen(false);
+    updateInput("", false);
     setSlashSelection(0);
     setHistoryIndex(-1);
     setInputHistory(current => [...current, line]);
@@ -474,10 +485,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
     if (key.ctrl && character === "c") { exit(); return; }
     if (showSplash) {
       setShowSplash(false);
-      if (!key.return && !key.escape && !key.ctrl && !key.meta && character) {
-        setInput(character);
-        setSlashMenuOpen(character === "/");
-      }
+      if (!key.return && !key.escape && !key.ctrl && !key.meta && character) updateInput(character);
       return;
     }
     if (busy) return;
@@ -526,38 +534,33 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
       if (key.return) { void approvePlan(); return; }
       return;
     }
-    if (slashMatches.length) {
-      if (key.escape) { setSlashMenuOpen(false); return; }
-      if (key.upArrow) { setSlashSelection(value => (value - 1 + slashMatches.length) % slashMatches.length); return; }
-      if (key.downArrow) { setSlashSelection(value => (value + 1) % slashMatches.length); return; }
-      if (key.tab || key.return) { chooseSlashCommand(slashMatches[Math.min(slashSelection, slashMatches.length - 1)]); return; }
+    const menu = matchSlashCommands(inputRef.current, slashMenuOpenRef.current);
+    if (menu.length) {
+      if (key.escape) { updateInput(inputRef.current, false); return; }
+      if (key.upArrow) { setSlashSelection(value => (value - 1 + menu.length) % menu.length); return; }
+      if (key.downArrow) { setSlashSelection(value => (value + 1) % menu.length); return; }
+      if (key.tab || key.return) { chooseSlashCommand(menu[Math.min(slashSelection, menu.length - 1)]); return; }
     }
     if (key.return) { void submit(); return; }
     if (key.backspace || key.delete) {
-      const next = input.slice(0, -1);
-      setInput(next);
-      setSlashMenuOpen(next.startsWith("/") && !next.includes(" "));
+      updateInput(inputRef.current.slice(0, -1));
       setSlashSelection(0);
       return;
     }
     if (key.upArrow && inputHistory.length) {
       const nextIndex = Math.min(inputHistory.length - 1, historyIndex + 1);
       setHistoryIndex(nextIndex);
-      setInput(inputHistory[inputHistory.length - 1 - nextIndex] ?? "");
-      setSlashMenuOpen(false);
+      updateInput(inputHistory[inputHistory.length - 1 - nextIndex] ?? "", false);
       return;
     }
     if (key.downArrow && historyIndex >= 0) {
       const nextIndex = historyIndex - 1;
       setHistoryIndex(nextIndex);
-      setInput(nextIndex < 0 ? "" : inputHistory[inputHistory.length - 1 - nextIndex] ?? "");
-      setSlashMenuOpen(false);
+      updateInput(nextIndex < 0 ? "" : inputHistory[inputHistory.length - 1 - nextIndex] ?? "", false);
       return;
     }
     if (!key.ctrl && !key.meta && character) {
-      const next = input + character;
-      setInput(next);
-      setSlashMenuOpen(next.startsWith("/") && !next.includes(" "));
+      updateInput(inputRef.current + character);
       setSlashSelection(0);
     }
   });
