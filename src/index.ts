@@ -4,14 +4,14 @@ import { resolve } from "node:path";
 import { startSolarUi } from "./ui.js";
 import { REASONING_EFFORTS, type ReasoningEffort } from "./types.js";
 import { loadDefaultEffort } from "./settings.js";
-import { SOLAR_VERSION } from "./version.js";
+import { SOLAR_VERSION_LABEL } from "./version.js";
 
 const program = new Command();
 
 program
   .name("solar")
   .description("Solar Harness — a terminal-native coding agent harness")
-  .version(SOLAR_VERSION);
+  .version(SOLAR_VERSION_LABEL);
 
 program
   .command("chat", { isDefault: true })

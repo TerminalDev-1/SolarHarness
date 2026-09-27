@@ -5,7 +5,7 @@ import { actionStatus, activityDetail, formatElapsed, initialActivity } from "./
 import { parseMarkdown, plainText, type Inline } from "./markdown.js";
 import { PET_NAMES, petSprite, type PetSelection } from "./pets.js";
 import { formatStats } from "./stats.js";
-import { SOLAR_VERSION } from "./version.js";
+import { SOLAR_VERSION_LABEL } from "./version.js";
 import { loadDefaultEffort, saveDefaultEffort } from "./settings.js";
 import { instructionPaths } from "./instructions.js";
 import { sunColors, sunFrames } from "./sun.js";
@@ -810,7 +810,7 @@ function Header({ compact, workspace, width }: { compact: boolean; workspace: st
   return (
     <Box marginTop={1} marginBottom={1} flexDirection="column">
       <Box paddingX={1} flexDirection="column">
-        <Text><Text bold color={theme.pulse}>▣ Solar</Text><Text color={theme.secondary}> Harness</Text><Text color={theme.subtle}> v{SOLAR_VERSION}</Text></Text>
+        <Text><Text bold color={theme.pulse}>▣ Solar</Text><Text color={theme.secondary}> Harness</Text><Text color={theme.subtle}> v{SOLAR_VERSION_LABEL}</Text></Text>
         <Text color={theme.subtle}>{workspaceLabel}</Text>
       </Box>
       <GradientRail width={width} glyph="▄" colors={theme.rail} />

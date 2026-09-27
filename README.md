@@ -30,7 +30,8 @@ Solar's workspace.
 ![The Solar welcome screen](docs/images/welcome.png)
 
 ```text
- ▣ Solar Harness v1.0                     ← your workspace folder is shown below
+ ▣ Solar Harness v1.0 build fb241f7       ← version and the commit it was built from
+                                          ← your workspace folder is shown below
  C:\Users\you\projects\portfolio
  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
    (conversation)                         ← your messages, Solar's steps and replies
