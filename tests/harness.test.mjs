@@ -1272,3 +1272,18 @@ test("control words the model leaves at the end of a reply are removed", async (
     assert.equal((await harness.converse("make a page")).reply, "Created page.html.");
   }
 });
+
+test("the default effort starts at max, persists, and keeps other settings", async () => {
+  const { loadDefaultEffort, saveDefaultEffort, settingsPath } = await import("../dist/settings.js");
+  const home = await mkdtemp(join(tmpdir(), "solar-settings-"));
+  try {
+    assert.equal(loadDefaultEffort(home), "max");
+    await writeFile(settingsPath(home), JSON.stringify({ provider: "gemini" }));
+    saveDefaultEffort("medium", home);
+    assert.equal(loadDefaultEffort(home), "medium");
+    assert.deepEqual(JSON.parse(await readFile(settingsPath(home), "utf8")), { provider: "gemini", defaultEffort: "medium" });
+    await writeFile(settingsPath(home), JSON.stringify({ defaultEffort: "extreme" }));
+    assert.equal(loadDefaultEffort(home), "max");
+    assert.throws(() => saveDefaultEffort("extreme", home));
+  } finally { await rm(home, { recursive: true, force: true }); }
+});

@@ -50,7 +50,10 @@ use, and creation.
   final report synthesis.
 - Start a genuinely clean session with `/new`, clearing old sub-agent records.
   Files are deleted only when the workspace is a folder named `test`.
-- Change Solar's default reasoning effort at runtime from Light through Max.
+- Change the current session's reasoning effort with `/effort` (Light through Max).
+  Every session starts at the saved default, which is Max until you change it
+  with `/default-effort <level>`; it is stored in `~/.solarharness/settings.json`.
+  `solar --reasoning <level>` overrides it for one launch.
 - Run one task at full power with `/ultra <task>`: Max effort and Fast mode for
   that task only, with the rainbow input frame, then your usual settings return.
 - Plan before acting with `/plan <task>`: Solar inspects the workspace in a

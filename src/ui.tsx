@@ -5,6 +5,7 @@ import { actionStatus, activityDetail, formatElapsed, initialActivity } from "./
 import { parseMarkdown, plainText, type Inline } from "./markdown.js";
 import { PET_NAMES, petSprite, type PetSelection } from "./pets.js";
 import { formatStats } from "./stats.js";
+import { loadDefaultEffort, saveDefaultEffort } from "./settings.js";
 import { instructionPaths } from "./instructions.js";
 import { sunColors, sunFrames } from "./sun.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type ReasoningEffort } from "./types.js";
@@ -72,7 +73,8 @@ const slashCommands = [
   { command: "/speed", detail: "Select Standard or Fast", insert: "/speed" },
   { command: "/fast", detail: "Turn Fast mode on or off", insert: "/fast " },
   { command: "/stats", detail: "Show usage and achievements", insert: "/stats" },
-  { command: "/effort", detail: "Choose reasoning effort", insert: "/effort" },
+  { command: "/effort", detail: "Choose effort for this session", insert: "/effort" },
+  { command: "/default-effort", detail: "Set the effort every session starts with", insert: "/default-effort " },
   { command: "/agents", detail: "Show assigned agents", insert: "/agents" },
   { command: "/agent", detail: "Control an assigned agent", insert: "/agent " },
   { command: "/delegate", detail: "Prepare an agent plan", insert: "/delegate" },
@@ -274,7 +276,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
     harness.setReasoning(effort);
     setCurrentReasoning(effort);
     setPendingEffort(null);
-    addMessage({ role: "solar", text: `Reasoning effort is now ${effort}. This applies to Solar and newly launched top-level sub-agents; new sub-delegates remain pinned to Light until Solar explicitly authorizes a change.` });
+    addMessage({ role: "solar", text: `Reasoning effort is now ${effort} for this session. This applies to Solar and newly launched top-level sub-agents; new sub-delegates remain pinned to Light until Solar explicitly authorizes a change. New sessions still start at the default (${loadDefaultEffort()}); change that with /default-effort.` });
   };
 
   const changeSpeed = (enabled: boolean): void => {
@@ -374,7 +376,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /ultra <task> · /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
+        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /ultra <task> · /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /default-effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
       } else if (planCommand) {
         const request = planCommand[2]?.trim();
         if (!request) addMessage({ role: "error", text: `Usage: /${planCommand[1]} <task to plan>` });
@@ -433,6 +435,15 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
         addMessage({ role: "solar", text: formatStats(harness.stats.snapshot()) });
       } else if (line === "/effort") {
         setPendingEffort({ cursor: REASONING_EFFORTS.indexOf(currentReasoning) });
+      } else if (line === "/default-effort") {
+        addMessage({ role: "solar", text: `Default effort is ${loadDefaultEffort()}. Every new Solar session starts with it. Usage: /default-effort <light|medium|high|xhigh|max>` });
+      } else if (line.startsWith("/default-effort ")) {
+        const effort = line.slice(16).trim().toLowerCase() as ReasoningEffort;
+        if (!REASONING_EFFORTS.includes(effort)) addMessage({ role: "error", text: "Usage: /default-effort <light|medium|high|xhigh|max>" });
+        else {
+          saveDefaultEffort(effort);
+          addMessage({ role: "solar", text: `Default effort is now ${effort}. Every new Solar session will start with it. This session stays at ${currentReasoning}; use /effort to change it now.` });
+        }
       } else if (line.startsWith("/effort ")) {
         const effort = line.slice(8).trim() as ReasoningEffort;
         if (REASONING_EFFORTS.includes(effort)) changeEffort(effort);
