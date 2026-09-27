@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data:; connect-src 'none'; object-src 'none'">
+  <title>Solar</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar">
+      <div class="sidebar-top drag">
+        <div class="brand">
+          <span class="brand-sun" aria-hidden="true"></span>
+          <span class="brand-name">Solar</span>
+        </div>
+      </div>
+
+      <button class="new-chat no-drag" id="new-chat" title="New chat (Ctrl+N)">
+        <span class="icon" data-icon="plus"></span>
+        <span>New chat</span>
+        <kbd>Ctrl N</kbd>
+      </button>
+
+      <div class="side-section">
+        <div class="side-label">Workspace</div>
+        <button class="workspace-card" id="workspace-card" title="Open a different folder (Ctrl+O)">
+          <span class="workspace-icon icon" data-icon="folder"></span>
+          <span class="workspace-text">
+            <span class="workspace-name" id="workspace-name">No folder</span>
+            <span class="workspace-path" id="workspace-path">Open a folder to begin</span>
+          </span>
+          <span class="icon chevron" data-icon="swap"></span>
+        </button>
+      </div>
+
+      <div class="side-section grow">
+        <div class="side-label">
+          <span>Changes</span>
+          <span class="side-stats" id="side-stats"></span>
+        </div>
+        <div class="side-changes" id="side-changes">
+          <div class="side-empty">Files Solar edits will show up here.</div>
+        </div>
+      </div>
+
+      <div class="sidebar-foot">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="version-label">Solar</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar drag">
+        <div class="topbar-title">
+          <span id="chat-title">New chat</span>
+          <span class="topbar-sub" id="chat-sub"></span>
+        </div>
+        <div class="topbar-actions no-drag">
+          <button class="ghost-button" id="review-toggle" title="Review changes (Ctrl+\)">
+            <span class="icon" data-icon="diff"></span>
+            <span>Review</span>
+            <span class="count-badge" id="review-count" hidden>0</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="thread" id="thread">
+        <div class="thread-inner" id="thread-inner"></div>
+      </section>
+
+      <footer class="composer-area">
+        <div class="composer" id="composer">
+          <div class="composer-frame" aria-hidden="true"></div>
+          <div class="composer-body">
+            <div class="attachments" id="attachments" hidden></div>
+            <textarea id="input" rows="1" placeholder="Ask Solar to build, fix, or explain anything" spellcheck="false"></textarea>
+            <div class="composer-bar">
+              <div class="bar-left">
+                <button class="round-button" id="attach" title="Add images">
+                  <span class="icon" data-icon="plus"></span>
+                </button>
+                <div class="segmented" id="modes" role="tablist">
+                  <button data-mode="chat" class="active">Chat</button>
+                  <button data-mode="plan">Plan</button>
+                  <button data-mode="ultra">Ultra</button>
+                </div>
+              </div>
+              <div class="bar-right">
+                <button class="pill" id="model-button"><span class="icon" data-icon="spark"></span><span id="model-label">Model</span><span class="icon caret" data-icon="caret"></span></button>
+                <button class="pill" id="effort-button"><span class="effort-meter" id="effort-meter"><i></i><i></i><i></i><i></i><i></i></span><span id="effort-label">Max</span><span class="icon caret" data-icon="caret"></span></button>
+                <button class="pill toggle" id="fast-button" title="Fast mode"><span class="icon" data-icon="bolt"></span><span>Fast</span></button>
+                <button class="send-button" id="send" title="Send (Enter)" disabled>
+                  <span class="icon" data-icon="arrow-up"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="composer-hint">Enter to send, Shift+Enter for a new line. Paste images with Ctrl+V.</div>
+      </footer>
+    </main>
+
+    <aside class="review" id="review" hidden>
+      <header class="review-head drag">
+        <div class="review-title">
+          <span>Changes</span>
+          <span class="review-totals" id="review-totals"></span>
+        </div>
+        <button class="icon-button no-drag" id="review-close" title="Close"><span class="icon" data-icon="close"></span></button>
+      </header>
+      <div class="review-files" id="review-files"></div>
+      <div class="review-diff" id="review-diff"></div>
+    </aside>
+  </div>
+
+  <div class="menu" id="menu" hidden></div>
+  <div class="toast" id="toast" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

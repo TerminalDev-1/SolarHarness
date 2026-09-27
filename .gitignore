@@ -2,3 +2,4 @@ node_modules/
 dist/
 .solarharness/
 test/agent-*/
+desktop/screenshots/
