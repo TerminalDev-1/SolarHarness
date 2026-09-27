@@ -5,10 +5,11 @@ import { solarDirectory } from "./solar-dir.js";
 import { join } from "node:path";
 import type { CodexRunOptions, CodexRunResult, DelegationPlan, ReasoningEffort } from "./types.js";
 import { SOLAR_SYSTEM_PROMPT } from "./system-prompt.js";
+import { FileChangeTracker, unwrapShellCommand, type FileChange } from "./file-changes.js";
 
 type CodexEvent = {
   type?: string;
-  item?: { type?: string; text?: string; command?: string; status?: string };
+  item?: { type?: string; text?: string; command?: string; status?: string; changes?: FileChange[] };
   usage?: { input_tokens?: number; output_tokens?: number };
   error?: { message?: string; code?: string; type?: string } | string;
 };
@@ -47,6 +48,7 @@ export class CodexCliProvider {
     const child = spawn(this.codexExecutable, args, { cwd: options.cwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
     const finalMessages: string[] = [];
     const eventErrors: string[] = [];
+    const fileChanges = new FileChangeTracker(options.cwd);
     let sessionId: string | undefined;
     let stderr = "";
     let stdoutRemainder = "";
@@ -65,6 +67,7 @@ export class CodexCliProvider {
             if (message) eventErrors.push(message);
           }
           const item = event.item;
+          for (const step of fileChangeSteps(event, fileChanges)) options.onEvent?.(`File: ${step}`);
           if (item?.type === "agent_message" && item.text) finalMessages.push(item.text);
           const activity = commandActivity(item) ?? (item?.type === "agent_message" ? undefined : item?.text) ?? (typeof event.error === "string" ? event.error : event.error?.message);
           if (activity) options.onEvent?.(activity.slice(0, 180));
@@ -118,6 +121,7 @@ export class CodexCliProvider {
     const child = spawn(this.codexExecutable, args, { cwd: options.cwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
     const messages: string[] = [];
     const eventErrors: string[] = [];
+    const fileChanges = new FileChangeTracker(options.cwd);
     let stderr = "";
     let sessionId: string | undefined;
     let remaining = "";
@@ -132,6 +136,7 @@ export class CodexCliProvider {
           const message = typeof event.error === "string" ? event.error : event.error?.message;
           if (message) eventErrors.push(message);
         }
+        for (const step of fileChangeSteps(event, fileChanges)) options.onEvent?.(`File: ${step}`);
         if (event.item?.type === "agent_message" && event.item.text) messages.push(event.item.text);
         const activity = commandActivity(event.item) ?? (event.item?.type === "agent_message" ? undefined : event.item?.text);
         if (activity) options.onEvent?.(activity.slice(0, 180));
@@ -241,9 +246,16 @@ function cleanStderr(stderr: string): string | undefined {
 
 function commandActivity(item: CodexEvent["item"]): string | undefined {
   if (!item?.command) return undefined;
-  const command = item.command.replace(/\s+/g, " ").trim();
+  const command = unwrapShellCommand(item.command);
   if (!command) return undefined;
   return item.status === "completed" ? `Command completed: ${command}` : `Running command: ${command}`;
+}
+
+function fileChangeSteps(event: CodexEvent, tracker: FileChangeTracker): string[] {
+  const item = event.item;
+  if (item?.type !== "file_change" || !item.changes?.length) return [];
+  if (event.type === "item.started") { tracker.started(item.changes); return []; }
+  return event.type === "item.completed" ? tracker.completed(item.changes, item.status === "failed") : [];
 }
 
 export function requestedSubAgentCount(request: string): number | undefined {

@@ -1115,3 +1115,27 @@ test("Solar's generated .solarharness folder ignores itself in Git", async () =>
     assert.match(await readFile(join(root, ".solarharness", ".gitignore"), "utf8"), /^\*$/m);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("file change steps name the file and the edited lines", async () => {
+  const { FileChangeTracker, changedLines, unwrapShellCommand } = await import("../dist/file-changes.js");
+  assert.equal(changedLines("a\nb\nc\nd\n", "a\nb\nC\nd\n"), "line 3");
+  assert.equal(changedLines("a\nb\n", "a\nx\ny\nb\n"), "lines 2-3");
+  assert.equal(changedLines("a\nb\nc\nd\n", "a\nd\n"), "removed lines 2-3");
+  assert.equal(changedLines("same", "same"), undefined);
+  assert.equal(unwrapShellCommand(`"C:\\windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'npm test'`), "npm test");
+  assert.equal(unwrapShellCommand("/bin/bash -lc 'ls -la'"), "ls -la");
+  const root = await mkdtemp(join(tmpdir(), "solar-steps-"));
+  try {
+    await writeFile(join(root, "notes.txt"), "one\ntwo\nthree\n");
+    const tracker = new FileChangeTracker(root);
+    tracker.started([{ path: join(root, "notes.txt"), kind: "update" }, { path: join(root, "site", "index.html"), kind: "add" }]);
+    await writeFile(join(root, "notes.txt"), "one\nTWO\nthree\n");
+    await mkdir(join(root, "site"));
+    await writeFile(join(root, "site", "index.html"), "<p>\nhi\n</p>\n");
+    assert.deepEqual(tracker.completed([{ path: join(root, "notes.txt"), kind: "update" }, { path: join(root, "site", "index.html"), kind: "add" }]),
+      ["Edited notes.txt (line 2)", "Created site/index.html (3 lines)"]);
+    assert.deepEqual(tracker.completed([{ path: "gone.txt", kind: "delete" }]), ["Deleted gone.txt"]);
+    assert.deepEqual(tracker.completed([{ path: "notes.txt", kind: "update" }]), ["Edited notes.txt"]);
+    assert.equal(activityDetail("File: Created index.html (3 lines)"), "created index.html (3 lines)");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

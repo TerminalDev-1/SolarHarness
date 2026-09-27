@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import { SolarHarness } from "./harness.js";
 import { actionStatus, activityDetail, initialActivity } from "./activity.js";
@@ -9,7 +9,7 @@ import { sunColors, sunFrames } from "./sun.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type ReasoningEffort } from "./types.js";
 
 type UiPhase = "idle" | "thinking" | "browsing" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating" | "reviewing";
-type ChatMessage = { role: "user" | "solar" | "error"; text: string };
+type ChatMessage = { role: "user" | "solar" | "error" | "steps"; text: string };
 type PendingPlan = { plan: DelegationPlan; request: string; context: string; selected: boolean[]; cursor: number };
 type PendingEffort = { cursor: number };
 type PendingSpeed = { cursor: number };
@@ -109,6 +109,8 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
   const [themeName, setThemeName] = useState<ThemeName>("dark");
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
+  const [steps, setSteps] = useState<string[]>([]);
+  const stepsRef = useRef<string[]>([]);
   const [currentActivity, setCurrentActivity] = useState("working on your request");
   const [spinner, setSpinner] = useState(0);
   const [pet, setPet] = useState<PetSelection>("cat");
@@ -164,8 +166,23 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
   };
 
   const addMessage = (message: ChatMessage): void => setConversation(current => [...current, message]);
+  const resetSteps = (): void => { stepsRef.current = []; setSteps([]); };
+  // Before a reply, records the turn's file changes (and a command count) in the transcript.
+  const addReply = (text: string): void => {
+    const files = stepsRef.current.filter(step => !step.startsWith("Ran "));
+    const commands = stepsRef.current.length - files.length;
+    const summary = [...files, ...(commands ? [`Ran ${commands} command${commands === 1 ? "" : "s"}`] : [])];
+    if (summary.length) addMessage({ role: "steps", text: summary.join("\n") });
+    resetSteps();
+    addMessage({ role: "solar", text });
+  };
   const reportActivity = (message: string): void => {
     const clean = message.replace(/\s+/g, " ").trim();
+    const step = clean.startsWith("File: ") ? clean.slice(6) : clean.startsWith("Command completed: ") ? `Ran ${clean.slice(19)}` : undefined;
+    if (step) {
+      stepsRef.current = [...stepsRef.current.slice(-49), step];
+      setSteps(stepsRef.current);
+    }
     if (clean) {
       setActivityLog(current => [...current.slice(-5), clean]);
       const detail = activityDetail(clean);
@@ -183,7 +200,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
     addMessage({ role: "solar", text: `Okay — I’m launching ${plan.tasks.length} named sub-agent${plan.tasks.length === 1 ? "" : "s"} at ${currentReasoning} reasoning: ${plan.tasks.map(task => `${task.name} (${task.title})`).join(", ")}. They can create Light-pinned sub-delegates when that makes the work genuinely more parallel.` });
     try {
       const result = await harness.executePlan(plan, request, context, updateSubAgents, reportActivity);
-      addMessage({ role: "solar", text: result });
+      addReply(result);
       for (const achievement of harness.takeAchievements()) addMessage({ role: "solar", text: `◆ Achievement unlocked: ${achievement}` });
       setBrief([]);
     } catch (error) {
@@ -290,7 +307,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
       : await harness.converse(line, reportActivity);
     setAutoApprove(harness.getAutoPermissions().enabled);
     setAgents(harness.manager.list());
-    addMessage({ role: "solar", text: response.reply });
+    addReply(response.reply);
     for (const achievement of harness.takeAchievements()) addMessage({ role: "solar", text: `◆ Achievement unlocked: ${achievement}` });
     if (response.readyToDelegate) {
       await preparePlan(nextBrief.join("\n"), nextBrief.join("\n"));
@@ -306,6 +323,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
       return;
     }
     setActivityLog(["Executing the approved plan"]);
+    resetSteps();
     setCurrentActivity("executing the approved plan");
     setBusy(true);
     setPhase("thinking");
@@ -326,6 +344,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
 
     addMessage({ role: "user", text: line });
     setActivityLog(["Sending your request to Solar"]);
+    resetSteps();
     setCurrentActivity(initialActivity(line));
     setBusy(true);
     const planCommand = line.match(/^\/(plan|ultraplan)(?:\s+([\s\S]*))?$/);
@@ -343,11 +362,11 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
         else {
           const ultra = planCommand[1] === "ultraplan";
           const plan = await harness.planTask(request, ultra, reportActivity);
-          addMessage({ role: "solar", text: plan });
+          addReply(plan);
           setPendingTaskPlan({ request, plan, ultra, cursor: 0 });
         }
       } else if (reviewCommand) {
-        addMessage({ role: "solar", text: await harness.ultraReview(reviewCommand[1]?.trim() ?? "", reportActivity) });
+        addReply(await harness.ultraReview(reviewCommand[1]?.trim() ?? "", reportActivity));
       } else if (line === "/memory") {
         const files = harness.getInstructionFiles();
         addMessage({ role: "solar", text: files.length
@@ -544,6 +563,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
         <Box marginTop={1} flexDirection="column" paddingX={1}>
           <SunActivity tick={spinner} activity={phaseInfo} elapsed={elapsed} />
           {latestStepLabel && latestStepLabel.toLowerCase() !== phaseInfo.toLowerCase() && <Text color={theme.subtle}>  {latestStepLabel}</Text>}
+          <StepList steps={steps.slice(-6)} width={contentWidth - 4} />
         </Box>
       )}
 
@@ -746,7 +766,29 @@ function Header({ compact, workspace, width }: { compact: boolean; workspace: st
   );
 }
 
+function stepMarker(step: string): { marker: string; color: string } {
+  if (step.startsWith("Created ")) return { marker: "+", color: theme.success };
+  if (step.startsWith("Edited ")) return { marker: "~", color: theme.warning };
+  if (step.startsWith("Deleted ")) return { marker: "-", color: theme.error };
+  if (step.startsWith("Failed ")) return { marker: "!", color: theme.error };
+  return { marker: "$", color: theme.subtle };
+}
+
+function StepList({ steps, width }: { steps: string[]; width: number }): React.JSX.Element | null {
+  if (!steps.length) return null;
+  return <Box flexDirection="column" paddingLeft={2}>
+    {steps.map((step, index) => {
+      const { marker, color } = stepMarker(step);
+      const text = step.length > width - 2 ? `${step.slice(0, Math.max(1, width - 5))}...` : step;
+      return <Text key={`${index}-${step}`} color={theme.secondary}><Text color={color}>{marker}</Text> {text}</Text>;
+    })}
+  </Box>;
+}
+
 function Message({ message }: { message: ChatMessage }): React.JSX.Element {
+  if (message.role === "steps") {
+    return <Box marginBottom={1} paddingLeft={9}><StepList steps={message.text.split("\n")} width={76} /></Box>;
+  }
   const color = message.role === "user" ? theme.accent : message.role === "error" ? theme.error : theme.accentStrong;
   const label = message.role === "user" ? "You" : message.role === "error" ? "Error" : "Solar";
   return (
@@ -806,17 +848,17 @@ function SubAgents({ agents }: { agents: AgentRecord[] }): React.JSX.Element {
 
 function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner: number }): React.JSX.Element | null {
   const commands = agents.flatMap(agent => agent.recentActivity
-    .filter(activity => activity.startsWith("Running command:") || activity.startsWith("Command completed:"))
+    .filter(activity => activity.startsWith("Running command:") || activity.startsWith("Command completed:") || activity.startsWith("File: "))
     .map(activity => ({ name: agent.name, activity }))
   ).slice(-5);
   if (!commands.length) return null;
   const running = agents.some(agent => agent.status === "running" && agent.latestActivity.startsWith("Running command:"));
   return (
     <Box flexDirection="column" marginTop={1} paddingX={1}>
-      <Text color={running ? sunColors[spinner % sunColors.length] : theme.secondary}>{running ? sunFrames[spinner % sunFrames.length][2] : "     *     "} Recent commands</Text>
+      <Text color={running ? sunColors[spinner % sunColors.length] : theme.secondary}>{running ? sunFrames[spinner % sunFrames.length][2] : "     *     "} Recent activity</Text>
       {commands.map((command, index) => {
-        const completed = command.activity.startsWith("Command completed:");
-        const text = command.activity.replace(/^(Running command|Command completed):\s*/, "");
+        const completed = command.activity.startsWith("Command completed:") || command.activity.startsWith("File: ");
+        const text = command.activity.replace(/^(Running command|Command completed|File):\s*/, "");
         return <Text key={`${command.name}-${text}-${index}`} color={theme.secondary}><Text color={completed ? theme.success : theme.pulse}>{completed ? "✓" : "·"}</Text> <Text color={theme.subtle}>{command.name}</Text>  {text}</Text>;
       })}
     </Box>

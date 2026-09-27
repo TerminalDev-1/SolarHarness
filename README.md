@@ -71,6 +71,9 @@ use, and creation.
   and milestones with `/stats`. Stats are saved under `~/.solarharness/stats.json`.
 - Adjust a particular sub-agent's next-exchange effort through a command or a
   natural-language request to Solar.
+- Show what Solar is doing as it works: files created (with line counts), files
+  edited (with the changed lines), files deleted, and commands run. Each reply is
+  preceded by a short list of the files it changed.
 - Display the nested agent tree, reasoning pins, live state, elapsed time, recent
   commands, and an expanding golden sun while work is running.
 - Switch between dark and light interface palettes while keeping the rainbow-blue
