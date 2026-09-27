@@ -246,7 +246,7 @@ harness runs those named children at Light reasoning, sends their reports back t
 the parent session for integration, and keeps the complete tree visible to
 Solar. No third delegation level is allowed.
 
-The user chooses direct Solar work or delegation. See [`AGENTS.md`](./AGENTS.md)
+The user chooses direct Solar work or delegation. See [`CLAUDE.md`](./CLAUDE.md)
 for the role and runtime contract.
 
 ## Claude Code-style activity indicator
