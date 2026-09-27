@@ -1,4 +1,4 @@
-// Launches the desktop app with the scripted demo Solar; --screenshots saves views to desktop/screenshots and exits.
+// Launches the app with the scripted demo Solar; --screenshots saves views to screenshots/ and exits.
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";

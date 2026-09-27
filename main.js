@@ -3,12 +3,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SolarHarness } from "../dist/harness.js";
-import { SOLAR_MODELS } from "../dist/models.js";
-import { loadDefaultEffort } from "../dist/settings.js";
-import { solarDirectory } from "../dist/solar-dir.js";
-import { REASONING_EFFORTS } from "../dist/types.js";
-import { SOLAR_VERSION_LABEL } from "../dist/version.js";
+import { SolarHarness } from "solar-harness/dist/harness.js";
+import { SOLAR_MODELS } from "solar-harness/dist/models.js";
+import { loadDefaultEffort } from "solar-harness/dist/settings.js";
+import { solarDirectory } from "solar-harness/dist/solar-dir.js";
+import { REASONING_EFFORTS } from "solar-harness/dist/types.js";
+import { SOLAR_VERSION_LABEL } from "solar-harness/dist/version.js";
 import { ChangeTracker } from "./changes.js";
 
 const here = dirname(fileURLToPath(import.meta.url));

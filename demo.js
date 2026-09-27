@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SolarHarness } from "../dist/harness.js";
+import { SolarHarness } from "solar-harness/dist/harness.js";
 
 /**
  * `npm run demo`: a scripted Solar that makes real file edits in a scratch folder, so the

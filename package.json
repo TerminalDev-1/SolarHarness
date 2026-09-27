@@ -1,36 +1,23 @@
 {
-  "name": "solar-harness",
-  "version": "1.1.0",
+  "name": "solar-desktop",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "bin": {
-    "solar": "./dist/index.js",
-    "solar-harness": "./dist/index.js"
-  },
+  "main": "main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-info.mjs",
-    "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
-    "check": "tsc --noEmit",
-    "test": "npm run build && node --test tests/*.test.mjs",
-    "test:browser-live": "npm run build && node tests/browser-live.mjs",
-    "docs:screenshots": "npm run build && node scripts/readme-screenshots.mjs"
-  },
-  "engines": {
-    "node": ">=20"
+    "start": "electron .",
+    "demo": "node scripts/run-demo.mjs",
+    "screenshots": "node scripts/run-demo.mjs --screenshots"
   },
   "dependencies": {
-    "commander": "^14.0.0",
-    "ink": "^6.8.0",
-    "playwright": "^1.63.0",
-    "react": "^19.3.0",
-    "sharp": "^0.35.5"
+    "diff": "^9.0.0",
+    "solar-harness": "github:TerminalDev-1/SolarHarness#main"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@types/react": "^19.2.2",
-    "@xterm/xterm": "^5.5.0",
-    "tsx": "^4.20.0",
-    "typescript": "^5.8.0"
+    "electron": "^44.4.5"
+  },
+  "description": "Solar desktop app (Electron). Runs the Solar Harness engine from the CLI on main.",
+  "allowScripts": {
+    "github:TerminalDev-1/SolarHarness": true
   }
 }
