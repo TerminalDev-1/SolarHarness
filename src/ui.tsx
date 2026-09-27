@@ -77,6 +77,7 @@ const slashCommands = [
   { command: "/agent", detail: "Control an assigned agent", insert: "/agent " },
   { command: "/delegate", detail: "Prepare an agent plan", insert: "/delegate" },
   { command: "/plan", detail: "Plan a task read-only, then approve", insert: "/plan " },
+  { command: "/ultra", detail: "Run a task at Max effort with Fast on", insert: "/ultra " },
   { command: "/ultraplan", detail: "Max-effort plan with a self-critique", insert: "/ultraplan " },
   { command: "/ultrareview", detail: "Parallel review with verified findings", insert: "/ultrareview" },
   { command: "/memory", detail: "Show loaded SOLAR.md files", insert: "/memory" },
@@ -116,7 +117,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
   const [workspace, setWorkspace] = useState(harness.getWorkspace());
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [steps, setSteps] = useState<string[]>([]);
-  const [ultra, setUltra] = useState<"ultraplan" | "ultrareview" | null>(null);
+  const [ultra, setUltra] = useState<"ultra" | "ultraplan" | "ultrareview" | null>(null);
   // Bumped by /new so the printed transcript starts over with the new header.
   const [sessionKey, setSessionKey] = useState(0);
   const stepsRef = useRef<string[]>([]);
@@ -309,11 +310,13 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
     }
   };
 
-  const runConversation = async (line: string, approvedPlan?: string): Promise<void> => {
+  const runConversation = async (line: string, approvedPlan?: string, ultraTask = false): Promise<void> => {
     const nextBrief = [line];
     setBrief(nextBrief);
     const response = approvedPlan
       ? await harness.executeTaskPlan(line, approvedPlan, reportActivity)
+      : ultraTask
+      ? await harness.converseUltra(line, reportActivity)
       : await harness.converse(line, reportActivity);
     setAutoApprove(harness.getAutoPermissions().enabled);
     setAgents(harness.manager.list());
@@ -359,14 +362,15 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
     setBusy(true);
     const planCommand = line.match(/^\/(plan|ultraplan)(?:\s+([\s\S]*))?$/);
     const reviewCommand = line.match(/^\/ultrareview(?:\s+([\s\S]*))?$/);
+    const ultraCommand = line.match(/^\/ultra(?:\s+([\s\S]*))?$/);
     if (planCommand) setCurrentActivity(planCommand[1] === "ultraplan" ? "drafting an ultraplan" : "drafting a plan");
     if (reviewCommand) setCurrentActivity("starting the ultrareview");
-    setUltra(planCommand?.[1] === "ultraplan" && planCommand[2]?.trim() ? "ultraplan" : reviewCommand ? "ultrareview" : null);
+    setUltra(planCommand?.[1] === "ultraplan" && planCommand[2]?.trim() ? "ultraplan" : reviewCommand ? "ultrareview" : ultraCommand?.[1]?.trim() ? "ultra" : null);
     setPhase(line === "/delegate" || planCommand ? "planning" : reviewCommand ? "reviewing" : line.startsWith("/agent ") ? "updating" : "thinking");
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
+        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /ultra <task> · /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
       } else if (planCommand) {
         const request = planCommand[2]?.trim();
         if (!request) addMessage({ role: "error", text: `Usage: /${planCommand[1]} <task to plan>` });
@@ -376,6 +380,10 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
           addReply(plan);
           setPendingTaskPlan({ request, plan, ultra, cursor: 0 });
         }
+      } else if (ultraCommand) {
+        const task = ultraCommand[1]?.trim();
+        if (!task) addMessage({ role: "error", text: "Usage: /ultra <task>" });
+        else await runConversation(task, undefined, true);
       } else if (reviewCommand) {
         addReply(await harness.ultraReview(reviewCommand[1]?.trim() ?? "", reportActivity));
       } else if (line === "/memory") {
@@ -591,7 +599,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
 
       <RainbowInput
         width={contentWidth}
-        value={ultra && busy && !input ? `Solar is running ${ultra} at max effort…` : pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
+        value={ultra && busy && !input ? `Solar is running ${ultra} at max effort${ultra === "ultra" ? " with Fast on" : ""}…` : pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
         entered={Boolean(input) && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
         cursor={!busy && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
         busy={busy}
@@ -599,7 +607,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
         tick={spinner}
       />
 
-      <Footer compact={compact} model={model} reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast} themeName={themeName} />
+      <Footer compact={compact} model={model} reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast || (ultra === "ultra" && busy)} themeName={themeName} />
     </Box>
     </Box>
     </Box>

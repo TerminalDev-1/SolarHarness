@@ -454,6 +454,19 @@ export class SolarHarness {
     return plan;
   }
 
+  /** /ultra: runs one task at max effort with Fast on, then restores the previous settings. */
+  async converseUltra(message: string, onActivity?: (message: string) => void): Promise<{ reply: string; readyToDelegate: boolean }> {
+    const reasoning = this.options.reasoning;
+    const fast = this.fast;
+    this.setReasoning("max");
+    this.setFast(true);
+    try { return await this.converse(message, onActivity); }
+    finally {
+      this.setReasoning(reasoning);
+      this.setFast(fast);
+    }
+  }
+
   /** Runs a reviewed /plan or /ultraplan through the normal main-agent loop. */
   async executeTaskPlan(request: string, plan: string, onActivity?: (message: string) => void): Promise<{ reply: string; readyToDelegate: boolean }> {
     return this.converse(request, onActivity, plan);

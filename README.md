@@ -51,6 +51,8 @@ use, and creation.
 - Start a genuinely clean session with `/new`, clearing old sub-agent records.
   Files are deleted only when the workspace is a folder named `test`.
 - Change Solar's default reasoning effort at runtime from Light through Max.
+- Run one task at full power with `/ultra <task>`: Max effort and Fast mode for
+  that task only, with the rainbow input frame, then your usual settings return.
 - Plan before acting with `/plan <task>`: Solar inspects the workspace in a
   read-only session, shows a plan, and changes nothing until you choose Execute.
   `/ultraplan <task>` does the same at Max effort and adds a self-critique pass

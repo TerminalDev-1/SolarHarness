@@ -1192,10 +1192,28 @@ test("a full terminal is not cleared on idle redraws, so scrolling stays where t
       await sleep(100);
     }
     await sleep(300);
-    assert.match(writes.join(""), /Controls: \/plan/);
+    assert.match(writes.join(""), /Controls: \/ultra <task>/);
     writes = [];
     await sleep(1_000);
     assert.ok(writes.length > 0, "the pet should keep animating while idle");
     assert.doesNotMatch(writes.join(""), /\x1b\[2J|\x1b\[3J|\x1bc/, "idle redraws must not wipe the terminal or its scrollback");
   } finally { app.unmount(); }
+});
+
+test("/ultra runs one task at max effort with Fast on, then restores the settings", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "medium", cwd: process.cwd() });
+  const seen = [];
+  harness.provider.run = async (_prompt, options) => {
+    seen.push([options.reasoning, options.fast]);
+    return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "Done." }), sessionId: "ultra-task" };
+  };
+  assert.equal((await harness.converseUltra("tidy the README")).reply, "Done.");
+  assert.deepEqual(seen, [["max", true]]);
+  assert.equal(harness.getFast(), false);
+  harness.provider.resume = async (_id, _prompt, options) => {
+    seen.push([options.reasoning, options.fast]);
+    return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "Normal." }), sessionId: "ultra-task" };
+  };
+  await harness.converse("and now normally");
+  assert.deepEqual(seen.at(-1), ["medium", false]);
 });
