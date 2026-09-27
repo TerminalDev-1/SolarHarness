@@ -1287,3 +1287,45 @@ test("the default effort starts at max, persists, and keeps other settings", asy
     assert.throws(() => saveDefaultEffort("extreme", home));
   } finally { await rm(home, { recursive: true, force: true }); }
 });
+
+test("images named or dragged into a message are found and attached to the turn", async () => {
+  const { findImagePaths, imageArgs } = await import("../dist/images.js");
+  const root = await mkdtemp(join(tmpdir(), "solar-vision-"));
+  try {
+    await mkdir(join(root, "my shots"));
+    await writeFile(join(root, "logo.png"), "png");
+    await writeFile(join(root, "my shots", "bug report.JPG"), "jpg");
+    const message = `What is wrong in "${join(root, "my shots", "bug report.JPG")}" and @logo.png? Ignore missing.png and notes.txt.`;
+    assert.deepEqual(findImagePaths(message, root), [join(root, "my shots", "bug report.JPG"), join(root, "logo.png")]);
+    assert.deepEqual(imageArgs(["a.png"]), ["--image=a.png"]);
+    const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: root });
+    const calls = [];
+    harness.provider.run = async (prompt, _options, args) => {
+      calls.push({ prompt, args });
+      return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "A red square." }), sessionId: "vision" };
+    };
+    const events = [];
+    await harness.converse("describe logo.png", event => events.push(event));
+    assert.ok(calls[0].args.includes(`--image=${join(root, "logo.png")}`));
+    assert.match(calls[0].prompt, /attached 1 image/);
+    assert.ok(events.includes("Image: logo.png"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a browser screenshot is sent back to the model as an image", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const shot = join(process.cwd(), ".solarharness", "screenshots", "shot.png");
+  harness.tools.call = async name => {
+    assert.equal(name, "browser");
+    return { url: "http://localhost:3000/", title: "Game", snapshot: "", screenshotPath: shot };
+  };
+  harness.provider.run = async () => ({ text: JSON.stringify({ kind: "tool", tool: "browser", input: JSON.stringify({ action: "screenshot" }), reply: "" }), sessionId: "shot" });
+  const resumes = [];
+  harness.provider.resume = async (_id, prompt, _options, args) => {
+    resumes.push({ prompt, args });
+    return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "The game shows a start button." }), sessionId: "shot" };
+  };
+  await harness.converse("look at what is on screen now");
+  assert.ok(resumes[0].args.includes(`--image=${shot}`));
+  assert.match(resumes[0].prompt, /screenshot is attached/);
+});

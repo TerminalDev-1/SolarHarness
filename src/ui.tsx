@@ -192,6 +192,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
     const step = clean.startsWith("File: ") ? clean.slice(6)
       : clean.startsWith("Command completed: ") ? `Ran ${clean.slice(19)}`
       : clean.startsWith("Workspace: ") ? `Ran ${clean.slice(11)}`
+      : clean.startsWith("Image: ") ? `Viewed ${clean.slice(7)}`
       : clean.startsWith("Note: ") ? clean : undefined;
     if (step) {
       stepsRef.current = [...stepsRef.current.slice(-49), step];
@@ -831,6 +832,7 @@ function normalizeNote(text: string): string {
 
 function stepMarker(step: string): { marker: string; color: string } {
   if (step.startsWith("Note: ")) return { marker: "›", color: theme.pulse };
+  if (step.startsWith("Viewed ")) return { marker: "@", color: theme.accent };
   if (step.startsWith("Created ")) return { marker: "+", color: theme.success };
   if (step.startsWith("Edited ")) return { marker: "~", color: theme.warning };
   if (step.startsWith("Deleted ")) return { marker: "-", color: theme.error };

@@ -84,6 +84,11 @@ use, and creation.
 - The input frame is an animated full-spectrum rainbow. While `/ultra`,
   `/ultraplan`, or `/ultrareview` runs, the footer shows Max effort and the
   rainbow spins twice as fast on a deep purple background.
+- See images. Mention an image file in your message (`describe mockup.png`,
+  `@screens/home.jpg`, or drag a file into Windows Terminal to paste its path) and
+  Solar attaches it for the model to look at. PNG, JPEG, GIF, WebP, and BMP files
+  are supported, up to eight per message. Browser screenshots Solar takes are
+  also sent back to the model as images, so it can check what a page really shows.
 - Narrate each turn like a modern coding agent: Solar says what it will do next
   ("I'll read notes.txt, then update line 2"), and the transcript keeps its notes,
   commands, and file changes in order before the reply.
