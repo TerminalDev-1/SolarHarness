@@ -42,11 +42,7 @@ export class CodexCliProvider {
   }
 
   async run(prompt: string, options: CodexRunOptions, extraArgs: string[] = []): Promise<CodexRunResult> {
-    const args = buildCodexRunArgs(prompt, options, extraArgs);
-    // Never use a shell here: Windows cmd.exe splits a multi-word prompt into CLI arguments.
-    // Codex also reads piped stdin in addition to the prompt argument. Close the default
-    // child stdin pipe immediately or it will wait forever for more input.
-    const child = spawn(this.codexExecutable, args, { cwd: options.cwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawnCodex(this.codexExecutable, buildCodexRunArgs(prompt, options, extraArgs), options.cwd);
     const finalMessages: string[] = [];
     const eventErrors: string[] = [];
     const fileChanges = new FileChangeTracker(options.cwd);
@@ -123,7 +119,7 @@ export class CodexCliProvider {
   }
 
   private async runWithArgs(args: string[], options: CodexRunOptions): Promise<CodexRunResult> {
-    const child = spawn(this.codexExecutable, args, { cwd: options.cwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawnCodex(this.codexExecutable, args, options.cwd);
     const messages: string[] = [];
     const eventErrors: string[] = [];
     const fileChanges = new FileChangeTracker(options.cwd);
@@ -165,6 +161,18 @@ export class CodexCliProvider {
       });
     });
   }
+}
+
+/**
+ * Starts Codex with the prompt (the last argument) sent on stdin as `-`. A prompt carrying tool
+ * results or file contents can pass Windows' 32K command-line limit (spawn ENAMETOOLONG).
+ * Never use a shell here: Windows cmd.exe splits a multi-word prompt into CLI arguments.
+ */
+function spawnCodex(executable: string, args: string[], cwd: string) {
+  const child = spawn(executable, [...args.slice(0, -1), "-"], { cwd, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+  child.stdin.on("error", () => { /* Codex exited early; its close event reports why. */ });
+  child.stdin.end(args.at(-1));
+  return child;
 }
 
 export function buildCodexRunArgs(prompt: string, options: CodexRunOptions, extraArgs: string[] = []): string[] {
