@@ -8,4 +8,4 @@ Rules:
 - Update this file for agent/tool contract changes, README for user-facing ones. After verifying a requested change, commit only its files and push.
 - Never weaken tests. Credit Solar only for recorded successful tool calls.
 - Delegate only on explicit request or `/delegate`; max 8 agents, two levels, sub-delegates pinned Light. Auto-approve never bypasses `/new` confirmation. Wording heuristics never gate tool availability.
-- UI: ASCII sun, one solid-color label span, no emoji-capable glyphs or per-char ANSI, short activity labels, rainbow input frame in all themes; no cards, status panels, `Ready` badge, or silver palette.
+- UI: header and finished messages go in Ink `<Static>`; keep the live area shorter than the window, or Ink clears the terminal each frame and breaks scrolling. ASCII sun, one solid-color label span, no emoji-capable glyphs or per-char ANSI, short activity labels, rainbow input frame in all themes; no cards, status panels, `Ready` badge, or silver palette.

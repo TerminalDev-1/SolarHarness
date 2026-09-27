@@ -1169,3 +1169,33 @@ test("Solar replies render Markdown headings, lists, bold, and code", async () =
   assert.match(output, /npm run dev/);
   assert.doesNotMatch(output, /\*\*|```|##/);
 });
+
+test("a full terminal is not cleared on idle redraws, so scrolling stays where the user put it", async () => {
+  const { PassThrough } = await import("node:stream");
+  const { render } = await import("ink");
+  const { SolarApp } = await import("../dist/ui.js");
+  const stdout = Object.assign(new PassThrough(), { isTTY: true, rows: 20, columns: 90 });
+  let writes = [];
+  stdout.on("data", data => writes.push(data.toString()));
+  const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = harness.provider.resume = async () => { throw new Error("this test must not reach the model"); };
+  const app = render(React.createElement(SolarApp, { harness, model: "gpt-6-luna", reasoning: "light", initialSplash: false }), { stdout, stdin, exitOnCtrlC: false, patchConsole: false });
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  try {
+    await sleep(200);
+    for (let turn = 0; turn < 8; turn++) {
+      for (const character of "/help") { stdin.write(character); await sleep(10); }
+      stdin.write("\r"); // picks /help from the command menu
+      await sleep(30);
+      stdin.write("\r"); // sends it
+      await sleep(100);
+    }
+    await sleep(300);
+    assert.match(writes.join(""), /Controls: \/plan/);
+    writes = [];
+    await sleep(1_000);
+    assert.ok(writes.length > 0, "the pet should keep animating while idle");
+    assert.doesNotMatch(writes.join(""), /\x1b\[2J|\x1b\[3J|\x1bc/, "idle redraws must not wipe the terminal or its scrollback");
+  } finally { app.unmount(); }
+});

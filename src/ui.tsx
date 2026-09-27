@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Box, Text, render, useApp, useInput, useStdout } from "ink";
+import { Box, Static, Text, render, useApp, useInput, useStdout } from "ink";
 import { SolarHarness } from "./harness.js";
 import { actionStatus, activityDetail, formatElapsed, initialActivity } from "./activity.js";
 import { parseMarkdown, type Inline } from "./markdown.js";
@@ -17,6 +17,7 @@ type PendingSpeed = { cursor: number };
 type PendingNew = { cursor: number };
 type PendingTaskPlan = { request: string; plan: string; ultra: boolean; cursor: number };
 type ThemeName = "dark" | "light";
+type TranscriptItem = { kind: "header" } | { kind: "message"; message: ChatMessage };
 type Theme = {
   accent: string; accentStrong: string; primary: string; secondary: string;
   subtle: string; success: string; warning: string; error: string;
@@ -91,7 +92,7 @@ interface SolarAppProps {
   initialSplash: boolean;
 }
 
-function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): React.JSX.Element {
+export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): React.JSX.Element {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [input, setInput] = useState("");
@@ -116,6 +117,8 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
   const [activityLog, setActivityLog] = useState<string[]>([]);
   const [steps, setSteps] = useState<string[]>([]);
   const [ultra, setUltra] = useState<"ultraplan" | "ultrareview" | null>(null);
+  // Bumped by /new so the printed transcript starts over with the new header.
+  const [sessionKey, setSessionKey] = useState(0);
   const stepsRef = useRef<string[]>([]);
   const [currentActivity, setCurrentActivity] = useState("working on your request");
   const [spinner, setSpinner] = useState(0);
@@ -297,6 +300,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
       setPendingPlan(null);
       setPendingTaskPlan(null);
       setPendingEffort(null);
+      setSessionKey(value => value + 1);
       setConversation([{ role: "solar", text: cleared
         ? `Started a completely fresh Solar session. The test workspace was cleared and is now empty: ${nextWorkspace}`
         : `Started a completely fresh Solar session. Files in ${nextWorkspace} were kept.` }]);
@@ -541,18 +545,26 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
   const contentWidth = Math.min(Math.max(terminalWidth - 4, 20), 88);
   const latestStep = activityLog.at(-1);
   const latestStepLabel = latestStep ? activityDetail(latestStep) ?? latestStep : undefined;
+  // The header and finished messages print once into the terminal's scrollback via <Static>.
+  // Only the small live area below is redrawn, so Ink never falls back to clearing the whole
+  // terminal (which happens once its output is taller than the window) and scrolling stays put.
+  const transcript: TranscriptItem[] = [{ kind: "header" }, ...conversation.map(message => ({ kind: "message" as const, message }))];
   return (
-    <Box key={themeName} width={terminalWidth - 1} justifyContent="center">
+    <Box key={themeName} flexDirection="column">
+    <Static key={sessionKey} items={transcript}>
+      {(item, index) => (
+        <Box key={index} width={terminalWidth - 1} justifyContent="center">
+          <Box width={contentWidth} flexDirection="column">
+            {item.kind === "header" ? <Header compact={compact} workspace={workspace} width={contentWidth} /> : <Message message={item.message} />}
+          </Box>
+        </Box>
+      )}
+    </Static>
+    <Box width={terminalWidth - 1} justifyContent="center">
     <Box width={contentWidth} flexDirection="column">
-      <Header compact={compact} workspace={workspace} width={contentWidth} />
-
       {pet !== "off" && <PetCompanion pet={pet} tick={petTick} width={contentWidth} />}
 
       {conversation.length === 0 && <Welcome />}
-
-      <Box flexDirection="column">
-        {conversation.map((message, index) => <Message key={index} message={message} />)}
-      </Box>
 
       {agents.length > 0 && <SubAgents agents={agents} />}
 
@@ -588,6 +600,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
       />
 
       <Footer compact={compact} model={model} reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast} themeName={themeName} />
+    </Box>
     </Box>
     </Box>
   );
