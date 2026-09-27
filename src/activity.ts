@@ -54,6 +54,8 @@ export function activityDetail(event: string): string | undefined {
   }
   if (event.startsWith("Command completed:")) return "checking command output";
   if (event.startsWith("Designing a named sub-agent plan")) return "drafting the sub-agent plan";
+  const stage = event.match(/^(?:Plan|Review): (.+)$/);
+  if (stage) return stage[1];
   if (event.startsWith("Synthesizing sub-agent reports")) return "reviewing sub-agent reports";
   return undefined;
 }

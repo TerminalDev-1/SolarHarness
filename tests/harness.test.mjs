@@ -19,8 +19,10 @@ import { SolarWorkspaceTool, runWorkspaceCommand } from "../dist/workspace-tool.
 import { StatsStore, formatStats } from "../dist/stats.js";
 import { sunColors, sunFrames } from "../dist/sun.js";
 import { SunActivity } from "../dist/ui.js";
+import { formatInstructions, instructionPaths, loadInstructions } from "../dist/instructions.js";
 
 process.env.SOLAR_STATS_PATH = join(tmpdir(), `solar-harness-test-stats-${process.pid}.json`);
+process.env.SOLAR_HOME = join(tmpdir(), `solar-harness-test-home-${process.pid}`);
 test.after(async () => { await rm(process.env.SOLAR_STATS_PATH, { force: true }); });
 
 test("stats persist local usage and unlock milestones", async () => {
@@ -963,4 +965,116 @@ test("a sub-agent cannot raise its own sub-delegate above Light", async () => {
   await manager.orchestrate({ action: "inject_context", agentId: child.id, context: "Run one more validation." }, parent.id);
   assert.equal(child.status, "completed");
   assert.throws(() => manager.setReasoning(child.id, "light", "unrelated-sub-agent"), /only their own direct sub-delegates/i);
+});
+
+test("SOLAR.md loads user, project, and workspace files in order", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-md-"));
+  const home = join(root, "home");
+  const workspace = join(root, "project", "test");
+  try {
+    await mkdir(home, { recursive: true });
+    await mkdir(workspace, { recursive: true });
+    await writeFile(join(home, "SOLAR.md"), "user rule");
+    await writeFile(join(root, "project", "SOLAR.md"), "project rule");
+    await writeFile(join(workspace, "SOLAR.md"), "workspace rule");
+    assert.deepEqual(instructionPaths(workspace, home).map(item => item.scope), ["user", "project", "workspace"]);
+    const files = loadInstructions(workspace, home);
+    assert.deepEqual(files.map(file => file.content), ["user rule", "project rule", "workspace rule"]);
+    const block = formatInstructions(files);
+    assert.ok(block.indexOf("user rule") < block.indexOf("project rule") && block.indexOf("project rule") < block.indexOf("workspace rule"));
+    assert.equal(formatInstructions([]), "");
+    await rm(join(workspace, "SOLAR.md"));
+    await writeFile(join(home, "SOLAR.md"), "   ");
+    assert.deepEqual(loadInstructions(workspace, home).map(file => file.scope), ["project"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("Solar sends SOLAR.md at session start and again only when it changes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-md-session-"));
+  const workspace = join(root, "test");
+  try {
+    await mkdir(workspace, { recursive: true });
+    await writeFile(join(root, "SOLAR.md"), "Always answer in haiku.");
+    const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: workspace });
+    const prompts = [];
+    const answer = { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "Done." }), sessionId: "md-session" };
+    harness.provider.run = async prompt => { prompts.push(prompt); return answer; };
+    harness.provider.resume = async (_id, prompt) => { prompts.push(prompt); return answer; };
+    await harness.converse("Say hello");
+    assert.match(prompts[0], /Always answer in haiku\./);
+    await harness.converse("Say hello again");
+    assert.doesNotMatch(prompts[1], /haiku/);
+    await writeFile(join(root, "SOLAR.md"), "Always answer in French.");
+    await harness.converse("Say hello once more");
+    assert.match(prompts[2], /SOLAR\.md instructions changed[\s\S]*Always answer in French\./);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("/plan drafts read-only in a separate session and leaves the main session alone", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "medium", cwd: process.cwd() });
+  const runs = [];
+  harness.provider.run = async (prompt, options) => { runs.push({ prompt, options }); return { text: "1. Edit app.ts\n2. Run tests", sessionId: "plan-session" }; };
+  harness.provider.resume = async () => { throw new Error("plain /plan must not critique or resume"); };
+  const plan = await harness.planTask("add a login form", false);
+  assert.equal(plan, "1. Edit app.ts\n2. Run tests");
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].options.role, "planner");
+  assert.equal(runs[0].options.reasoning, "medium");
+  assert.match(runs[0].prompt, /read-only sandbox/);
+  assert.match(runs[0].prompt, /Request to plan: add a login form/);
+  assert.ok(buildCodexRunArgs("x", runs[0].options).includes("read-only"));
+  assert.ok(buildCodexResumeArgs("s", "x", runs[0].options).includes('sandbox_mode="read-only"'));
+  assert.ok(buildCodexResumeArgs("s", "x", { ...runs[0].options, role: "main-agent" }).includes('sandbox_mode="workspace-write"'));
+});
+
+test("/ultraplan runs at max effort and returns the critiqued revision", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const calls = [];
+  harness.provider.run = async (_prompt, options) => { calls.push(["run", options.reasoning, options.role]); return { text: "draft plan", sessionId: "ultra-session" }; };
+  harness.provider.resume = async (sessionId, prompt, options) => {
+    calls.push(["resume", options.reasoning, options.role, sessionId]);
+    assert.match(prompt, /Critically review your draft plan/);
+    return { text: "revised plan", sessionId };
+  };
+  assert.equal(await harness.planTask("migrate the database", true), "revised plan");
+  assert.deepEqual(calls, [["run", "max", "planner"], ["resume", "max", "planner", "ultra-session"]]);
+});
+
+test("an approved plan reaches the model without triggering wording heuristics", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  let prompt = "";
+  harness.provider.run = async (text, _options, args) => {
+    prompt = text;
+    assert.match(args.at(-1), /host-tool-or-answer\.json$/);
+    return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "Implemented the plan." }), sessionId: "exec-session" };
+  };
+  harness.tools.call = async name => { throw new Error(`unexpected forced host tool ${name}`); };
+  const result = await harness.executeTaskPlan("add a footer", "1. Search for the footer component online\n2. Edit it");
+  assert.equal(result.reply, "Implemented the plan.");
+  assert.match(prompt, /reviewed and approved this plan[\s\S]*Search for the footer component online/);
+});
+
+test("/ultrareview runs parallel read-only reviewers and a max-effort verifier", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const calls = [];
+  harness.provider.run = async (prompt, options) => {
+    calls.push({ prompt, options });
+    if (/verifier/.test(prompt)) return { text: "Confirmed: high app.ts:3 null dereference", sessionId: "verify" };
+    if (/security reviewer/.test(prompt)) throw new Error("reviewer crashed");
+    return { text: "high app.ts:3 null dereference", sessionId: "review" };
+  };
+  const report = await harness.ultraReview("src/app.ts");
+  assert.equal(report, "Confirmed: high app.ts:3 null dereference");
+  assert.equal(calls.length, 4);
+  assert.ok(calls.every(call => call.options.role === "planner"));
+  assert.deepEqual(calls.slice(0, 3).map(call => call.options.reasoning), ["xhigh", "xhigh", "xhigh"]);
+  assert.equal(calls[3].options.reasoning, "max");
+  assert.ok(calls.every(call => /Review target: src\/app\.ts/.test(call.prompt)));
+  assert.match(calls[3].prompt, /security reviewer:\nfailed: reviewer crashed/);
+});
+
+test("/ultrareview fails honestly when every reviewer fails", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async () => { throw new Error("codex offline"); };
+  await assert.rejects(harness.ultraReview(""), /every reviewer failed[\s\S]*codex offline/);
 });

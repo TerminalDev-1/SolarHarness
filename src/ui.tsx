@@ -4,15 +4,17 @@ import { SolarHarness } from "./harness.js";
 import { actionStatus, activityDetail, initialActivity } from "./activity.js";
 import { PET_NAMES, petSprite, type PetSelection } from "./pets.js";
 import { formatStats } from "./stats.js";
+import { instructionPaths } from "./instructions.js";
 import { sunColors, sunFrames } from "./sun.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type ReasoningEffort } from "./types.js";
 
-type UiPhase = "idle" | "thinking" | "browsing" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating";
+type UiPhase = "idle" | "thinking" | "browsing" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating" | "reviewing";
 type ChatMessage = { role: "user" | "solar" | "error"; text: string };
 type PendingPlan = { plan: DelegationPlan; request: string; context: string; selected: boolean[]; cursor: number };
 type PendingEffort = { cursor: number };
 type PendingSpeed = { cursor: number };
 type PendingNew = { cursor: number };
+type PendingTaskPlan = { request: string; plan: string; ultra: boolean; cursor: number };
 type ThemeName = "dark" | "light";
 type Theme = {
   accent: string; accentStrong: string; primary: string; secondary: string;
@@ -68,6 +70,10 @@ const slashCommands = [
   { command: "/agents", detail: "Show assigned agents", insert: "/agents" },
   { command: "/agent", detail: "Control an assigned agent", insert: "/agent " },
   { command: "/delegate", detail: "Prepare an agent plan", insert: "/delegate" },
+  { command: "/plan", detail: "Plan a task read-only, then approve", insert: "/plan " },
+  { command: "/ultraplan", detail: "Max-effort plan with a self-critique", insert: "/ultraplan " },
+  { command: "/ultrareview", detail: "Parallel review with verified findings", insert: "/ultrareview" },
+  { command: "/memory", detail: "Show loaded SOLAR.md files", insert: "/memory" },
   { command: "/quit", detail: "Close Solar Harness", insert: "/quit" },
   { command: "/exit", detail: "Close Solar Harness", insert: "/exit" }
 ] as const;
@@ -97,6 +103,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
   const [pendingEffort, setPendingEffort] = useState<PendingEffort | null>(null);
   const [pendingSpeed, setPendingSpeed] = useState<PendingSpeed | null>(null);
   const [pendingNew, setPendingNew] = useState<PendingNew | null>(null);
+  const [pendingTaskPlan, setPendingTaskPlan] = useState<PendingTaskPlan | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState(reasoning);
   const [autoApprove, setAutoApprove] = useState(harness.getAutoPermissions().enabled);
   const [themeName, setThemeName] = useState<ThemeName>("dark");
@@ -265,11 +272,44 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
       setAgents([]);
       setBrief([]);
       setPendingPlan(null);
+      setPendingTaskPlan(null);
       setPendingEffort(null);
       setConversation([{ role: "solar", text: `Started a completely fresh Solar session. The test workspace was cleared and is now empty: ${nextWorkspace}` }]);
     } catch (error) {
       addMessage({ role: "error", text: `Unable to start the test workspace: ${error instanceof Error ? error.message : String(error)}` });
     }
+  };
+
+  const runConversation = async (line: string, approvedPlan?: string): Promise<void> => {
+    const nextBrief = [line];
+    setBrief(nextBrief);
+    const response = approvedPlan
+      ? await harness.executeTaskPlan(line, approvedPlan, reportActivity)
+      : await harness.converse(line, reportActivity);
+    setAutoApprove(harness.getAutoPermissions().enabled);
+    setAgents(harness.manager.list());
+    addMessage({ role: "solar", text: response.reply });
+    for (const achievement of harness.takeAchievements()) addMessage({ role: "solar", text: `◆ Achievement unlocked: ${achievement}` });
+    if (response.readyToDelegate) {
+      await preparePlan(nextBrief.join("\n"), nextBrief.join("\n"));
+    }
+  };
+
+  const finishTaskPlan = async (execute: boolean): Promise<void> => {
+    if (!pendingTaskPlan) return;
+    const { request, plan } = pendingTaskPlan;
+    setPendingTaskPlan(null);
+    if (!execute) {
+      addMessage({ role: "solar", text: "Plan kept, not executed. No workspace changes were made. Refine it with another /plan or send a request." });
+      return;
+    }
+    setActivityLog(["Executing the approved plan"]);
+    setCurrentActivity("executing the approved plan");
+    setBusy(true);
+    setPhase("thinking");
+    try { await runConversation(request, plan); }
+    catch (error) { addMessage({ role: "error", text: error instanceof Error ? error.message : String(error) }); }
+    finally { setBusy(false); setPhase("idle"); }
   };
 
   const submit = async (): Promise<void> => {
@@ -286,11 +326,31 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
     setActivityLog(["Sending your request to Solar"]);
     setCurrentActivity(initialActivity(line));
     setBusy(true);
-    setPhase(line === "/delegate" ? "planning" : line.startsWith("/agent ") ? "updating" : "thinking");
+    const planCommand = line.match(/^\/(plan|ultraplan)(?:\s+([\s\S]*))?$/);
+    const reviewCommand = line.match(/^\/ultrareview(?:\s+([\s\S]*))?$/);
+    if (planCommand) setCurrentActivity(planCommand[1] === "ultraplan" ? "drafting an ultraplan" : "drafting a plan");
+    if (reviewCommand) setCurrentActivity("starting the ultrareview");
+    setPhase(line === "/delegate" || planCommand ? "planning" : reviewCommand ? "reviewing" : line.startsWith("/agent ") ? "updating" : "thinking");
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
+        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
+      } else if (planCommand) {
+        const request = planCommand[2]?.trim();
+        if (!request) addMessage({ role: "error", text: `Usage: /${planCommand[1]} <task to plan>` });
+        else {
+          const ultra = planCommand[1] === "ultraplan";
+          const plan = await harness.planTask(request, ultra, reportActivity);
+          addMessage({ role: "solar", text: plan });
+          setPendingTaskPlan({ request, plan, ultra, cursor: 0 });
+        }
+      } else if (reviewCommand) {
+        addMessage({ role: "solar", text: await harness.ultraReview(reviewCommand[1]?.trim() ?? "", reportActivity) });
+      } else if (line === "/memory") {
+        const files = harness.getInstructionFiles();
+        addMessage({ role: "solar", text: files.length
+          ? `Loaded SOLAR.md instructions (later files override earlier ones):\n${files.map(file => `${file.scope}: ${file.path}${file.truncated ? " (truncated)" : ""}`).join("\n")}`
+          : `No SOLAR.md instructions are loaded. Create one at any of:\n${instructionPaths(harness.getWorkspace()).map(item => `${item.scope}: ${item.path}`).join("\n")}` });
       } else if (line === "/new") {
         setPendingNew({ cursor: 1 });
       } else if (line === "/auto-approve") {
@@ -344,16 +404,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
           await preparePlan(brief.join("\n"), brief.join("\n"));
         }
       } else {
-        const nextBrief = [line];
-        setBrief(nextBrief);
-        const response = await harness.converse(line, reportActivity);
-        setAutoApprove(harness.getAutoPermissions().enabled);
-        setAgents(harness.manager.list());
-        addMessage({ role: "solar", text: response.reply });
-        for (const achievement of harness.takeAchievements()) addMessage({ role: "solar", text: `◆ Achievement unlocked: ${achievement}` });
-        if (response.readyToDelegate) {
-          await preparePlan(nextBrief.join("\n"), nextBrief.join("\n"));
-        }
+        await runConversation(line);
       }
     } catch (error) {
       addMessage({ role: "error", text: error instanceof Error ? error.message : String(error) });
@@ -380,6 +431,13 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
       if (key.leftArrow || key.upArrow) { setPendingNew({ cursor: 0 }); return; }
       if (key.rightArrow || key.downArrow) { setPendingNew({ cursor: 1 }); return; }
       if (key.return) { void finishNewSession(pendingNew.cursor === 0); return; }
+      return;
+    }
+    if (pendingTaskPlan) {
+      if (key.escape || character.toLowerCase() === "n") { void finishTaskPlan(false); return; }
+      if (character.toLowerCase() === "y") { void finishTaskPlan(true); return; }
+      if (key.leftArrow || key.upArrow || key.rightArrow || key.downArrow) { setPendingTaskPlan(value => value && ({ ...value, cursor: 1 - value.cursor })); return; }
+      if (key.return) { void finishTaskPlan(pendingTaskPlan.cursor === 0); return; }
       return;
     }
     if (pendingEffort) {
@@ -476,6 +534,8 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
       {pendingEffort && <EffortPicker pending={pendingEffort} current={currentReasoning} />}
       {pendingSpeed && <SpeedPicker pending={pendingSpeed} fast={fast} model={model} />}
 
+      {pendingTaskPlan && <TaskPlanApproval pending={pendingTaskPlan} />}
+
       {pendingNew && <NewSessionConfirmation pending={pendingNew} workspace={harness.getTestWorkspace()} />}
 
       {busy && (
@@ -489,9 +549,9 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
 
       <RainbowInput
         width={contentWidth}
-        value={pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
-        entered={Boolean(input) && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
-        cursor={!busy && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
+        value={pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
+        entered={Boolean(input) && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
+        cursor={!busy && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
         busy={busy}
       />
 
@@ -635,6 +695,21 @@ function NewSessionConfirmation({ pending, workspace }: { pending: PendingNew; w
   );
 }
 
+function TaskPlanApproval({ pending }: { pending: PendingTaskPlan }): React.JSX.Element {
+  return (
+    <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.warning} paddingX={1}>
+      <Text bold color={theme.warning}>{pending.ultra ? "Ultraplan ready" : "Plan ready"}</Text>
+      <Text color={theme.secondary}>Nothing has changed yet. Execute this plan in the workspace?</Text>
+      <Box marginTop={1}>
+        <Text color={pending.cursor === 0 ? theme.success : theme.secondary}>{pending.cursor === 0 ? "› " : "  "}[ Execute ]</Text>
+        <Text>  </Text>
+        <Text color={pending.cursor === 1 ? theme.warning : theme.secondary}>{pending.cursor === 1 ? "› " : "  "}[ Keep planning ]</Text>
+      </Box>
+      <Text color={theme.subtle}>←→ choose · Enter confirm · Esc keep</Text>
+    </Box>
+  );
+}
+
 function ActivityText({ text }: { text: string }): React.JSX.Element {
   // Keep this as one ANSI color span. Per-character bold/reset sequences can
   // briefly restore the terminal's default (often green) foreground on Windows.
@@ -757,6 +832,7 @@ function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): str
   if (phase === "working") return `${activeSubAgents} sub-agent${activeSubAgents === 1 ? "" : "s"} — ${detail}`;
   if (phase === "synthesizing") return `Reviewing — ${detail}`;
   if (phase === "updating") return `Updating — ${detail}`;
+  if (phase === "reviewing") return `Ultrareview — ${detail}`;
   return "";
 }
 

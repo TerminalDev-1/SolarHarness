@@ -21,6 +21,8 @@ TypeScript ESM (`.js` import suffixes), Node >= 20, Ink UI. The model backend is
 
 `SolarHarness.converse()` (`harness.ts`) keeps one main Codex session and loops: prompt with a live tool-registry manifest → structured `{kind, tool, input, reply}` via `--output-schema` (`host-turn.ts`) → run host tool → resume with result. Responses normalize to `SOLAR_TOOL:` / `SOLAR_STATE:` lines; sub-agents request children via `SOLAR_SUBDELEGATE` (`agent-manager.ts`). When adding a main-agent host tool, update `tool-registry.ts`, `HOST_TOOLS` in `host-turn.ts`, and the manifest filter in `harness.ts`.
 
+`SOLAR.md` (`instructions.ts`) loads `$SOLAR_HOME` (default `~/.solarharness`), the launch dir (parent of `test`, survives `/new`), then `test/`; later overrides earlier. It is sent at main-session start (re-sent only when changed), and to planners, sub-agents, synthesis, plan and review runs. `/plan` and `/ultraplan` (`planTask`) use a fresh `planner`-role (read-only) session, never the main one; ultra = max effort + a critique resume. Approved plans run via `converse(request, _, approvedPlan)` so heuristics see only the request. `/ultrareview` runs 3 read-only xhigh reviewers in parallel, then a max verifier.
+
 ## Rules
 
 - Update this file when agent behavior or tool contracts change; update `README.md` only for user-facing changes.

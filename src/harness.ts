@@ -9,6 +9,7 @@ import { mkdir, readdir, rm } from "node:fs/promises";
 import { readdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { SOLAR_SYSTEM_PROMPT } from "./system-prompt.js";
+import { loadInstructions, workspaceInstructions, type InstructionFile } from "./instructions.js";
 import { registerHarnessTools, type AdjustSubEffortLevelInput, type AutoPermissionsState, type RuntimeOperation, type RuntimeOperationsInput, type SetAutoPermissionsInput, type SpawnSubAgentInput, type ToolRegistry } from "./tool-registry.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type HarnessOptions, type ReasoningEffort, type SolarModelProvider } from "./types.js";
 import { StatsStore } from "./stats.js";
@@ -26,6 +27,7 @@ export class SolarHarness {
   private autoPermissions = false;
   private fast = false;
   private unlocked: string[] = [];
+  private sessionInstructions?: string;
 
   constructor(private readonly options: HarnessOptions) {
     this.provider = new CodexCliProvider();
@@ -43,7 +45,8 @@ export class SolarHarness {
     });
   }
 
-  async converse(message: string, onActivity?: (message: string) => void): Promise<{ reply: string; readyToDelegate: boolean }> {
+  /** `approvedPlan` is sent to the model but kept out of the wording heuristics, which read only `message`. */
+  async converse(message: string, onActivity?: (message: string) => void, approvedPlan?: string): Promise<{ reply: string; readyToDelegate: boolean }> {
     const startedAt = Date.now();
     const standaloneAutoPermissions = standaloneAutoPermissionRequest(message);
     if (standaloneAutoPermissions !== undefined) {
@@ -55,7 +58,11 @@ export class SolarHarness {
     const agentRoster = this.manager.list().map(agent => `${agent.depth ? "  sub-delegate" : "sub-agent"} ${agent.name} [${agent.id}]: ${agent.title} (${agent.status}, ${agent.reasoning}${agent.reasoningPinned ? ", pinned" : ""})`).join("\n") || "No sub-agents exist yet.";
     const hostToolManifest = JSON.stringify(this.tools.list().filter(tool => ["browser", "workspace_command", "web_search_headless", "runtime_operations", "set-auto-permissions", "adjust-sub-effort-level"].includes(tool.name)));
     const wantsDelegation = delegationRequested(message);
+    const instructions = workspaceInstructions(this.options.cwd);
+    const instructionsChanged = Boolean(this.mainSessionId) && instructions !== (this.sessionInstructions ?? "");
+    this.sessionInstructions = instructions;
     const turnPrompt = [
+      ...(instructionsChanged ? [instructions ? `The SOLAR.md instructions changed during this session. They now read:\n\n${instructions}` : "The SOLAR.md instructions were removed during this session. Disregard the earlier SOLAR.md instructions."] : []),
       wantsDelegation
         ? "The user requested delegation. Explain the intended sub-agent scope and mark READY. The harness will prepare the sub-agent plan after this turn, honoring any requested agent count and otherwise choosing the smallest useful number. Do not implement the delegated task yourself."
         : "You are Solar. Carry out the user's request yourself using your workspace tools. Work alone. Do not propose sub-agents or ask whether the user wants delegation or how many agents to use. Finish with DISCOVER. Browser actions can be handled directly. Ask other clarifying questions only when a missing answer materially changes the work.",
@@ -69,6 +76,7 @@ export class SolarHarness {
       `Current agent tree:\n${agentRoster}`,
       "Finish with exactly one control line: SOLAR_STATE: READY only when the user explicitly requested delegation, otherwise SOLAR_STATE: DISCOVER.",
       `User: ${message}`,
+      ...(approvedPlan ? [`The user reviewed and approved this plan. Carry it out now, verify the result, and report what changed:\n${approvedPlan}`] : []),
       'Every turn uses the structured host response schema. Choose kind=tool with a real tool name and JSON-encoded input when an action is needed; choose kind=answer with a plain reply only when no action is needed or the task is complete. The host executes tool requests and resumes this session with the result. Never claim an action ran without a successful tool result.'
     ].join("\n\n");
     const runOptions = { ...this.options, fast: this.fast, role: "main-agent" as const, onEvent: onActivity, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
@@ -101,7 +109,7 @@ export class SolarHarness {
     };
     let response = this.mainSessionId
       ? await resumeTurn(turnPrompt, requireInitialTool)
-      : await normalizeHostResponse(await this.provider.run([SOLAR_SYSTEM_PROMPT, turnPrompt].join("\n\n"), runOptions, await hostArgs(requireInitialTool)), requireInitialTool);
+      : await normalizeHostResponse(await this.provider.run([SOLAR_SYSTEM_PROMPT, instructions, turnPrompt].filter(Boolean).join("\n\n"), runOptions, await hostArgs(requireInitialTool)), requireInitialTool);
     this.mainSessionId = response.sessionId ?? this.mainSessionId;
     if (requireInitialTool && !/^\s*SOLAR_TOOL:/m.test(response.text)) {
       response = await resumeTurn([
@@ -326,6 +334,7 @@ export class SolarHarness {
     void this.browser.close();
     void this.workspace.close();
     this.mainSessionId = undefined;
+    this.sessionInstructions = undefined;
     this.mainTranscript.length = 0;
     this.tools.resetOperations();
     this.manager.reset();
@@ -359,7 +368,7 @@ export class SolarHarness {
 
   async plan(request: string, context: string, onActivity?: (message: string) => void): Promise<DelegationPlan> {
     onActivity?.(`Designing a named sub-agent plan at ${this.options.reasoning} reasoning`);
-    const retainedContext = [this.mainTranscript.join("\n\n"), context].filter(Boolean).join("\n\n");
+    const retainedContext = [workspaceInstructions(this.options.cwd), this.mainTranscript.join("\n\n"), context].filter(Boolean).join("\n\n");
     const plan = await this.provider.createPlan(request, retainedContext, { ...this.options, fast: this.fast, role: "main-agent", onEvent: onActivity, onUsage: (input, output) => this.stats.recordUsage(input, output) });
     onActivity?.(`Plan ready: ${plan.tasks.map(task => `${task.name} — ${task.title}`).join(" · ")}`);
     return plan;
@@ -390,7 +399,7 @@ export class SolarHarness {
     const runOptions = { ...this.options, fast: this.fast, role: "main-agent" as const, onEvent: onActivity, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
     const synthesis = this.mainSessionId
       ? await this.provider.resume(this.mainSessionId, synthesisPrompt, runOptions)
-      : await this.provider.run([SOLAR_SYSTEM_PROMPT, synthesisPrompt].join("\n\n"), runOptions);
+      : await this.provider.run([SOLAR_SYSTEM_PROMPT, workspaceInstructions(this.options.cwd), synthesisPrompt].filter(Boolean).join("\n\n"), runOptions);
     this.mainSessionId = synthesis.sessionId ?? this.mainSessionId;
     this.mainTranscript.push(`Solar: ${synthesis.text}`);
     if (/\b(?:build|create|make)\b[^.!?\n]*\b(?:website|web\s?page|landing page)\b/i.test(request) && hasRecentWebFile(this.options.cwd, startedAt)) {
@@ -399,12 +408,89 @@ export class SolarHarness {
     return synthesis.text;
   }
 
+  getInstructionFiles(): InstructionFile[] {
+    return loadInstructions(this.options.cwd);
+  }
+
+  /**
+   * /plan and /ultraplan: a fresh read-only Codex session drafts a plan without changing the workspace.
+   * Ultra runs at max effort and adds a self-critique pass that re-checks the draft against the code.
+   */
+  async planTask(request: string, ultra: boolean, onActivity?: (message: string) => void): Promise<string> {
+    const runOptions = { ...this.options, reasoning: ultra ? "max" as const : this.options.reasoning, fast: this.fast, role: "planner" as const, onEvent: onActivity, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
+    onActivity?.(`Plan: drafting the plan at ${runOptions.reasoning} effort`);
+    const draft = await this.provider.run([
+      SOLAR_SYSTEM_PROMPT,
+      workspaceInstructions(this.options.cwd),
+      "Plan mode is active. You are in a read-only sandbox. Inspect the workspace as needed, but do not create, edit, or delete files, and do not claim any change was made.",
+      "Produce an implementation plan the user can review before any work starts. Include: the goal, the relevant files and what you found in them, ordered implementation steps naming the files each step touches, how each step will be verified, and risks or open questions. Keep it concrete and concise. Do not propose sub-agents unless the user asked for delegation.",
+      ultra ? "This is an ultraplan. Be exhaustive: read every file the change touches, weigh at least two approaches and justify the chosen one, and cover edge cases, failure modes, and test coverage." : "",
+      this.mainTranscript.length ? `Earlier conversation:\n${this.mainTranscript.slice(-12).join("\n\n")}` : "",
+      `Request to plan: ${request}`
+    ].filter(Boolean).join("\n\n"), runOptions);
+    let plan = draft.text.trim();
+    if (ultra && draft.sessionId) {
+      onActivity?.("Plan: critiquing the draft");
+      const revised = await this.provider.resume(draft.sessionId, [
+        "Critically review your draft plan. Re-check each assumption against the actual files, find missing steps, wrong file references, unhandled edge cases, and weak verification.",
+        "Return only the complete revised plan, not a list of the changes you made to it. Stay read-only."
+      ].join("\n\n"), runOptions);
+      plan = revised.text.trim() || plan;
+    }
+    this.mainTranscript.push(`User: /${ultra ? "ultraplan" : "plan"} ${request}`, `Solar (plan, not yet executed): ${plan}`);
+    return plan;
+  }
+
+  /** Runs a reviewed /plan or /ultraplan through the normal main-agent loop. */
+  async executeTaskPlan(request: string, plan: string, onActivity?: (message: string) => void): Promise<{ reply: string; readyToDelegate: boolean }> {
+    return this.converse(request, onActivity, plan);
+  }
+
+  /**
+   * /ultrareview: three read-only reviewers with different focuses run in parallel at xhigh effort,
+   * then a max-effort verifier re-checks every finding against the code and drops false positives.
+   */
+  async ultraReview(target: string, onActivity?: (message: string) => void): Promise<string> {
+    const base = { ...this.options, fast: this.fast, role: "planner" as const, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
+    const scope = target.trim()
+      ? `Review target: ${target.trim()}`
+      : "Review target: if the workspace is a Git repository, review the uncommitted changes (git status and git diff, including untracked files), or the most recent commit when there are none. Otherwise review the source files in the workspace.";
+    const instructions = workspaceInstructions(this.options.cwd);
+    onActivity?.(`Review: ${ULTRAREVIEW_FOCUSES.length} reviewers inspecting the code`);
+    const reviews = await Promise.allSettled(ULTRAREVIEW_FOCUSES.map(focus => this.provider.run([
+      `You are the ${focus.name} reviewer in a Solar Harness ultrareview. You are in a read-only sandbox: inspect files and run read-only commands, but never modify anything.`,
+      instructions,
+      scope,
+      `Focus: ${focus.detail}`,
+      "Report only concrete defects you can point to in the code. For each finding give: severity (critical, high, medium, low), file and line, what is wrong, and a concrete failing scenario. If you find nothing, say so plainly. Do not pad the list."
+    ].filter(Boolean).join("\n\n"), { ...base, reasoning: "xhigh", onEvent: onActivity })));
+    const reports = reviews.map((review, index) => `${ULTRAREVIEW_FOCUSES[index].name} reviewer:\n${review.status === "fulfilled" ? review.value.text : `failed: ${review.reason instanceof Error ? review.reason.message : String(review.reason)}`}`);
+    if (reviews.every(review => review.status === "rejected")) throw new Error(`Ultrareview failed: every reviewer failed.\n\n${reports.join("\n\n")}`);
+    onActivity?.("Review: verifying findings");
+    const verified = await this.provider.run([
+      "You are the verifier for a Solar Harness ultrareview. You are in a read-only sandbox; never modify anything.",
+      instructions,
+      scope,
+      `Reviewer reports:\n\n${reports.join("\n\n")}`,
+      "Re-check every reported finding against the actual code. Drop false positives and duplicates. Output the confirmed findings ranked most severe first, each with severity, file:line, the defect, and a failing scenario. Then list anything plausible but unconfirmed separately. Mention any reviewer that failed. If nothing survives, say the review found no confirmed defects."
+    ].filter(Boolean).join("\n\n"), { ...base, reasoning: "max", onEvent: onActivity });
+    const report = verified.text.trim();
+    this.mainTranscript.push(`User: /ultrareview ${target}`.trim(), `Solar (ultrareview): ${report}`);
+    return report;
+  }
+
   async delegate(request: string, context: string, onProgress: (agents: AgentRecord[]) => void, onActivity?: (message: string) => void): Promise<string> {
     const plan = await this.plan(request, context, onActivity);
     return this.executePlan(plan, request, context, onProgress, onActivity);
   }
 
 }
+
+const ULTRAREVIEW_FOCUSES = [
+  { name: "correctness", detail: "logic errors, broken edge cases, wrong error handling, race conditions, and regressions against existing behavior." },
+  { name: "security", detail: "injection, unsafe handling of untrusted input, path traversal, leaked secrets, and sandbox or permission bypasses." },
+  { name: "design", detail: "duplicated or dead code, needless complexity, inefficiency, and missing or weakened tests." }
+] as const;
 
 function hasRecentWebFile(root: string, since: number): boolean {
   const visit = (directory: string, depth: number): boolean => {

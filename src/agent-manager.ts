@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { AgentRecord, AgentTask, CodexRunOptions, ReasoningEffort, SolarModelProvider } from "./types.js";
+import { workspaceInstructions } from "./instructions.js";
 import type { OrchestrateInput, SpawnSubAgentInput } from "./tool-registry.js";
 
 const MAX_CONCURRENT_AGENTS = 8;
@@ -199,6 +200,7 @@ export class AgentManager {
       `Task: ${record.title}`,
       `Instructions: ${record.instructions}`,
       `Reference context: ${record.context}`,
+      workspaceInstructions(this.options.cwd),
       "Work only on this assignment. At the end, give your owner a concise report of changes, validation, and open risks."
     ].join("\n\n");
   }

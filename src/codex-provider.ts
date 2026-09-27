@@ -169,7 +169,7 @@ export function buildCodexRunArgs(prompt: string, options: CodexRunOptions, extr
 
 export function buildCodexResumeArgs(sessionId: string, prompt: string, options: CodexRunOptions, extraArgs: string[] = []): string[] {
   return ["exec", "resume", "--json", "--skip-git-repo-check", "--model", options.model,
-    "-c", 'sandbox_mode="workspace-write"',
+    "-c", `sandbox_mode="${options.role === "planner" ? "read-only" : "workspace-write"}"`,
     "-c", `model_reasoning_effort=\"${cliReasoning(options.reasoning)}\"`, "-c", `service_tier=\"${options.fast ? "fast" : "default"}\"`,
     ...(options.fast ? ["-c", "features.fast_mode=true"] : []),
     "-c", "agents.enabled=false", ...extraArgs, sessionId, prompt];

@@ -51,6 +51,18 @@ use, and creation.
 - Start a genuinely clean session with `/new`, including clearing old sub-agent
   records and deleting all contents of the `test` workspace.
 - Change Solar's default reasoning effort at runtime from Light through Max.
+- Plan before acting with `/plan <task>`: Solar inspects the workspace in a
+  read-only session, shows a plan, and changes nothing until you choose Execute.
+  `/ultraplan <task>` does the same at Max effort and adds a self-critique pass
+  that re-checks the draft against the code.
+- Review code with `/ultrareview [target]`: three read-only reviewers (correctness,
+  security, design) run in parallel, then a Max-effort verifier re-checks every
+  finding and drops false positives. With no target it reviews uncommitted Git
+  changes, or the workspace files outside a Git repository.
+- Give Solar standing instructions with `SOLAR.md`, like `CLAUDE.md`. Solar reads
+  `~/.solarharness/SOLAR.md` (all projects), `SOLAR.md` in the directory you launch
+  `solar` from (kept across `/new`), and `test/SOLAR.md`; more specific files win.
+  Edits are picked up on the next message. `/memory` lists the loaded files.
 - Select Standard or Fast processing with `/speed` or `/fast on|off|status`.
 - Keep a shaded cat, dog, or fox moving across the terminal while idle or working;
   choose one with `/pets` or hide it with `/pets off`.
