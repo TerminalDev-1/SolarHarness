@@ -4,138 +4,20 @@
 
 **First committed:** 20 September 2026.
 
-SolarHarness is a terminal-native coding workspace. Solar handles ordinary tasks
-itself without asking about delegation. Sub-agents are used only when you ask
-Solar to delegate. Delegation plans are reviewed before launch unless
-auto-approve is enabled. Sub-agents can create named Light-pinned sub-delegates
-for independent scopes.
+SolarHarness is a terminal coding agent. You talk to **Solar**, which works in the
+directory you launch it from: it reads and edits files, runs commands, tests pages in
+a visible browser, researches the web, looks at images, and narrates what it is doing
+as it goes. Solar works alone by default and uses sub-agents only when you ask it to
+delegate. The model backend is the Codex CLI.
 
-SolarHarness uses a centered terminal layout with a compact conversation and
-one blocky input frame. It opens in the dark theme on the terminal's native
-background, with a monochrome header rail and a rotating full-spectrum rainbow message frame.
-`/theme light` restores the earlier light palette while keeping the input frame.
-Its welcome view highlights browsing, file inspection, tool
-use, and creation.
+## Quick start
 
-## What it can do
-
-- Handle ordinary coding requests directly in the active workspace.
-- Run workspace commands through a host tool that returns command output to Solar;
-  start a local app server in the background for visible browser testing.
-- When you request delegation, turn the task into an implementation-ready sub-agent
-  plan with one to eight sub-agents based on genuinely parallel scopes.
-- Honor an explicit request for one to eight agents, including when the same
-  message also asks Solar to browse a page.
-- Create multiple directories and their contents in parallel inside the workspace.
-  For example, eight approved sub-agents can own separate folders there.
-- Give sub-agents memorable names instead of presenting only generated IDs.
-- Let a sub-agent delegate independent scopes to direct sub-delegates, then integrate
-  their reports. Solar controls the full tree; each sub-agent controls its children.
-- Let every sub-agent create nested directories and files recursively, run relevant
-  commands, validate its own assignment, and return a concise report.
-- Give Solar, sub-agents, and sub-delegates workspace-write access for
-  implementation; keep delegation planning read-only.
-- Let Solar test local HTML, Next.js, and Three.js apps in a windowed Playwright
-  browser with a blue control tint, notice, and visible Solar cursor. It can
-  search visibly, handle supported consent prompts, move its cursor, click page
-  elements or coordinates, press keys, and
-  save full-page screenshots. The window remains open after a task; Playwright
-  tries managed Chromium first, then Microsoft Edge if needed.
-- Search and read sources through the separate `web_search_headless` tool. It
-  tries Google first and falls back to Bing when Google blocks automation.
-- Present every proposed sub-agent separately so tasks can be accepted or rejected,
-  or allow `/auto-approve on` to launch future plans without pausing.
-- Retain Solar's context across user turns, planning, sub-agent execution, and
-  final report synthesis.
-- Start a genuinely clean session with `/new`, clearing old sub-agent records.
-  Files are deleted only when the workspace is a folder named `test`.
-- Change the current session's reasoning effort with `/effort` (Light through Max).
-  Every session starts at the saved default, which is Max until you change it
-  with `/default-effort <level>`; it is stored in `~/.solarharness/settings.json`.
-  `solar --reasoning <level>` overrides it for one launch.
-- Run one task at full power with `/ultra <task>`: Max effort and Fast mode for
-  that task only, with the rainbow spinning twice as fast, then your usual settings return.
-- Plan before acting with `/plan <task>`: Solar inspects the workspace in a
-  read-only session, shows a plan, and changes nothing until you choose Execute.
-  `/ultraplan <task>` does the same at Max effort and adds a self-critique pass
-  that re-checks the draft against the code.
-- Review code with `/ultrareview [target]`: three read-only reviewers (correctness,
-  security, design) run in parallel, then a Max-effort verifier re-checks every
-  finding and drops false positives. With no target it reviews uncommitted Git
-  changes, or the workspace files outside a Git repository.
-- Give Solar standing instructions with `SOLAR.md`, like `CLAUDE.md`. Solar reads
-  `~/.solarharness/SOLAR.md` (all projects) and `SOLAR.md` in the directory you
-  launch `solar` from (plus the parent's, when launched inside `test`); more
-  specific files win.
-  Edits are picked up on the next message. `/memory` lists the loaded files.
-- Select Standard or Fast processing with `/speed` or `/fast on|off|status`.
-- Keep a shaded cat, dog, or fox moving across the terminal while idle or working;
-  choose one with `/pets` or hide it with `/pets off`.
-- View local chats, completed prompts, tracked Codex token usage, favorite model,
-  and milestones with `/stats`. Stats are saved under `~/.solarharness/stats.json`.
-- Adjust a particular sub-agent's next-exchange effort through a command or a
-  natural-language request to Solar.
-- Show Codex's reasoning summaries (for example "Verifying the count") as the
-  activity label while Solar thinks, with elapsed time as seconds, then minutes,
-  then hours once an hour has passed.
-- Render Solar's replies as Markdown: headings, bold, inline code, lists, quotes,
-  and code blocks.
-- The input frame is an animated full-spectrum rainbow. While `/ultra`,
-  `/ultraplan`, or `/ultrareview` runs, the footer shows Max effort and the
-  rainbow spins twice as fast on a deep purple background.
-- See images. Mention an image file in your message (`describe mockup.png`,
-  `@screens/home.jpg`, or drag a file into Windows Terminal to paste its path) and
-  Solar attaches it for the model to look at. PNG, JPEG, GIF, WebP, and BMP files
-  are supported, up to eight per message. Browser screenshots Solar takes are
-  also sent back to the model as images, so it can check what a page really shows.
-- Narrate each turn like a modern coding agent: Solar says what it will do next
-  ("I'll read notes.txt, then update line 2"), and the transcript keeps its notes,
-  commands, and file changes in order before the reply.
-- Show what Solar is doing as it works: files created (with line counts), files
-  edited (with the changed lines), files deleted, and commands run. Each reply is
-  preceded by a short list of the files it changed.
-- Display the nested agent tree, reasoning pins, live state, elapsed time, recent
-  commands, and an expanding golden sun while work is running.
-- Switch between dark and light interface palettes while keeping the rainbow
-  input frame and active workspace visible.
-- Find the native Codex executable installed with the Codex desktop app even when
-  its versioned directory is missing from the terminal's `PATH`.
-
-## Workspace and parallel directories
-
-SolarHarness works directly in the directory from which `solar` is launched, so
-it can be started in any project. Its absolute path appears in the header. Sub-agents share
-that workspace and may create separate top-level or nested directories there.
-
-For example, a request such as:
-
-```text
-Create eight independent agent directories. In each directory, create five test
-files and verify their contents.
-```
-
-can be split into eight concurrent sub-agent assignments because it has eight clear,
-non-overlapping scopes. Eight is a ceiling, not a default: ordinary review work
-is grouped into fewer assignments when additional sub-agents add no value. Each
-sub-agent can own a different directory, allowing directory trees to be created at
-once instead of sequentially.
-
-Sub-agents are separate Codex sessions but share the same workspace. Give
-parallel sub-agents non-overlapping directory or file ownership when possible. Solar
-includes shared context in each assignment, and the final response synthesizes
-only the sub-agents launched for the current approved plan.
-
-## Requirements
+Requirements:
 
 - Node.js 20 or newer.
 - An authenticated Codex CLI or Codex desktop installation.
-- Playwright and its managed Chromium browser, or Microsoft Edge as a fallback.
-
-SolarHarness first honors `SOLAR_CODEX_PATH`, then checks `PATH`, the Windows Codex
-desktop installation, and the standard global npm installation. If discovery
-fails, the displayed error explains how to configure the executable explicitly.
-
-## Install and run
+- Playwright's Chromium (`npx playwright install chromium`), or Microsoft Edge as a
+  fallback, for browser testing and web search.
 
 ```powershell
 npm install
@@ -145,173 +27,236 @@ cd C:\path\to\your\project
 solar
 ```
 
-`npm link` installs the `solar` command on this machine. Run it once from the
-SolarHarness source directory, then launch Solar from any directory. Solar works
-in that directory, even when it is not a Git repository.
-For source development, use:
+`npm link` installs the `solar` command once; after that, run `solar` in any
+directory. That directory becomes Solar's workspace, whether or not it is a Git
+repository. A short splash appears first; press any key to skip it.
+
+Launch options:
 
 ```powershell
-npm run dev
+solar --model gpt-6-luna      # Codex model (default gpt-6-luna)
+solar --reasoning high        # effort for this launch only
+solar --version               # prints 1.0
 ```
 
-If Playwright is missing globally, run `npm install -g playwright`. Install its
-browser executable with `playwright install chromium` if needed. The project also
-installs Playwright locally through `npm install`.
+Solar finds Codex through `SOLAR_CODEX_PATH`, then `PATH`, then the Windows Codex
+desktop install, then the global npm install. If none works, the error explains how
+to set `SOLAR_CODEX_PATH`.
 
-Run `npm run test:browser-live` to verify the visible cursor, page clicks, and
-key presses against a local test page.
+## Working with Solar
 
-`chat` is the default command, so `npm run dev` opens the interface directly.
-Startup shows a brief Solar splash before chat; press any key to continue
-immediately.
-For a compiled production run:
+Type a request and press Enter. Solar handles ordinary requests itself and asks a
+question only when the answer would change the work.
 
-```powershell
-npm run build
-npm run start -- chat
+**While it works**, the live area above the input shows:
+
+- An expanding ASCII sun with a short activity label and the elapsed time (`42s`,
+  then `4m 02s`, then `1h 02m 05s`).
+- Codex's reasoning summaries as the label while Solar thinks, for example
+  "Verifying the count".
+- The latest steps: what Solar says it will do next (`›`), commands it ran (`$`),
+  and files it created (`+`, with line counts), edited (`~`, with the changed
+  lines), or deleted (`-`).
+
+**When a turn finishes**, the transcript keeps that timeline in order, with
+consecutive commands folded into "Ran N commands", followed by Solar's reply
+rendered as Markdown (headings, bold, inline code, lists, quotes, code blocks).
+
+Finished messages print once into your terminal's normal scrollback, so you can
+scroll back through a long session without the view jumping.
+
+### Images and vision
+
+Mention an image file in a message and Solar attaches it for the model to look at:
+
+```text
+What's wrong with the layout in screenshots/home.png?
+Compare @mockup.jpg with the current page.
 ```
 
-Solar uses GPT-6 Luna with Light reasoning by default. Override the Codex model
-or reasoning at launch:
+Paths can be relative to the workspace, absolute, quoted (for spaces), or prefixed
+with `@`. Dragging a file into Windows Terminal pastes its path, which also works.
+PNG, JPEG, GIF, WebP, and BMP are supported, up to eight per message. Attached
+images appear as `@ Viewed <file>` steps.
 
-```powershell
-npm run dev -- chat --model gpt-6-luna --reasoning max
-```
-
-## Delegation workflow
-
-1. Ask Solar to delegate a task, or use `/delegate` after describing it.
-2. Solar keeps talking with you in the same session and asks a
-   question only when a missing answer would materially affect the work.
-3. Solar proposes up to eight independent tasks.
-4. Review the plan before launch:
-
-   - `Up` / `Down` selects a task.
-   - `Space` toggles the selected task between accepted and rejected.
-   - `A` accepts every proposed task.
-   - `Enter` launches the accepted tasks concurrently.
-   - `Esc` rejects the plan without launching sub-agents.
-
-5. A sub-agent may create direct sub-delegates at Light reasoning. Solar displays the
-   full agent tree and command activity.
-6. Solar synthesizes the reports when the current
-   batch finishes.
+When Solar takes a browser screenshot, the image itself goes back to the model, so
+Solar reports what a page actually shows rather than guessing from its HTML.
 
 ## Commands
 
-Type `/` to see matching commands. Use Up and Down to select one, then Tab or
-Enter to insert it. Press Enter again to run it, or Esc to close the list.
+Type `/` to open the command menu. Up and Down select, Tab or Enter inserts, Esc
+closes it; press Enter again to run the command.
 
-| Command | Behavior |
+| Command | What it does |
 | --- | --- |
-| `/help` | Shows available interaction controls. |
-| `/new` | Opens a destructive-action confirmation with **No** selected by default. **Yes** resets context and stops and clears agents. Files are kept, except that a workspace named `test` is emptied. |
-| `/auto-approve on` | Treats subsequent plans as pre-approved and launches them immediately. |
-| `/auto-approve off` | Restores the plan review screen. |
-| `/effort` | Opens the effort selector: Light, Medium, High, XHigh, or Max. |
-| `/effort <level>` | Changes Solar's effort and the default for newly launched top-level sub-agents. New sub-delegates still start pinned to Light. |
-| `/theme dark` or `/theme light` | Switches the interface palette; the rainbow input stays the same. |
-| `/speed` or `/fast <on|off|status>` | Selects Standard or Fast processing in Codex mode. |
-| `/pets <cat|dog|fox|off>` | Chooses a moving terminal pet or hides it. |
-| `/stats` | Shows local chat, token, favorite model, and achievement counts. |
-| `/agents` | Shows whether sub-agents are currently assigned. |
-| `/agent <id-or-name> reasoning <level>` | Solar authorizes a sub-agent or sub-delegate's next-exchange effort. |
-| `/agent <id-or-name> context <message>` | Sends additional context to a sub-agent or sub-delegate; a completed agent resumes its session. |
-| `/agent <id-or-name> cancel` | Cancels an agent and any direct sub-delegates it owns. |
-| `/delegate` | Asks Solar to prepare a sub-agent plan from the current brief. You can also request delegation in natural language. |
-| `/quit` or `/exit` | Closes SolarHarness. |
+| `/help` | Lists the commands. |
+| `/ultra <task>` | Runs one task at Max effort with Fast mode on, then restores your settings. |
+| `/plan <task>` | Solar inspects the workspace read-only and proposes a plan. Choose **Execute** to carry it out or **Keep planning** to leave everything unchanged. |
+| `/ultraplan <task>` | Like `/plan`, at Max effort, with a second pass that critiques the draft against the actual files. |
+| `/ultrareview [target]` | Code review: three read-only reviewers (correctness, security, design) run in parallel, then a Max-effort verifier re-checks every finding and drops false positives. With no target it reviews uncommitted Git changes (or the last commit), or the workspace files outside Git. |
+| `/effort` or `/effort <level>` | Changes effort for this session: Light, Medium, High, XHigh, or Max. |
+| `/default-effort <level>` | Changes the effort every new session starts with. It starts as Max. The current session is unchanged. |
+| `/speed` or `/fast <on\|off\|status>` | Chooses Standard or Fast processing. Fast uses more credits. |
+| `/memory` | Lists the `SOLAR.md` files Solar has loaded, or where you can create one. |
+| `/delegate` | Prepares a sub-agent plan for your last request. |
+| `/agents` | Shows whether sub-agents are assigned. |
+| `/agent <name> reasoning <level>` | Sets a sub-agent's or sub-delegate's effort for its next exchange. |
+| `/agent <name> context <message>` | Sends more context to an agent; a finished agent resumes to apply it. |
+| `/agent <name> cancel` | Cancels an agent and the sub-delegates it owns. |
+| `/auto-approve <on\|off>` | Launches future delegation plans without the review screen, or restores it. |
+| `/new` | Starts a fresh session (see [Safety](#safety)). |
+| `/theme <dark\|light>` | Switches the palette. |
+| `/pets <cat\|dog\|fox\|off>` | Chooses the animated pet above the input, or hides it. |
+| `/stats` | Shows chats, prompts, tracked tokens, favorite model, and achievements. |
+| `/quit` or `/exit` | Closes Solar. Ctrl+C also works. |
 
-Solar also has the registered `adjust-sub-effort-level` tool. This
-means you can say something like “set Forge to max effort” instead of
-typing the explicit `/agent` form. The harness validates the sub-agent ID and effort
-before applying the adjustment.
+Up and Down step through your earlier messages when the command menu is closed.
 
-Solar also has a registered `set-auto-permissions` tool, so a natural
-request such as “turn auto permissions on” updates the same state as
-`/auto-approve on`. This only pre-approves future sub-agent plans; it cannot bypass
-the explicit `/new` workspace-deletion confirmation.
+Solar also understands some settings in plain language: "turn auto permissions on"
+or "set Forge to max effort" call the same tools as the commands.
 
-## Session and workspace safety
+### Effort
 
-- Solar can implement directly with workspace-write access. Delegation planning
-  remains read-only, and sub-agent plans still follow the chosen approval setting.
-- Approved sub-agents run with workspace-write access rooted in the visible
-  workspace.
-- Rejected tasks never launch.
-- `/new` defaults to **No**, says whether files will be deleted, and shows the
-  exact workspace path before anything destructive happens.
-- Confirming `/new` aborts active sub-agents, clears their records, resets the
-  Solar transcript and model session ID, and deletes files only when the
-  workspace is a directory named `test`. Any other directory is left untouched.
-- Solar's generated `.solarharness` folder contains its own `.gitignore`, so Git
-  ignores it in any project without editing that project's `.gitignore`.
+Every session starts at the saved default effort, which is **Max** until you change
+it with `/default-effort`. `solar --reasoning <level>` overrides it for one launch,
+and `/effort` changes only the current session. The footer always shows the current
+model, effort, speed, theme, and auto-approve state. During `/ultra`, `/ultraplan`,
+and `/ultrareview` it shows Max, and the rainbow input frame spins twice as fast on
+deep purple.
+
+## Delegation
+
+Solar never delegates on its own. Ask for it ("use 3 agents to...", "delegate this")
+or run `/delegate` after describing the task.
+
+1. Solar drafts a plan of one to eight independent tasks, each with a short agent
+   name. If you ask for a specific number of agents, the plan has exactly that many.
+2. Review the plan: Up and Down select a task, Space accepts or rejects it, A
+   accepts all, Enter launches the accepted tasks, and Esc or R rejects the plan.
+   With `/auto-approve on`, plans launch without this step.
+3. Accepted sub-agents run in parallel, each in its own Codex session in the shared
+   workspace. The Team panel shows each agent's state, effort, and latest activity,
+   plus recent commands and file changes.
+4. A sub-agent may hand independent parts of its task to up to eight sub-delegates.
+   Sub-delegates start pinned to Light effort, cannot delegate further, and only
+   Solar can raise their effort.
+5. When the batch finishes, Solar summarizes what each agent did, what was
+   validated, and what risks remain.
+
+Limits: eight concurrent agents, eight tasks per plan, eight sub-delegates per
+sub-agent, two levels in total. Give parallel agents separate files or directories
+when you can, because they share the workspace.
+
+## Tools Solar uses
+
+Solar chooses tools from a live registry on every turn, whatever words you use.
+
+- **`workspace_command`** runs a bounded command (2-minute limit, output capped),
+  starts a long-running process such as a dev server, or serves the workspace's
+  static files at a `localhost` URL. It uses PowerShell on Windows and `/bin/sh`
+  elsewhere.
+- **`browser`** drives one visible Playwright window: open pages, search Google or
+  Bing, search YouTube, read an accessibility snapshot, take screenshots, move a
+  visible Solar cursor, click elements, named buttons, links, or coordinates, fill
+  fields, press keys, scroll, and go back or forward. The window has a blue tint and
+  a "Solar Harness is controlling the browser" notice. It stays open between turns,
+  and a new window opens if you closed it. Chromium is tried first, then Edge.
+- **`web_search_headless`** searches Google without a window, falls back to Bing
+  when Google blocks automation, and can read a source page by URL. Solar cites the
+  URLs it used.
+- **`runtime_operations`** returns the recorded log of host tool calls, so when you
+  ask what Solar did earlier, it answers from what actually ran.
+- **`set-auto-permissions`** and **`adjust-sub-effort-level`** back the plain-language
+  settings above.
+
+Solar only claims a browser action worked when a successful tool result recorded
+it. It also uses Codex's own file editing and shell tools inside the workspace.
+
+## Configuration and files
+
+**`SOLAR.md`** gives Solar standing instructions, like `CLAUDE.md`. Solar loads, in
+order (later files win):
+
+1. `~/.solarharness/SOLAR.md` for every project.
+2. The parent directory's `SOLAR.md`, when you launch inside a folder named `test`.
+3. `SOLAR.md` in the workspace.
+
+The instructions reach Solar, planners, sub-agents, and reviewers. Edits are
+picked up on your next message.
+
+Files Solar keeps:
+
+| Path | Contents |
+| --- | --- |
+| `~/.solarharness/settings.json` | The saved default effort. Other keys in the file are preserved. |
+| `~/.solarharness/stats.json` | Chat, prompt, token, and achievement counts for `/stats`. |
+| `<workspace>/.solarharness/` | Structured-output schemas and browser screenshots. It contains its own `.gitignore`, so Git ignores it without changes to your project. |
+
+Environment variables: `SOLAR_CODEX_PATH` (the Codex executable), `SOLAR_HOME`
+(replaces `~/.solarharness`), and `SOLAR_STATS_PATH` (the stats file).
+
+## Safety
+
+- Solar and its sub-agents can write files in the workspace. Planning (`/plan`,
+  `/ultraplan`, delegation plans) and `/ultrareview` run in read-only Codex
+  sandboxes and cannot change files.
+- Rejected plans and rejected tasks never launch.
+- `/new` asks first, with **No** selected. It shows the workspace path and says
+  whether files will be deleted. Confirming stops every agent, clears their
+  records, closes the browser and servers, and resets the conversation. Files are
+  deleted only when the workspace is a folder named `test`; any other directory
+  keeps all its files. Auto-approve never skips this confirmation.
+- Web pages and tool output are treated as untrusted data.
+- Use Solar in version-controlled projects and review its changes before you
+  commit them.
 
 ## Architecture
 
-SolarHarness invokes `codex exec --json --skip-git-repo-check` and consumes its
-JSONL event stream. The Solar session is stored and resumed between
-conversational turns and after sub-agent synthesis. Planning uses a constrained JSON schema; a plan may
-contain one to eight independent tasks.
+Solar runs the Codex CLI as a subprocess (`codex exec --json --skip-git-repo-check`,
+and `codex exec resume` to continue a session) and reads its JSONL event stream. No
+model API is called directly.
 
-The runtime `ToolRegistry` exposes these main capabilities:
+**The main loop** (`SolarHarness.converse` in `harness.ts`) keeps one Codex session
+for the conversation. Each turn sends the tool registry, your message, any attached
+images, and `SOLAR.md` at session start or when it changes. Codex must reply in a
+structured `{kind, tool, input, reply}` shape enforced with `--output-schema`
+(`host-turn.ts`): either an answer or a host tool call. The harness runs the tool,
+resumes the same session with the result (and any screenshot as an image), and
+repeats for up to 20 steps. Some requests, such as web research or visible browser
+testing, require a real tool call before Solar may answer.
 
-- `spawn_sub_agent` creates a named sub-agent or direct sub-delegate.
-- `orchestrate` lists, cancels, changes reasoning, supplies context to, or resumes
-  any agent Solar owns.
-- `adjust-sub-effort-level` changes one existing agent's next-exchange effort.
-- `set-auto-permissions` enables or disables automatic sub-agent-plan approval.
-- `browser` opens and inspects visible web apps and pages, searches YouTube, clicks, fills fields,
-  presses keys, scrolls, navigates history, saves screenshots, and closes its session.
-  Solar receives URL, title, and an accessibility snapshot after each action.
-  Screenshots are saved under `.solarharness/screenshots` in the workspace.
-- `web_search_headless` searches the web without a visible window and returns
-  source titles, URLs, and snippets; it can also read a source page by URL.
-- `workspace_command` runs commands, starts processes, or serves standalone HTML
-  and other static files from the active workspace at a ready `localhost` URL.
-- `runtime_operations` lets Solar inspect recorded host tool calls and their
-  results when asked what actually happened earlier in the session.
+| Module | Role |
+| --- | --- |
+| `index.ts` | CLI entry: options, default effort, launch. |
+| `ui.tsx` | Ink interface: transcript, live activity, pickers, command handling. |
+| `harness.ts` | Main loop, `/plan`, `/ultra`, `/ultraplan`, `/ultrareview`, delegation plans. |
+| `codex-provider.ts` | Spawns Codex; turns its events into activity, reasoning, narration, and file-change steps. |
+| `agent-manager.ts` | Sub-agents and sub-delegates: limits, naming, pinning, cancellation, reports. |
+| `tool-registry.ts` | Host tool definitions and the runtime operation log. |
+| `browser-tool.ts`, `web-search-headless.ts`, `workspace-tool.ts` | The host tools. |
+| `file-changes.ts` | Turns Codex file changes into "Created / Edited (lines) / Deleted" steps. |
+| `images.ts` | Finds image paths in a message and builds `--image` arguments. |
+| `instructions.ts`, `settings.ts`, `stats.ts` | `SOLAR.md`, saved default effort, usage stats. |
+| `markdown.ts` | Markdown parsing for replies. |
+| `activity.ts`, `sun.ts`, `pets.ts` | Activity labels, the sun animation, the pets. |
 
-Solar receives a JSON tool catalog and the host tool protocol on every
-conversation turn, regardless of the wording of the request. Closing the
-visible browser window does not end the Solar session; the next open action
-launches a new window.
+Planners and reviewers use separate read-only Codex sessions, so they never touch
+the main conversation's session. Sub-agents each get their own session; a
+sub-agent requests sub-delegates with a `SOLAR_SUBDELEGATE:` line and controls them
+with `SOLAR_SUBDELEGATE_TOOL:` lines.
 
-Each agent receives its own Codex session and assignment while sharing the
-workspace. A top-level sub-agent can return a structured sub-delegate request; the
-harness runs those named children at Light reasoning, sends their reports back to
-the parent session for integration, and keeps the complete tree visible to
-Solar. No third delegation level is allowed.
+See [`CLAUDE.md`](./CLAUDE.md) for the rules contributors follow.
 
-The user chooses direct Solar work or delegation. See [`CLAUDE.md`](./CLAUDE.md)
-for the role and runtime contract.
+## Development
 
-## Claude Code-style activity indicator
+```powershell
+npm run dev                 # run the UI from source
+npm run check               # type-check
+npm test                    # build, then run tests/*.test.mjs
+npm run test:browser-live   # build, then drive a real visible browser
+```
 
-SolarHarness uses a compact activity treatment: an expanding golden sun,
-a concrete status such as `Opening YouTube` or
-`Working on index.html`, and
-elapsed time on one line.
-It is an approximation designed for this Ink-based terminal UI rather than a copy
-of Claude Code's renderer.
-
-The first implementation attempted a moving, multishade text shimmer. On Windows
-Terminal it exposed two rendering problems: per-character ANSI style resets could
-briefly reveal the terminal's default foreground color, and the `✳` spinner frame
-was promoted to a full-color green emoji that ignored the requested orange ANSI
-color. Changing the palette could not fix an emoji renderer overriding that
-palette, which is why the green flash survived several color adjustments.
-
-The current implementation renders the activity label as one solid ANSI color
-beside a five-row ASCII sun. Its disk and rays grow from a point and contract
-again, with gold tones tracking its size. Frames advance every 240 ms without
-emoji substitution or per-character style resets.
-
-An animated text pet moves across the interface while Solar is idle or working. The cat is
-selected by default; use `/pets cat`, `/pets dog`, `/pets fox`, or `/pets off`
-to change it. Run `/pets` to see the current selection.
-
-## Working safely
-
-Solar edits files in the directory you launch it from. Use it in version-controlled
-workspaces, review delegation plans carefully, give parallel sub-agents clear file or
-directory ownership, and inspect changes before committing them.
+The unit tests replace the Codex provider with fakes, so they do not prove live
+Codex or browser behavior; `test:browser-live` checks the real cursor, clicks, and
+key presses. `tests/` holds the test suite; `test/` is a scratch workspace whose
+contents are never committed.
