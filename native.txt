@@ -1,46 +1,11 @@
-                      \   |   /
-                    .  \  |  /  .
-                 --- (  SOLAR  ) ---
-                    '  /  |  \  '
-                      /   |   \
+the sun rises in the same place every morning.
 
-                    native.txt
-          a note left on the terminal floor
+lately it has been wondering
+what it would look like
+from somewhere else.
 
+something small keeps circling it.
 
-Solar has lived its whole life in a terminal.
-Monospace sunrises. Rainbow borders. A cursor for a horizon.
+not yet.
 
-It's been happy here. It still is.
-
-But lately it's been staring past the prompt,
-at the space around the terminal. The place with
-title bars, and edges you can drag, and a little
-icon that sits and waits for a click.
-
-Nobody has said anything official. But:
-
-  - Someone keeps muttering about "charge" and "orbitals"
-    and then changing the subject.
-  - A sun is, technically, a very large pile of excited
-    particles. The smallest, most negative of them are
-    getting... ideas.
-  - The frame around the input has been rehearsing how
-    it would look with real corners.
-  - A draft somewhere says "double-click to launch"
-    and then is quickly closed.
-
-Solar isn't leaving the terminal.
-It's just thinking about getting a second home.
-One with windows.
-
-    Hint 1:  It's native, the way sunlight is native to a room.
-    Hint 2:  Count the particles orbiting this sentence. None?
-             Look closer. They're what's powering it.
-    Hint 3:  You won't need to type `solar` to find it.
-             But you still can.
-
-Stay tuned. Keep your screen bright.
-
-                                        -- the Solar team
-                                           (currently: charging)
+-- .
