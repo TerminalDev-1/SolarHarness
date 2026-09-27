@@ -13,7 +13,7 @@ for independent scopes.
 
 SolarHarness uses a centered terminal layout with a compact conversation and
 one blocky input frame. It opens in the dark theme on the terminal's native
-background, with a monochrome header rail and a rainbow-blue message frame.
+background, with a monochrome header rail and a rotating full-spectrum rainbow message frame.
 `/theme light` restores the earlier light palette while keeping the input frame.
 Its welcome view highlights browsing, file inspection, tool
 use, and creation.
@@ -55,7 +55,7 @@ use, and creation.
   with `/default-effort <level>`; it is stored in `~/.solarharness/settings.json`.
   `solar --reasoning <level>` overrides it for one launch.
 - Run one task at full power with `/ultra <task>`: Max effort and Fast mode for
-  that task only, with the rainbow input frame, then your usual settings return.
+  that task only, with the rainbow spinning twice as fast, then your usual settings return.
 - Plan before acting with `/plan <task>`: Solar inspects the workspace in a
   read-only session, shows a plan, and changes nothing until you choose Execute.
   `/ultraplan <task>` does the same at Max effort and adds a self-critique pass
@@ -81,8 +81,9 @@ use, and creation.
   then hours once an hour has passed.
 - Render Solar's replies as Markdown: headings, bold, inline code, lists, quotes,
   and code blocks.
-- While `/ultraplan` or `/ultrareview` runs, the footer shows Max effort and the
-  input frame becomes an animated full-spectrum rainbow.
+- The input frame is an animated full-spectrum rainbow. While `/ultra`,
+  `/ultraplan`, or `/ultrareview` runs, the footer shows Max effort and the
+  rainbow spins twice as fast on a deep purple background.
 - Narrate each turn like a modern coding agent: Solar says what it will do next
   ("I'll read notes.txt, then update line 2"), and the transcript keeps its notes,
   commands, and file changes in order before the reply.
@@ -91,7 +92,7 @@ use, and creation.
   preceded by a short list of the files it changed.
 - Display the nested agent tree, reasoning pins, live state, elapsed time, recent
   commands, and an expanding golden sun while work is running.
-- Switch between dark and light interface palettes while keeping the rainbow-blue
+- Switch between dark and light interface palettes while keeping the rainbow
   input frame and active workspace visible.
 - Find the native Codex executable installed with the Codex desktop app even when
   its versioned directory is missing from the terminal's `PATH`.

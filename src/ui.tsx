@@ -56,11 +56,9 @@ const rainbowInput = {
   secondary: "#c8e7ff",
   prompt: "#effbff",
   placeholder: "#b4e8ff",
-  rail: ["#00dcff", "#22bdff", "#348cff", "#75c7ff", "#ecfaff", "#528cff", "#4162ff", "#6158f6", "#a970ff"]
+  // Full-spectrum rail that rotates by default; ultra commands spin it twice as fast on deep purple.
+  rail: ["#ff3b5c", "#ff8a1f", "#ffd21f", "#5cff6b", "#1fe0ff", "#3b7bff", "#9b5cff", "#ff4fd8"]
 } as const;
-
-// Ultra commands swap in a full-spectrum rail that rotates each sun tick.
-const ultraRail = ["#ff3b5c", "#ff8a1f", "#ffd21f", "#5cff6b", "#1fe0ff", "#3b7bff", "#9b5cff", "#ff4fd8"] as const;
 const ultraInputBackground = "#1c0b45";
 
 const splashDurationMs = 1_800;
@@ -619,7 +617,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
         cursor={!busy && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
         busy={busy}
         ultra={Boolean(ultra && busy)}
-        tick={spinner}
+        tick={petTick}
       />
 
       <Footer compact={compact} model={model} reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast || (ultra === "ultra" && busy)} themeName={themeName} />
@@ -668,8 +666,8 @@ function SlashCommandMenu({ matches, selected }: { matches: readonly SlashComman
 }
 
 function RainbowInput({ width, value, entered, cursor, busy, ultra = false, tick = 0 }: { width: number; value: string; entered: boolean; cursor: boolean; busy: boolean; ultra?: boolean; tick?: number }): React.JSX.Element {
-  const offset = tick % ultraRail.length;
-  const rail: readonly string[] = ultra ? [...ultraRail.slice(offset), ...ultraRail.slice(0, offset)] : rainbowInput.rail;
+  const offset = (ultra ? tick * 2 : tick) % rainbowInput.rail.length;
+  const rail: readonly string[] = [...rainbowInput.rail.slice(offset), ...rainbowInput.rail.slice(0, offset)];
   const background = ultra ? ultraInputBackground : rainbowInput.background;
   const available = Math.max(1, width - 7);
   const visibleValue = entered ? value.slice(-available) : value.slice(0, available);
