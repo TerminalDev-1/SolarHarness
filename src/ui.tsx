@@ -267,16 +267,18 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
       return;
     }
     try {
-      const nextWorkspace = await harness.resetIntoTestWorkspace();
+      const { workspace: nextWorkspace, cleared } = await harness.startNewSession();
       setWorkspace(nextWorkspace);
       setAgents([]);
       setBrief([]);
       setPendingPlan(null);
       setPendingTaskPlan(null);
       setPendingEffort(null);
-      setConversation([{ role: "solar", text: `Started a completely fresh Solar session. The test workspace was cleared and is now empty: ${nextWorkspace}` }]);
+      setConversation([{ role: "solar", text: cleared
+        ? `Started a completely fresh Solar session. The test workspace was cleared and is now empty: ${nextWorkspace}`
+        : `Started a completely fresh Solar session. Files in ${nextWorkspace} were kept.` }]);
     } catch (error) {
-      addMessage({ role: "error", text: `Unable to start the test workspace: ${error instanceof Error ? error.message : String(error)}` });
+      addMessage({ role: "error", text: `Unable to start a new session: ${error instanceof Error ? error.message : String(error)}` });
     }
   };
 
@@ -536,7 +538,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
 
       {pendingTaskPlan && <TaskPlanApproval pending={pendingTaskPlan} />}
 
-      {pendingNew && <NewSessionConfirmation pending={pendingNew} workspace={harness.getTestWorkspace()} />}
+      {pendingNew && <NewSessionConfirmation pending={pendingNew} workspace={harness.getWorkspace()} clears={harness.clearsOnNew()} />}
 
       {busy && (
         <Box marginTop={1} flexDirection="column" paddingX={1}>
@@ -549,7 +551,7 @@ function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppProps): 
 
       <RainbowInput
         width={contentWidth}
-        value={pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new test-workspace session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
+        value={pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
         entered={Boolean(input) && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
         cursor={!busy && !pendingTaskPlan && !pendingPlan && !pendingEffort && !pendingSpeed && !pendingNew}
         busy={busy}
@@ -677,14 +679,19 @@ function fastDescription(model: string): string {
   return "faster responses · higher credit use where available";
 }
 
-function NewSessionConfirmation({ pending, workspace }: { pending: PendingNew; workspace: string }): React.JSX.Element {
+function NewSessionConfirmation({ pending, workspace, clears }: { pending: PendingNew; workspace: string; clears: boolean }): React.JSX.Element {
   return (
     <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={theme.warning} paddingX={1}>
       <Text bold color={theme.warning}>Start a completely fresh session?</Text>
       <Text color={theme.secondary}>This discards the Solar conversation, stops all sub-agents, and clears their records.</Text>
-      <Text color={theme.error}>Every file and folder inside this test workspace will also be deleted:</Text>
-      <Text color={theme.primary}>{workspace}</Text>
-      <Text color={theme.subtle}>The empty test folder is kept and becomes the new session workspace. This cannot be undone by Solar Harness.</Text>
+      {clears ? <>
+        <Text color={theme.error}>Every file and folder inside this test workspace will also be deleted:</Text>
+        <Text color={theme.primary}>{workspace}</Text>
+        <Text color={theme.subtle}>The empty test folder is kept and becomes the new session workspace. This cannot be undone by Solar Harness.</Text>
+      </> : <>
+        <Text color={theme.secondary}>Files in this directory are kept:</Text>
+        <Text color={theme.primary}>{workspace}</Text>
+      </>}
       <Box marginTop={1}>
         <Text color={pending.cursor === 0 ? theme.success : theme.secondary}>{pending.cursor === 0 ? "› " : "  "}[ Yes ]</Text>
         <Text>  </Text>

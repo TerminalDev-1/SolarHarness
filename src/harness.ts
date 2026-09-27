@@ -344,6 +344,19 @@ export class SolarHarness {
     return this.options.cwd;
   }
 
+  /** Only a workspace named `test` is emptied by /new; any other launch directory is never deleted. */
+  clearsOnNew(): boolean {
+    return basename(resolve(this.options.cwd)).toLowerCase() === "test";
+  }
+
+  async startNewSession(): Promise<{ workspace: string; cleared: boolean }> {
+    if (this.clearsOnNew()) return { workspace: await this.resetIntoTestWorkspace(), cleared: true };
+    await this.browser.close();
+    await this.workspace.close();
+    this.resetConversation();
+    return { workspace: this.options.cwd, cleared: false };
+  }
+
   getTestWorkspace(): string {
     const current = resolve(this.options.cwd);
     return basename(current).toLowerCase() === "test" ? current : join(current, "test");

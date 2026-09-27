@@ -1078,3 +1078,27 @@ test("/ultrareview fails honestly when every reviewer fails", async () => {
   harness.provider.run = async () => { throw new Error("codex offline"); };
   await assert.rejects(harness.ultraReview(""), /every reviewer failed[\s\S]*codex offline/);
 });
+
+test("/new outside a test directory resets the session without deleting files", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-any-dir-"));
+  try {
+    await writeFile(join(root, "keep.txt"), "user project file");
+    const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: root });
+    assert.equal(harness.clearsOnNew(), false);
+    assert.deepEqual(await harness.startNewSession(), { workspace: root, cleared: false });
+    assert.equal(await readFile(join(root, "keep.txt"), "utf8"), "user project file");
+    assert.equal(harness.getWorkspace(), root);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("/new inside a test directory still empties it", async () => {
+  const root = await mkdtemp(join(tmpdir(), "solar-test-dir-"));
+  const workspace = join(root, "test");
+  try {
+    await mkdir(workspace, { recursive: true });
+    await writeFile(join(workspace, "old.txt"), "old");
+    const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: workspace });
+    assert.deepEqual(await harness.startNewSession(), { workspace, cleared: true });
+    assert.deepEqual(await readdir(workspace), []);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
