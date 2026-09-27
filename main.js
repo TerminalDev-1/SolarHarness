@@ -10,6 +10,7 @@ import { solarDirectory } from "solar-harness/dist/solar-dir.js";
 import { REASONING_EFFORTS } from "solar-harness/dist/types.js";
 import { SOLAR_VERSION_LABEL } from "solar-harness/dist/version.js";
 import { ChangeTracker } from "./changes.js";
+import { claimBrowser, releaseBrowser } from "./browser-control.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const preferencesPath = () => join(app.getPath("userData"), "preferences.json");
@@ -75,11 +76,13 @@ async function runTurn(turnId, work) {
   if (!harness) throw new Error("Open a folder first.");
   if (busy) throw new Error("Solar is still working on the last message.");
   busy = true;
+  const turnHarness = harness;
   try {
-    await tracker.snapshot();
+    await Promise.all([tracker.snapshot(), claimBrowser(turnHarness.browser).catch(() => {})]);
     return await work(activityRelay(turnId));
   } finally {
     busy = false;
+    await releaseBrowser(turnHarness.browser).catch(() => {});
   }
 }
 
@@ -162,9 +165,10 @@ function createWindow() {
     show: false,
     titleBarStyle: "hidden",
     ...(process.platform === "darwin" ? { trafficLightPosition: { x: 16, y: 16 } } : { titleBarOverlay: { color: "#0b0b10", symbolColor: "#a1a1aa", height: 44 } }),
-    webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true }
+    // Screenshot runs render offscreen so no window appears on the desktop.
+    webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: capturing }
   });
-  window.once("ready-to-show", () => window.show());
+  if (!capturing) window.once("ready-to-show", () => window.show());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/i.test(url)) void shell.openExternal(url);
     return { action: "deny" };
@@ -174,8 +178,9 @@ function createWindow() {
 }
 
 const demo = process.env.SOLAR_DESKTOP_DEMO ? await import("./demo.js") : undefined;
+const capturing = Boolean(demo && process.env.SOLAR_DESKTOP_SCREENSHOTS);
 // Offscreen captures are more reliable on the software renderer.
-if (process.env.SOLAR_DESKTOP_SCREENSHOTS) app.disableHardwareAcceleration();
+if (capturing) app.disableHardwareAcceleration();
 
 app.whenReady().then(() => {
   loadPreferences();
@@ -188,7 +193,7 @@ app.whenReady().then(() => {
   if (launchFolder && existsSync(launchFolder)) openWorkspace(launchFolder);
   registerIpc();
   createWindow();
-  if (demo && process.env.SOLAR_DESKTOP_SCREENSHOTS) {
+  if (capturing) {
     window.webContents.once("did-finish-load", async () => {
       await demo.captureScreenshots(window, process.env.SOLAR_DESKTOP_SCREENSHOTS);
       app.quit();

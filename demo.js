@@ -44,9 +44,10 @@ export function prepareDemoWorkspace() {
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export function installDemoHarness() {
-  SolarHarness.prototype.converse = async function demoConverse(_message, onActivity) {
+  SolarHarness.prototype.converse = async function demoConverse(message, onActivity) {
     const cwd = this.getWorkspace();
     const say = async (line, ms = 450) => { onActivity?.(line); await wait(ms); };
+    if (/stress/i.test(message)) return stressTurn(cwd, say);
     await say("Thinking: Reviewing the landing page structure");
     await say("Note: I'll inspect the workspace, then build the page and polish the styles.");
     await say("Running command: Get-ChildItem -Recurse src", 300);
@@ -121,6 +122,18 @@ export function installDemoHarness() {
   };
 }
 
+/** A turn with many large files, for checking the layout holds up under big diffs. */
+async function stressTurn(cwd, say) {
+  await say("Note: I'll generate a large batch of files.", 100);
+  mkdirSync(join(cwd, "generated"), { recursive: true });
+  for (let file = 0; file < 60; file++) {
+    const lines = Array.from({ length: 400 }, (_, line) => `export const value${line} = "${"x".repeat(line % 90)}"; // file ${file}`);
+    await writeFile(join(cwd, "generated", `module-${file}.js`), `${lines.join("\n")}\n`);
+    await say(`File: Created generated/module-${file}.js (400 lines)`, 10);
+  }
+  return { readyToDelegate: false, reply: "Generated 60 modules of 400 lines each." };
+}
+
 /** Types a request, waits for the scripted turn, and saves screenshots of the key views. */
 export async function captureScreenshots(window, directory) {
   mkdirSync(directory, { recursive: true });
@@ -143,4 +156,11 @@ export async function captureScreenshots(window, directory) {
   await run(`[...document.querySelectorAll(".review-file")].find(row => row.textContent.includes("styles.css"))?.click()`);
   await wait(500);
   await shot("review");
+  await run(`document.getElementById("review-close").click()`);
+  await run(`(() => { const input = document.getElementById("input"); input.value = "stress test with huge diffs"; input.dispatchEvent(new Event("input")); document.getElementById("send").click(); })()`);
+  await wait(6000);
+  await shot("stress");
+  // The composer must stay fully inside the window however much the thread holds.
+  const layout = await run(`(() => { const box = document.getElementById("composer").getBoundingClientRect(); return { composerBottom: Math.round(box.bottom), windowHeight: innerHeight, pageHeight: document.documentElement.scrollHeight }; })()`);
+  console.log(`stress layout: ${JSON.stringify(layout)} ${layout.composerBottom <= layout.windowHeight && layout.pageHeight <= layout.windowHeight ? "OK" : "COMPOSER OFF SCREEN"}`);
 }

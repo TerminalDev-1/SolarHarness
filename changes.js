@@ -81,7 +81,7 @@ export class ChangeTracker {
       if (kind === "modified" && !diff.added && !diff.removed) continue;
       files.push({ path, name: displayName(this.workspace, path), kind, ...diff });
     }
-    return files.sort((a, b) => a.name.localeCompare(b.name));
+    return files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   }
 }
 

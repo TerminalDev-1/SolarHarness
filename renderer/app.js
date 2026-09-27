@@ -210,8 +210,10 @@ async function submit() {
 // ---------- the thread ----------
 
 const thread = $("thread");
-thread.addEventListener("scroll", () => { stickToBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80; });
-const scrollToBottom = (force = false) => { if (force || stickToBottom) thread.scrollTop = thread.scrollHeight; };
+const updateJump = () => { $("jump-latest").hidden = stickToBottom || thread.scrollHeight <= thread.clientHeight; };
+thread.addEventListener("scroll", () => { stickToBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80; updateJump(); });
+const scrollToBottom = (force = false) => { if (force || stickToBottom) thread.scrollTop = thread.scrollHeight; updateJump(); };
+$("jump-latest").addEventListener("click", () => { stickToBottom = true; thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" }); });
 
 function clearThread() { $("thread-inner").replaceChildren(); turns.clear(); $("chat-title").textContent = "New chat"; }
 
