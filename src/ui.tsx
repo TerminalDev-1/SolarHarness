@@ -8,6 +8,7 @@ import { formatStats } from "./stats.js";
 import { SOLAR_VERSION_LABEL } from "./version.js";
 import { SOLAR_MODELS, modelName } from "./models.js";
 import { pasteClipboardImages, pickImageFiles } from "./attachments.js";
+import { renderThumbnail, type Thumbnail } from "./thumbnails.js";
 import { basename } from "node:path";
 import { loadDefaultEffort, saveDefaultEffort } from "./settings.js";
 import { instructionPaths } from "./instructions.js";
@@ -15,7 +16,8 @@ import { sunColors, sunFrames } from "./sun.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type ReasoningEffort } from "./types.js";
 
 type UiPhase = "idle" | "thinking" | "browsing" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating" | "reviewing";
-type ChatMessage = { role: "user" | "solar" | "error" | "steps"; text: string };
+type ImagePreview = { name: string; thumbnail?: Thumbnail };
+type ChatMessage = { role: "user" | "solar" | "error" | "steps"; text: string; images?: ImagePreview[] };
 type PendingPlan = { plan: DelegationPlan; request: string; context: string; selected: boolean[]; cursor: number };
 type PendingEffort = { cursor: number };
 type PendingSpeed = { cursor: number };
@@ -187,8 +189,11 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
     setSlashMenuOpen(menuOpen);
   };
 
-  // Images added with Ctrl+O / Tab (file picker) or pasted with Ctrl+V / Alt+V, sent with the next message.
+  // Images added with Tab (file picker) or pasted with Ctrl+V / Alt+V, sent with the next message.
   const [attachments, setAttachmentsState] = useState<string[]>([]);
+  // Half-block previews, keyed by path; undefined while loading, null when the file can't be drawn.
+  const [thumbnails, setThumbnails] = useState<Record<string, Thumbnail | null>>({});
+  const previewsFor = (paths: string[]): ImagePreview[] => paths.map(path => ({ name: basename(path), thumbnail: thumbnails[path] ?? undefined }));
   const [attaching, setAttaching] = useState<"picker" | "clipboard" | null>(null);
   const attachmentsRef = useRef<string[]>([]);
   const setAttachments = (next: string[]): void => {
@@ -200,7 +205,13 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
     setAttaching(source);
     try {
       const found = source === "picker" ? await imageSources.pick() : await imageSources.paste(harness.getWorkspace());
-      if (found.length) setAttachments([...new Set([...attachmentsRef.current, ...found])].slice(0, 8));
+      if (found.length) {
+        const added = found.filter(path => !attachmentsRef.current.includes(path));
+        setAttachments([...attachmentsRef.current, ...added].slice(0, 8));
+        for (const path of added) {
+          void renderThumbnail(path).then(thumbnail => setThumbnails(current => ({ ...current, [path]: thumbnail ?? null })));
+        }
+      }
       else if (source === "clipboard") addMessage({ role: "error", text: "There's no image on the clipboard. Copy an image or an image file, then press Ctrl+V or Alt+V." });
     } catch (error) {
       addMessage({ role: "error", text: `Couldn't add the image: ${error instanceof Error ? error.message : String(error)}` });
@@ -416,7 +427,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
     if (line === "/quit" || line === "/exit") { exit(); return; }
     if (images.length) setAttachments([]);
 
-    addMessage({ role: "user", text: images.length ? `${line}\n${images.map(image => `+ ${basename(image)}`).join("  ")}` : line });
+    addMessage({ role: "user", text: line, ...(images.length ? { images: previewsFor(images) } : {}) });
     setActivityLog(["Sending your request to Solar"]);
     resetSteps();
     setCurrentActivity(initialActivity(line));
@@ -599,8 +610,8 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
       if (key.downArrow) { setSlashSelection(value => (value + 1) % menu.length); return; }
       if (key.tab || key.return) { chooseSlashCommand(menu[Math.min(slashSelection, menu.length - 1)]); return; }
     }
-    // The + button: Ctrl+O, or Tab on an empty box, opens the image picker; Ctrl+V or Alt+V pastes one.
-    if ((key.ctrl && character === "o") || (key.tab && !inputRef.current)) { void addAttachments("picker"); return; }
+    // The + button: Tab opens the image picker (Tab picks a command only while the / menu is open); Ctrl+V or Alt+V pastes one.
+    if (key.tab) { void addAttachments("picker"); return; }
     if ((key.ctrl || key.meta) && character === "v") { void addAttachments("clipboard"); return; }
     if (key.return) { void submit(); return; }
     if (key.backspace || key.delete) {
@@ -678,7 +689,10 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
 
       {slashMatches.length > 0 && <SlashCommandMenu matches={slashMatches} selected={slashSelection} />}
 
-      {attachments.length > 0 && <AttachmentLine names={attachments.map(image => basename(image))} />}
+      {attachments.length > 0 && <Box marginTop={1} paddingX={1} flexDirection="column">
+        <ImagePreviews images={previewsFor(attachments)} />
+        <Text color={theme.subtle}>Backspace removes the last image</Text>
+      </Box>}
 
       <RainbowInput
         width={contentWidth}
@@ -742,7 +756,7 @@ function RainbowInput({ width, value, entered, cursor, busy, ultra = false, tick
   const offset = (ultra ? tick * 2 : tick) % rainbowInput.rail.length;
   const rail: readonly string[] = [...rainbowInput.rail.slice(offset), ...rainbowInput.rail.slice(0, offset)];
   const background = ultra ? ultraInputBackground : rainbowInput.background;
-  // Row layout: "▌ + › value▐". The + marks where images are added (Ctrl+O, Tab, Ctrl+V, Alt+V).
+  // Row layout: "▌ + › value▐". The + marks where images are added (Tab, Ctrl+V, Alt+V).
   const available = Math.max(1, width - 9);
   const visibleValue = entered ? value.slice(-available) : value.slice(0, available);
   const remaining = Math.max(0, width - 2 - 5 - visibleValue.length - Number(cursor));
@@ -765,12 +779,17 @@ function RainbowInput({ width, value, entered, cursor, busy, ultra = false, tick
   );
 }
 
-function AttachmentLine({ names }: { names: string[] }): React.JSX.Element {
-  return <Box marginTop={1} paddingX={1}>
-    <Text color={theme.secondary}>
-      {names.map((name, index) => <Text key={`${index}-${name}`}><Text color={rainbowInput.plus}>+ </Text>{name}{"   "}</Text>)}
-      <Text color={theme.subtle}>Backspace removes the last image</Text>
-    </Text>
+/** Image thumbnails side by side, each drawn with "▀" cells and captioned with its file name. */
+function ImagePreviews({ images }: { images: ImagePreview[] }): React.JSX.Element {
+  return <Box flexWrap="wrap" columnGap={2}>
+    {images.map((image, index) => (
+      <Box key={`${index}-${image.name}`} flexDirection="column">
+        {image.thumbnail?.rows.map((runs, row) => (
+          <Text key={row}>{runs.map((run, cell) => <Text key={cell} color={run.top} backgroundColor={run.bottom}>{"▀".repeat(run.length)}</Text>)}</Text>
+        ))}
+        <Text color={theme.secondary}><Text color={rainbowInput.plus}>+ </Text>{image.name}</Text>
+      </Box>
+    ))}
   </Box>;
 }
 
@@ -961,7 +980,8 @@ function Message({ message }: { message: ChatMessage }): React.JSX.Element {
       <Box width={8}><Text bold color={color}>{label}</Text></Box>
       <Box flexGrow={1} flexDirection="column">{message.role === "solar"
         ? <MarkdownView text={message.text} />
-        : <Text color={message.role === "error" ? theme.error : theme.primary}>{message.text}</Text>}</Box>
+        : <Text color={message.role === "error" ? theme.error : theme.primary}>{message.text}</Text>}
+        {message.images && <Box marginTop={1}><ImagePreviews images={message.images} /></Box>}</Box>
     </Box>
   );
 }
@@ -1060,7 +1080,7 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
 function Footer({ compact, model, reasoning, autoApprove, fast, themeName }: { compact: boolean; model: string; reasoning: ReasoningEffort; autoApprove: boolean; fast: boolean; themeName: ThemeName }): React.JSX.Element {
   return (
     <Box paddingX={1} marginTop={1} justifyContent="space-between">
-      <Text color={theme.subtle}>Enter send · Ctrl+O image · /help</Text>
+      <Text color={theme.subtle}>Enter send · Tab image · /help</Text>
       {!compact && <Text color={theme.subtle}>{model} · {reasoning} · {fast ? "Fast" : "Standard"} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>}
     </Box>
   );

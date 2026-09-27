@@ -1401,7 +1401,7 @@ test("the /model picker switches between GPT-6 Luna and GPT-5.6 Luna", async () 
   } finally { app.unmount(); }
 });
 
-test("images added with Ctrl+O, Tab, Ctrl+V, or Alt+V go with the next message", async () => {
+test("images added with Tab, Ctrl+V, or Alt+V show as thumbnails and go with the next message", async () => {
   const { PassThrough } = await import("node:stream");
   const { render } = await import("ink");
   const { SolarApp } = await import("../dist/ui.js");
@@ -1419,10 +1419,12 @@ test("images added with Ctrl+O, Tab, Ctrl+V, or Alt+V go with the next message",
   harness.provider.resume = async (_session, prompt, options, args) => harness.provider.run(prompt, options, args);
   const picked = join(root, "mockup.png");
   const pasted = join(root, "clipboard-1.png");
-  await writeFile(picked, "png");
-  await writeFile(pasted, "png");
+  const sharp = (await import("sharp")).default;
+  await sharp({ create: { width: 16, height: 8, channels: 3, background: "#ff0000" } }).png().toFile(picked);
+  await sharp({ create: { width: 16, height: 8, channels: 3, background: "#0000ff" } }).png().toFile(pasted);
   let pastes = 0;
-  const imageSources = { pick: async () => [picked], paste: async () => (pastes++ ? [] : [pasted]) };
+  let picks = 0;
+  const imageSources = { pick: async () => { picks++; return [picked]; }, paste: async () => (pastes++ ? [] : [pasted]) };
   const app = render(React.createElement(SolarApp, { harness, model: "gpt-6-luna", reasoning: "light", initialSplash: false, imageSources }), { stdout, stdin, exitOnCtrlC: false, patchConsole: false });
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const press = async keys => { for (const key of keys) { stdin.write(key); await sleep(40); } };
@@ -1430,25 +1432,50 @@ test("images added with Ctrl+O, Tab, Ctrl+V, or Alt+V go with the next message",
   try {
     await sleep(150);
     assert.match(screen(), /▌ \+ › Ask Solar anything/);
-    await press(["\x0f"]);            // Ctrl+O opens the picker
-    await press(["\x1bv"]);           // Alt+V pastes from the clipboard
+    await press([..."/mod", "\t"]);   // With the / menu open, Tab still picks the command
     await sleep(100);
-    assert.match(screen(), /\+ mockup\.png\s+\+ clipboard-1\.png\s+Backspace removes the last image/);
+    assert.equal(picks, 0);
+    assert.match(screen(), /› \/model\s*▐/);
+    await press(["\x7f", "\x7f", "\x7f", "\x7f", "\x7f", "\x7f"]);
+    await press(["\t"]);              // Tab opens the picker
+    await press(["\x1bv"]);           // Alt+V pastes from the clipboard
+    await sleep(300);                 // thumbnails load in the background
+    assert.match(screen(), /▀{16}\s+▀{16}\n(?:.*\n)*?\s*\+ mockup\.png\s+\+ clipboard-1\.png\s*\n\s*Backspace removes the last image/);
     await press(["\x7f"]);            // Backspace on an empty box removes the last image
-    await press(["\t"]);              // Tab on an empty box opens the picker again (no duplicate)
+    await press([..."what is "]);
+    await press(["\t"]);              // Tab after typing still opens the picker (no duplicate added)
     await press(["\x16"]);            // Ctrl+V with nothing on the clipboard
     await sleep(100);
+    assert.equal(picks, 2);
     assert.match(screen(), /no image on the clipboard/);
-    await press([..."what is wrong here?", "\r"]);
+    await press([..."wrong here?", "\r"]);
     await sleep(300);
     assert.equal(sent.length, 1);
     assert.deepEqual(sent[0].images, [picked]);
     assert.match(sent[0].prompt, /User: what is wrong here\?/);
     assert.match(sent[0].prompt, /attached 1 image/);
-    assert.match(screen(), /You\s+what is wrong here\?\n\s+\+ mockup\.png/);
-    await press(["\x0f", "\r"]);      // An image alone, with no text, still sends
+    assert.match(screen(), /You\s+what is wrong here\?\n\s*\n\s+▀{16}\n(?:.*\n)*?\s+\+ mockup\.png/);
+    await press(["\t", "\r"]);        // An image alone, with no text, still sends
     await sleep(300);
     assert.equal(sent.length, 2);
     assert.match(sent[1].prompt, /User: Take a look at the attached image\./);
   } finally { app.unmount(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+});
+
+test("thumbnails turn image pixels into half-block colors", async () => {
+  const sharp = (await import("sharp")).default;
+  const { renderThumbnail } = await import("../dist/thumbnails.js");
+  const root = await mkdtemp(join(tmpdir(), "solar-thumb-"));
+  try {
+    const path = join(root, "split.png");
+    // Top half red, bottom half blue: every cell is a red "▀" on a blue background.
+    await sharp({ create: { width: 2, height: 2, channels: 3, background: "#0000ff" } })
+      .composite([{ input: { create: { width: 2, height: 1, channels: 3, background: "#ff0000" } }, top: 0, left: 0 }])
+      .png().toFile(path);
+    const thumbnail = await renderThumbnail(path, 2, 1);
+    assert.equal(thumbnail.columns, 2);
+    assert.deepEqual(thumbnail.rows, [[{ top: "#ff0000", bottom: "#0000ff", length: 2 }]]);
+    await writeFile(join(root, "broken.png"), "not an image");
+    assert.equal(await renderThumbnail(join(root, "broken.png")), undefined);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

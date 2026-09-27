@@ -67,9 +67,9 @@ as `v1.0 build 974504f`.
    (sun and activity)                     ← appears while Solar is working
    + home.png                             ← images you've added, waiting to send
  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄         ← the rainbow input frame
- ▌ + › Ask Solar anything           ▐     ← + adds images (Ctrl+O, Ctrl+V, Alt+V)
+ ▌ + › Ask Solar anything           ▐     ← + adds images (Tab, Ctrl+V, Alt+V)
  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
- Enter send · Ctrl+O image · /help   gpt-6-luna · max · Standard · dark · auto off
+ Enter send · Tab image · /help      gpt-6-luna · max · Standard · dark · auto off
                                      ↑ model · effort · speed · theme · auto-approve
 ```
 
@@ -106,12 +106,14 @@ The `+` at the start of the box is where images come in:
 
 | Keys | What happens |
 | --- | --- |
-| **Ctrl+O**, or **Tab** in an empty box | Opens a file picker. Choose one or more images. |
+| **Tab** | Opens a file picker. Choose one or more images. (While the `/` command menu is open, Tab picks a command instead.) |
 | **Ctrl+V** or **Alt+V** | Pastes the image on your clipboard: a screenshot or copied picture, or image files copied in File Explorer. |
 | **Backspace** in an empty box | Removes the last image you added. |
 
-Added images wait above the box. Type your question and press Enter, and they go
-with it. You can also press Enter with no text to just send the images.
+Added images appear above the box as small colour previews, so you can check you
+picked the right ones. Type your question and press Enter, and they go with it; the
+previews stay with your message in the conversation. You can also press Enter with
+no text to just send the images. (BMP files send fine but show only their name.)
 
 Windows Terminal normally keeps Ctrl+V for pasting text, and when the clipboard
 holds only a picture it passes nothing on to Solar. If Ctrl+V doesn't add your

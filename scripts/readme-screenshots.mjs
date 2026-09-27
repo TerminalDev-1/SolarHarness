@@ -122,11 +122,23 @@ const scenes = [];
 {
   await mkdir(join(scratch, "screenshots"), { recursive: true });
   const shots = ["home.png", "mobile.png"].map(name => join(scratch, "screenshots", name));
-  for (const shot of shots) await writeFile(shot, "png");
+  // Two small website mockups, so the previews show real pictures.
+  const sharp = (await import("sharp")).default;
+  const page = (width, height, accent) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+    <rect width="100%" height="100%" fill="#10141c"/><rect width="100%" height="${height * 0.14}" fill="#1f2937"/>
+    <circle cx="${width * 0.08}" cy="${height * 0.07}" r="${height * 0.035}" fill="${accent}"/>
+    <rect x="${width * 0.1}" y="${height * 0.26}" width="${width * 0.55}" height="${height * 0.1}" rx="4" fill="#f3f4f6"/>
+    <rect x="${width * 0.1}" y="${height * 0.42}" width="${width * 0.35}" height="${height * 0.08}" rx="4" fill="${accent}"/>
+    <rect x="${width * 0.1}" y="${height * 0.62}" width="${width * 0.24}" height="${height * 0.26}" rx="6" fill="#374151"/>
+    <rect x="${width * 0.38}" y="${height * 0.62}" width="${width * 0.24}" height="${height * 0.26}" rx="6" fill="#374151"/>
+    <rect x="${width * 0.66}" y="${height * 0.62}" width="${width * 0.24}" height="${height * 0.26}" rx="6" fill="#374151"/></svg>`);
+  await sharp(page(480, 240, "#f97316")).png().toFile(shots[0]);
+  await sharp(page(240, 240, "#22d3ee")).png().toFile(shots[1]);
   const solar = await startSolar(scratch, { pick: async () => [shots[0]], paste: async () => [shots[1]] });
-  await solar.type("\x0f", false);
+  await solar.type("\t", false);
   await solar.type("\x1bv", false);
   await solar.type("why does the menu overlap on mobile?", false);
+  await sleep(500); // thumbnails render in the background
   scenes.push(["attach", solar.output()]);
   solar.close();
 }
