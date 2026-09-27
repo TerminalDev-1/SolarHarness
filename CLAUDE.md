@@ -6,6 +6,7 @@ TS ESM (`.js` imports), Ink UI, Codex CLI backend (`codex-provider.ts`). `harnes
 
 Rules:
 - Update this file for agent/tool contract changes, README for user-facing ones; after UI changes rerun `npm run docs:screenshots` so README images stay accurate. After verifying a requested change, commit only its files and push.
+- Versioning: never bump the version for ordinary changes. The build commit (`version.ts`, `scripts/build-info.mjs`) identifies each change as `v1.0 build <commit>`; keep it shown in the header and `--version`. Change `package.json`'s version only when the user asks for a new release.
 - Never weaken tests. Credit Solar only for recorded successful tool calls.
 - Delegate only on explicit request or `/delegate`; max 8 agents, two levels, sub-delegates pinned Light. Auto-approve never bypasses `/new` confirmation. Wording heuristics never gate tool availability.
 - UI: header and finished messages go in Ink `<Static>`; keep the live area shorter than the window, or Ink clears the terminal each frame and breaks scrolling. ASCII sun, one solid-color label span, no emoji-capable glyphs or per-char ANSI, short activity labels, rotating full-spectrum rainbow input frame by default in all themes (ultra spins it faster); no cards, status panels, `Ready` badge, or silver palette.
