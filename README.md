@@ -25,6 +25,34 @@ npm link
 Then open a terminal in any project folder and run `solar`. That folder becomes
 Solar's workspace.
 
+## Versions and builds
+
+The top of the screen shows which Solar you are running:
+
+```text
+▣ Solar Harness v1.0 build 974504f
+```
+
+- **`v1.0`** is the release. It changes only for a new release, not for every fix
+  or feature.
+- **`build 974504f`** is the commit your copy was built from. Each change to Solar
+  gets a new build, so this tells you exactly which code you have. You can look it
+  up at `github.com/TerminalDev-1/SolarHarness/commit/<build>`.
+
+`solar --version` prints the same thing, for example `1.0 build 974504f`.
+
+To update to the latest build, run these in the SolarHarness folder:
+
+```powershell
+git pull
+npm install
+npm run build
+```
+
+The build shown only changes after `npm run build`, so it always matches the code
+that is actually running. When you report a problem, include the whole line, such
+as `v1.0 build 974504f`.
+
 ## The interface
 
 ![The Solar welcome screen](docs/images/welcome.png)
