@@ -984,7 +984,7 @@ function phaseCopy(phase: UiPhase, activeSubAgents: number, detail: string): str
 type LaunchOptions = { cwd: string; model: string; reasoning: ReasoningEffort };
 
 export function startSolarUi(launch: LaunchOptions): void {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("Solar Harness Preview requires an interactive terminal.");
+  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("an interactive terminal is required.");
   theme = darkTheme;
   applyTerminalTheme(process.stdout, "dark");
   const harness = new SolarHarness({ task: "", cwd: launch.cwd, model: launch.model, reasoning: launch.reasoning });

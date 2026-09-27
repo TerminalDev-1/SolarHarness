@@ -1,7 +1,6 @@
 # SolarHarness
 
-> **Preview:** SolarHarness is under active development. Its interfaces, behavior,
-> and safety boundaries may change before a stable release.
+> **v1.0:** SolarHarness is out of preview. This is the first stable release.
 
 **First committed:** 20 September 2026.
 
@@ -311,8 +310,8 @@ An animated text pet moves across the interface while Solar is idle or working. 
 selected by default; use `/pets cat`, `/pets dog`, `/pets fox`, or `/pets off`
 to change it. Run `/pets` to see the current selection.
 
-## Preview status
+## Working safely
 
-SolarHarness is not stable yet. Use it in disposable or version-controlled
+Solar edits files in the directory you launch it from. Use it in version-controlled
 workspaces, review delegation plans carefully, give parallel sub-agents clear file or
 directory ownership, and inspect changes before committing them.

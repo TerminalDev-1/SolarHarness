@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { startSolarUi } from "./ui.js";
 import { REASONING_EFFORTS, type ReasoningEffort } from "./types.js";
@@ -9,11 +10,12 @@ const program = new Command();
 
 program
   .name("solar")
-  .description("Solar Harness Preview — a terminal-native coding agent harness");
+  .description("Solar Harness — a terminal-native coding agent harness")
+  .version((JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version);
 
 program
   .command("chat", { isDefault: true })
-  .description("Start the Solar Harness Preview terminal UI")
+  .description("Start the Solar Harness terminal UI")
   .option("--model <model>", "Codex model", "gpt-6-luna")
   .option("--reasoning <effort>", "Reasoning for this session: light, medium, high, xhigh, or max (default: the saved /default-effort, initially max)")
   .action(({ model, reasoning = loadDefaultEffort() }: { model: string; reasoning?: ReasoningEffort }) => {
@@ -24,6 +26,6 @@ program
   });
 
 program.parseAsync().catch(error => {
-  process.stderr.write(`Solar Harness Preview: ${error.message}\n`);
+  process.stderr.write(`Solar Harness: ${error.message}\n`);
   process.exitCode = 1;
 });
