@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Box, Static, Text, render, useApp, useInput, useStdout } from "ink";
 import { SolarHarness } from "./harness.js";
 import { actionStatus, activityDetail, formatElapsed, initialActivity } from "./activity.js";
-import { parseMarkdown, type Inline } from "./markdown.js";
+import { parseMarkdown, plainText, type Inline } from "./markdown.js";
 import { PET_NAMES, petSprite, type PetSelection } from "./pets.js";
 import { formatStats } from "./stats.js";
 import { instructionPaths } from "./instructions.js";
@@ -177,18 +177,22 @@ export function SolarApp({ harness, model, reasoning, initialSplash }: SolarAppP
 
   const addMessage = (message: ChatMessage): void => setConversation(current => [...current, message]);
   const resetSteps = (): void => { stepsRef.current = []; setSteps([]); };
-  // Before a reply, records the turn's file changes (and a command count) in the transcript.
+  // Before a reply, records the turn as a timeline: Solar's notes, commands, and file changes in order.
   const addReply = (text: string): void => {
-    const files = stepsRef.current.filter(step => !step.startsWith("Ran "));
-    const commands = stepsRef.current.length - files.length;
-    const summary = [...files, ...(commands ? [`Ran ${commands} command${commands === 1 ? "" : "s"}`] : [])];
+    const timeline = [...stepsRef.current];
+    const last = timeline.at(-1);
+    if (last?.startsWith("Note: ") && normalizeNote(text).startsWith(normalizeNote(last.slice(6)).replace(/\.\.\.$/, ""))) timeline.pop();
+    const summary = collapseCommands(timeline);
     if (summary.length) addMessage({ role: "steps", text: summary.join("\n") });
     resetSteps();
     addMessage({ role: "solar", text });
   };
   const reportActivity = (message: string): void => {
     const clean = message.replace(/\s+/g, " ").trim();
-    const step = clean.startsWith("File: ") ? clean.slice(6) : clean.startsWith("Command completed: ") ? `Ran ${clean.slice(19)}` : undefined;
+    const step = clean.startsWith("File: ") ? clean.slice(6)
+      : clean.startsWith("Command completed: ") ? `Ran ${clean.slice(19)}`
+      : clean.startsWith("Workspace: ") ? `Ran ${clean.slice(11)}`
+      : clean.startsWith("Note: ") ? clean : undefined;
     if (step) {
       stepsRef.current = [...stepsRef.current.slice(-49), step];
       setSteps(stepsRef.current);
@@ -800,7 +804,24 @@ function Header({ compact, workspace, width }: { compact: boolean; workspace: st
   );
 }
 
+/** Consecutive commands fold into one line in the transcript, e.g. "Ran 4 commands". */
+function collapseCommands(steps: string[]): string[] {
+  const result: string[] = [];
+  for (let index = 0; index < steps.length;) {
+    let end = index;
+    while (end < steps.length && steps[end].startsWith("Ran ")) end++;
+    if (end - index > 1) { result.push(`Ran ${end - index} commands`); index = end; }
+    else result.push(steps[index++]);
+  }
+  return result;
+}
+
+function normalizeNote(text: string): string {
+  return plainText(text).toLowerCase();
+}
+
 function stepMarker(step: string): { marker: string; color: string } {
+  if (step.startsWith("Note: ")) return { marker: "›", color: theme.pulse };
   if (step.startsWith("Created ")) return { marker: "+", color: theme.success };
   if (step.startsWith("Edited ")) return { marker: "~", color: theme.warning };
   if (step.startsWith("Deleted ")) return { marker: "-", color: theme.error };
@@ -813,8 +834,10 @@ function StepList({ steps, width }: { steps: string[]; width: number }): React.J
   return <Box flexDirection="column" paddingLeft={2}>
     {steps.map((step, index) => {
       const { marker, color } = stepMarker(step);
-      const text = step.length > width - 2 ? `${step.slice(0, Math.max(1, width - 5))}...` : step;
-      return <Text key={`${index}-${step}`} color={theme.secondary}><Text color={color}>{marker}</Text> {text}</Text>;
+      const note = step.startsWith("Note: ");
+      const label = note ? step.slice(6) : step;
+      const text = label.length > width - 2 ? `${label.slice(0, Math.max(1, width - 5))}...` : label;
+      return <Text key={`${index}-${step}`} color={note ? theme.primary : theme.secondary}><Text color={color}>{marker}</Text> {text}</Text>;
     })}
   </Box>;
 }

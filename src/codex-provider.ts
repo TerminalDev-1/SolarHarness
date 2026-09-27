@@ -69,7 +69,11 @@ export class CodexCliProvider {
           }
           const item = event.item;
           for (const step of fileChangeSteps(event, fileChanges)) options.onEvent?.(`File: ${step}`);
-          if (item?.type === "agent_message" && item.text) finalMessages.push(item.text);
+          if (item?.type === "agent_message" && item.text) {
+            finalMessages.push(item.text);
+            const note = narration(item.text);
+            if (note) options.onEvent?.(`Note: ${note}`);
+          }
           const activity = commandActivity(item) ?? itemActivity(item) ?? (typeof event.error === "string" ? event.error : event.error?.message);
           if (activity) options.onEvent?.(activity.slice(0, 180));
         } catch {
@@ -138,7 +142,11 @@ export class CodexCliProvider {
           if (message) eventErrors.push(message);
         }
         for (const step of fileChangeSteps(event, fileChanges)) options.onEvent?.(`File: ${step}`);
-        if (event.item?.type === "agent_message" && event.item.text) messages.push(event.item.text);
+        if (event.item?.type === "agent_message" && event.item.text) {
+          messages.push(event.item.text);
+          const note = narration(event.item.text);
+          if (note) options.onEvent?.(`Note: ${note}`);
+        }
         const activity = commandActivity(event.item) ?? itemActivity(event.item);
         if (activity) options.onEvent?.(activity.slice(0, 180));
       } catch { if (line) options.onEvent?.(line.slice(0, 180)); }
@@ -250,6 +258,17 @@ function commandActivity(item: CodexEvent["item"]): string | undefined {
   const command = unwrapShellCommand(item.command);
   if (!command) return undefined;
   return item.status === "completed" ? `Command completed: ${command}` : `Running command: ${command}`;
+}
+
+/**
+ * First paragraph of a plain-text agent message, e.g. "I'll inspect the workspace, then edit index.html."
+ * Structured JSON turns are not narration. The final message is also emitted; the UI drops it when it repeats the reply.
+ */
+export function narration(text: string): string | undefined {
+  const trimmed = text.trim();
+  if (!trimmed || /^[{[]/.test(trimmed)) return undefined;
+  const paragraph = plainText(trimmed.split(/\r?\n\s*\r?\n/)[0]);
+  return paragraph.length > 160 ? `${paragraph.slice(0, 157)}...` : paragraph || undefined;
 }
 
 /** Reasoning summaries become `Thinking: <title>`; agent messages are replies, not activity. */

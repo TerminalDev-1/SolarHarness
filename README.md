@@ -80,6 +80,9 @@ use, and creation.
   and code blocks.
 - While `/ultraplan` or `/ultrareview` runs, the footer shows Max effort and the
   input frame becomes an animated full-spectrum rainbow.
+- Narrate each turn like a modern coding agent: Solar says what it will do next
+  ("I'll read notes.txt, then update line 2"), and the transcript keeps its notes,
+  commands, and file changes in order before the reply.
 - Show what Solar is doing as it works: files created (with line counts), files
   edited (with the changed lines), files deleted, and commands run. Each reply is
   preceded by a short list of the files it changed.

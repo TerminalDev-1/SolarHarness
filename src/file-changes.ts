@@ -22,7 +22,7 @@ export class FileChangeTracker {
   }
 
   completed(changes: FileChange[], failed = false): string[] {
-    return changes.map(change => {
+    return mergeRewrites(this.cwd, changes).map(change => {
       const path = resolve(this.cwd, change.path);
       const name = displayPath(this.cwd, path);
       const before = this.before.get(path);
@@ -35,6 +35,19 @@ export class FileChangeTracker {
       return range ? `Edited ${name} (${range})` : `Edited ${name}`;
     });
   }
+}
+
+/** A delete plus a re-create of the same file in one change is a rewrite, reported as an edit. */
+function mergeRewrites(cwd: string, changes: FileChange[]): FileChange[] {
+  const kinds = new Map<string, Set<string | undefined>>();
+  for (const change of changes) {
+    const path = resolve(cwd, change.path);
+    kinds.set(path, (kinds.get(path) ?? new Set()).add(change.kind));
+  }
+  return [...kinds].map(([path, set]) => ({
+    path,
+    kind: set.size > 1 && set.has("delete") ? "update" : [...set][0]
+  }));
 }
 
 /** One span covering every changed line, e.g. "line 3", "lines 3-9", or "removed lines 4-5". */

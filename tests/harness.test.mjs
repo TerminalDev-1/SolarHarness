@@ -1217,3 +1217,58 @@ test("/ultra runs one task at max effort with Fast on, then restores the setting
   await harness.converse("and now normally");
   assert.deepEqual(seen.at(-1), ["medium", false]);
 });
+
+test("a turn is recorded as an ordered timeline of notes, commands, and file changes", async () => {
+  const { narration } = await import("../dist/codex-provider.js");
+  assert.equal(narration("I'll inspect the workspace, then edit **index.html**.\n\nMore detail."), "I'll inspect the workspace, then edit index.html.");
+  assert.equal(narration('{"kind":"answer"}'), undefined);
+  const { PassThrough } = await import("node:stream");
+  const { render } = await import("ink");
+  const { SolarApp } = await import("../dist/ui.js");
+  const stdout = Object.assign(new PassThrough(), { isTTY: true, rows: 60, columns: 100 });
+  let output = "";
+  stdout.on("data", data => { output += data.toString(); });
+  const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async (_prompt, options) => {
+    for (const event of ["Note: I'll inspect the workspace first.", "Command completed: ls", "Command completed: cat notes.txt",
+      "Note: Now I'll update the page.", "File: Created site/index.html (11 lines)", "File: Edited notes.txt (line 3)", "Note: Done: the page is ready."]) options.onEvent?.(event);
+    return { text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply: "Done: the page is ready." }), sessionId: "timeline" };
+  };
+  const app = render(React.createElement(SolarApp, { harness, model: "gpt-6-luna", reasoning: "light", initialSplash: false }), { stdout, stdin, exitOnCtrlC: false, patchConsole: false });
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  try {
+    await sleep(150);
+    for (const character of "build the page") { stdin.write(character); await sleep(5); }
+    stdin.write("\r");
+    await sleep(400);
+    const plain = output.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+    const transcript = plain.slice(plain.lastIndexOf("You"));
+    const order = ["› I'll inspect the workspace first.", "$ Ran 2 commands", "› Now I'll update the page.", "+ Created site/index.html (11 lines)", "~ Edited notes.txt (line 3)", "Done: the page is ready."]
+      .map(text => transcript.indexOf(text));
+    assert.ok(order.every(index => index >= 0), `missing timeline entries: ${JSON.stringify(order)}`);
+    assert.deepEqual([...order].sort((a, b) => a - b), order);
+    assert.equal(transcript.split("the page is ready.").length - 1, 1, "the final note must not repeat the reply");
+  } finally { app.unmount(); }
+});
+
+test("a rewrite reported as delete plus create reads as an edit", async () => {
+  const { FileChangeTracker } = await import("../dist/file-changes.js");
+  const root = await mkdtemp(join(tmpdir(), "solar-rewrite-"));
+  try {
+    await writeFile(join(root, "notes.txt"), "a\nb\nc\n");
+    const tracker = new FileChangeTracker(root);
+    const changes = [{ path: "notes.txt", kind: "delete" }, { path: join(root, "notes.txt"), kind: "add" }];
+    tracker.started(changes);
+    await writeFile(join(root, "notes.txt"), "a\nB\nc\n");
+    assert.deepEqual(tracker.completed(changes), ["Edited notes.txt (line 2)"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("control words the model leaves at the end of a reply are removed", async () => {
+  for (const reply of ["Created page.html. DISCOVER", "Created page.html.\nSOLAR_STATE: DISCOVER"]) {
+    const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+    harness.provider.run = async () => ({ text: JSON.stringify({ kind: "answer", tool: "none", input: "", reply }), sessionId: "strip" });
+    assert.equal((await harness.converse("make a page")).reply, "Created page.html.");
+  }
+});

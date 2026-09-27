@@ -31,7 +31,8 @@ export function decodeHostTurn(text: string): string {
   const turn = value as { kind?: unknown; tool?: unknown; input?: unknown; reply?: unknown };
   if (turn.kind === "answer") {
     if (typeof turn.reply !== "string") throw new Error("Host answer must contain reply text.");
-    const reply = turn.reply.replace(/\s*SOLAR_STATE:\s*(?:READY|DISCOVER)\s*$/i, "").trim();
+    // The model sometimes ends a reply with a bare control word; drop it with or without the prefix.
+    const reply = turn.reply.replace(/\s*(?:SOLAR_STATE:\s*)?\b(?:READY|DISCOVER)\s*$/, "").trim();
     return `${reply}\nSOLAR_STATE: DISCOVER`;
   }
   if (turn.kind !== "tool" || typeof turn.tool !== "string" || !HOST_TOOLS.includes(turn.tool as typeof HOST_TOOLS[number])) {

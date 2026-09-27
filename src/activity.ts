@@ -54,6 +54,8 @@ export function activityDetail(event: string): string | undefined {
   }
   if (event.startsWith("Command completed:")) return "checking command output";
   if (event.startsWith("Designing a named sub-agent plan")) return "drafting the sub-agent plan";
+  const note = event.match(/^Note: (.+)$/);
+  if (note) return note[1].length > 70 ? `${note[1].slice(0, 67)}...` : note[1];
   const thinking = event.match(/^Thinking: (.+)$/);
   if (thinking) return thinking[1].length > 70 ? `${thinking[1].slice(0, 67)}...` : thinking[1];
   const file = event.match(/^File: (.+)$/);
