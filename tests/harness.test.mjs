@@ -1193,6 +1193,7 @@ test("a full terminal is not cleared on idle redraws, so scrolling stays where t
     }
     await sleep(300);
     assert.match(writes.join(""), /Controls: \/ultra <task>/);
+    assert.match(writes.join("").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""), /▣ Solar Harness v1\.0\n/);
     writes = [];
     await sleep(1_000);
     assert.ok(writes.length > 0, "the pet should keep animating while idle");

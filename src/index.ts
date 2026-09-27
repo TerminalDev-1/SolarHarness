@@ -1,19 +1,17 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { startSolarUi } from "./ui.js";
 import { REASONING_EFFORTS, type ReasoningEffort } from "./types.js";
 import { loadDefaultEffort } from "./settings.js";
+import { SOLAR_VERSION } from "./version.js";
 
-// npm needs a three-part version (1.0.0); users see major.minor (1.0).
-const packageVersion = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 const program = new Command();
 
 program
   .name("solar")
   .description("Solar Harness — a terminal-native coding agent harness")
-  .version(packageVersion.replace(/\.0$/, ""));
+  .version(SOLAR_VERSION);
 
 program
   .command("chat", { isDefault: true })
