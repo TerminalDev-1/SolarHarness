@@ -18,6 +18,34 @@ const MODE_PLACEHOLDERS = {
   ultraplan: "Describe a task. A Max-effort plan with a self-critique, then you approve",
   ultrareview: "What to review (optional). Empty reviews the current changes"
 };
+// What each mode does, shown when hovering its tab and in the narrow-composer mode menu.
+const MODE_INFO = {
+  chat: {
+    badge: "Can edit files", short: "Talk to Solar; it can edit and run code",
+    text: "Talk to Solar normally. It reads, edits, runs, and tests code in your folder.",
+    meta: "Your effort and speed"
+  },
+  plan: {
+    badge: "Read-only", short: "A step-by-step plan first, then you approve",
+    text: "Solar studies the code and writes a step-by-step plan. Nothing changes until you click Run this plan.",
+    meta: "Your effort and speed"
+  },
+  ultra: {
+    badge: "Can edit files", short: "Chat at the strongest settings, for hard tasks",
+    text: "Like Chat, but for hard problems: this one task runs at the strongest settings, then your usual settings come back.",
+    meta: "Max effort · Fast"
+  },
+  ultraplan: {
+    badge: "Read-only", short: "A deeper plan that critiques itself",
+    text: "A deeper Plan. Solar weighs at least two approaches, covers edge cases and tests, then critiques and revises its own draft. Nothing changes until you approve.",
+    meta: "Max effort · your speed"
+  },
+  ultrareview: {
+    badge: "Read-only", short: "Three reviewers find bugs, a verifier checks them",
+    text: "Three reviewers check your code at once for correctness, security, and design. A verifier then re-checks every finding and drops false alarms. Leave the box empty to review your current changes.",
+    meta: "Reviewers at Extra high, verifier at Max · your speed"
+  }
+};
 const MODE_NAMES = { plan: "Plan", ultra: "Ultra", ultraplan: "Ultraplan", ultrareview: "Ultrareview", delegate: "Delegate" };
 // Ultra, Ultraplan, and Ultrareview all run at Max effort; only Ultra also forces Fast.
 const ULTRA_MODES = new Set(["ultra", "ultraplan", "ultrareview"]);
@@ -149,12 +177,46 @@ async function newChat() {
 }
 
 for (const button of $("modes").querySelectorAll("button")) {
-  button.addEventListener("click", () => setMode(button.dataset.mode));
+  button.addEventListener("click", () => { hideTip(); setMode(button.dataset.mode); });
+  button.setAttribute("aria-describedby", "tip");
+  button.addEventListener("pointerenter", () => scheduleTip(button));
+  button.addEventListener("focus", () => showTip(button));
+  button.addEventListener("pointerleave", hideTip);
+  button.addEventListener("blur", hideTip);
+}
+
+// ---------- mode hover cards ----------
+
+let tipTimer;
+function scheduleTip(button) {
+  clearTimeout(tipTimer);
+  // Once one card is open, moving to the next tab swaps it at once.
+  tipTimer = setTimeout(() => showTip(button), $("tip").hidden ? 350 : 0);
+}
+
+function showTip(button) {
+  const info = MODE_INFO[button.dataset.mode];
+  const tip = $("tip");
+  const head = el("div", "tip-head");
+  head.append(el("strong", "", button.textContent), el("span", `tip-badge${info.badge === "Read-only" ? " safe" : ""}`, info.badge));
+  tip.replaceChildren(head, el("p", "tip-text", info.text), el("div", "tip-meta", info.meta));
+  tip.hidden = false;
+  const box = button.getBoundingClientRect();
+  const left = Math.max(12, Math.min(box.left + box.width / 2 - tip.offsetWidth / 2, window.innerWidth - tip.offsetWidth - 12));
+  tip.style.left = `${left}px`;
+  tip.style.top = `${box.top - tip.offsetHeight - 10}px`;
+  requestAnimationFrame(() => tip.classList.add("open"));
+}
+
+function hideTip() {
+  clearTimeout(tipTimer);
+  $("tip").classList.remove("open");
+  $("tip").hidden = true;
 }
 
 // In a narrow composer the five modes collapse into one pill with a menu.
 $("mode-button").addEventListener("click", () => openMenu($("mode-button"), [...$("modes").querySelectorAll("button")].map(button => ({
-  label: button.textContent, detail: MODE_PLACEHOLDERS[button.dataset.mode], selected: button.dataset.mode === mode,
+  label: button.textContent, detail: MODE_INFO[button.dataset.mode].short, selected: button.dataset.mode === mode,
   run: () => setMode(button.dataset.mode)
 }))));
 

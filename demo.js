@@ -198,6 +198,11 @@ async function checkCliParity(run, shot) {
     await type("");
     results[mode] = await run(`[document.getElementById("effort-label").textContent, document.getElementById("effort-button").disabled, document.getElementById("speed-button").disabled, document.getElementById("send").disabled].join()`);
   }
+  await run(`document.querySelector('[data-mode="ultrareview"]').dispatchEvent(new PointerEvent("pointerenter"))`);
+  await wait(600);
+  results.tip = await run(`document.getElementById("tip").hidden ? "" : document.querySelector("#tip strong").textContent + "," + document.querySelector("#tip .tip-badge").textContent`);
+  await shot("mode-tip");
+  await run(`document.querySelector('[data-mode="ultrareview"]').dispatchEvent(new PointerEvent("pointerleave"))`);
   await run(`document.querySelector('[data-mode="chat"]').click()`);
   await type("Build the page with a team");
   await enter();
@@ -218,7 +223,7 @@ async function checkCliParity(run, shot) {
   await wait(300);
   const ok = results.slashMenu === 20 && results.filtered === "/stats" && results.notes === "Stats,Pets" && results.pet
     && results.ultraplan === "Max,true,false,true" && results.ultrareview === "Max,true,false,false"
-    && results.delegation === 2 && results.runLabel === "Run 1 sub-agent" && results.team === "agent completed" && results.teamReply;
+    && results.tip === "Ultrareview,Read-only" && results.delegation === 2 && results.runLabel === "Run 1 sub-agent" && results.team === "agent completed" && results.teamReply;
   console.log(`cli parity: ${JSON.stringify(results)} ${ok ? "OK" : "WRONG"}`);
 }
 
