@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld("solar", {
   setAutoApprove: enabled => ipcRenderer.invoke("settings:autoApprove", enabled),
   setDefaultEffort: effort => ipcRenderer.invoke("settings:defaultEffort", effort),
   setPet: pet => ipcRenderer.invoke("settings:pet", pet),
+  setTheme: theme => ipcRenderer.invoke("settings:theme", theme),
   petFrames: pet => ipcRenderer.invoke("pets:frames", pet),
   stats: () => ipcRenderer.invoke("info:stats"),
   memory: () => ipcRenderer.invoke("info:memory"),

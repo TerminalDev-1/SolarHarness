@@ -64,6 +64,7 @@ function state() {
     autoApprove: harness?.getAutoPermissions().enabled ?? false,
     defaultEffort: loadDefaultEffort(),
     pet: preferences.pet ?? "off",
+    theme: currentTheme(),
     pets: PET_NAMES,
     models: SOLAR_MODELS,
     efforts: REASONING_EFFORTS,
@@ -184,6 +185,13 @@ function registerIpc() {
     if (!demo) saveDefaultEffort(effort);
     return state();
   });
+  ipcMain.handle("settings:theme", (_event, theme) => {
+    if (theme !== "dark" && theme !== "light") throw new Error(`Unknown theme: ${theme}`);
+    preferences.theme = theme;
+    savePreferences();
+    applyWindowTheme();
+    return state();
+  });
   ipcMain.handle("settings:pet", (_event, pet) => {
     if (pet !== "off" && !PET_NAMES.includes(pet)) throw new Error(`Unknown pet: ${pet}`);
     preferences.pet = pet;
@@ -243,15 +251,31 @@ function registerIpc() {
   ipcMain.handle("file:reveal", (_event, path) => shell.showItemInFolder(path));
 }
 
+const WINDOW_THEMES = {
+  dark: { background: "#0b0b10", symbols: "#a1a1aa" },
+  light: { background: "#f7f6f3", symbols: "#52525b" }
+};
+const currentTheme = () => preferences.theme === "light" ? "light" : "dark";
+
+/** Native controls (title bar buttons, scrollbars, dialogs) follow the app's theme. */
+function applyWindowTheme() {
+  const colors = WINDOW_THEMES[currentTheme()];
+  nativeTheme.themeSource = currentTheme();
+  if (!window || window.isDestroyed()) return;
+  window.setBackgroundColor(colors.background);
+  if (process.platform !== "darwin") window.setTitleBarOverlay({ color: colors.background, symbolColor: colors.symbols, height: 44 });
+}
+
 function createWindow() {
-  nativeTheme.themeSource = "dark";
+  const colors = WINDOW_THEMES[currentTheme()];
+  nativeTheme.themeSource = currentTheme();
   window = new BrowserWindow({
     width: 1440, height: 920, minWidth: 900, minHeight: 600,
-    backgroundColor: "#0b0b10",
+    backgroundColor: colors.background,
     title: "Solar",
     show: false,
     titleBarStyle: "hidden",
-    ...(process.platform === "darwin" ? { trafficLightPosition: { x: 16, y: 16 } } : { titleBarOverlay: { color: "#0b0b10", symbolColor: "#a1a1aa", height: 44 } }),
+    ...(process.platform === "darwin" ? { trafficLightPosition: { x: 16, y: 16 } } : { titleBarOverlay: { color: colors.background, symbolColor: colors.symbols, height: 44 } }),
     // Screenshot runs render offscreen so no window appears on the desktop.
     webPreferences: { preload: join(here, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: capturing }
   });

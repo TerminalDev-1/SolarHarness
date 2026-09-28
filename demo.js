@@ -237,8 +237,8 @@ async function checkCliParity(run, shot) {
   await type("/pets off");
   await enter();
   await wait(300);
-  const ok = results.slashMenu === 20 && results.filtered === "/stats" && results.notes === "Stats,Pets" && results.pet
-    && results.ultraplan === "Max,true,false,true" && results.ultrareview === "Max,true,false,false"
+  const ok = results.slashMenu === 21 && results.filtered === "/stats" && results.notes === "Stats,Pets" && results.pet
+    && results.ultraplan === "Max,true,true,true" && results.ultrareview === "Max,true,true,false"
     && results.tip === "Ultrareview,Read-only" && results.delegation === 2 && results.lockedMenu
     && results.effortTip.startsWith("Reasoning effort|Max|Locked: Ultrareview") && results.speedTip.startsWith("Speed|Standard|Applies") && results.modelTip.startsWith("Model|GPT-6 Luna|") && results.runLabel === "Run 1 sub-agent" && results.team === "agent completed" && results.teamReply;
   console.log(`cli parity: ${JSON.stringify(results)} ${ok ? "OK" : "WRONG"}`);
@@ -293,4 +293,25 @@ export async function captureScreenshots(window, directory) {
   // The composer must stay fully inside the window however much the thread holds.
   const layout = await run(`(() => { const box = document.getElementById("composer").getBoundingClientRect(); return { composerBottom: Math.round(box.bottom), windowHeight: innerHeight, pageHeight: document.documentElement.scrollHeight }; })()`);
   console.log(`stress layout: ${JSON.stringify(layout)} ${layout.composerBottom <= layout.windowHeight && layout.pageHeight <= layout.windowHeight ? "OK" : "COMPOSER OFF SCREEN"}`);
+  // Light theme: the sidebar toggle switches it; views are saved as light-*.png, then /theme dark switches back.
+  await run(`document.getElementById("theme-toggle").click()`);
+  await wait(500);
+  await run(`document.querySelector(".files-summary")?.scrollIntoView({ block: "center" })`);
+  await wait(300);
+  await shot("light");
+  await run(`document.querySelector('[data-mode="ultraplan"]').click()`);
+  await run(`document.querySelector('[data-mode="ultraplan"]').dispatchEvent(new PointerEvent("pointerenter"))`);
+  await wait(600);
+  await shot("light-ultraplan");
+  await run(`document.querySelector('[data-mode="ultraplan"]').dispatchEvent(new PointerEvent("pointerleave"))`);
+  await run(`document.querySelector('[data-mode="chat"]').click()`);
+  await run(`document.getElementById("review-toggle").click()`);
+  await wait(900);
+  await shot("light-review");
+  const light = await run(`[document.documentElement.dataset.theme, getComputedStyle(document.body).backgroundColor].join()`);
+  await run(`document.getElementById("review-close").click()`);
+  await run(`(() => { const input = document.getElementById("input"); input.value = "/theme dark"; input.dispatchEvent(new Event("input")); input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); })()`);
+  await wait(500);
+  const dark = await run(`[document.documentElement.dataset.theme, getComputedStyle(document.body).backgroundColor].join()`);
+  console.log(`themes: ${JSON.stringify({ light, dark })} ${light === "light,rgb(247, 246, 243)" && dark === "dark,rgb(11, 11, 16)" ? "OK" : "WRONG"}`);
 }

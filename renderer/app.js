@@ -38,16 +38,16 @@ const MODE_INFO = {
   ultraplan: {
     badge: "Read-only", short: "A deeper plan that critiques itself",
     text: "A deeper Plan. Solar weighs at least two approaches, covers edge cases and tests, then critiques and revises its own draft. Nothing changes until you approve.",
-    meta: "Max effort · your speed"
+    meta: "Max effort · Fast"
   },
   ultrareview: {
     badge: "Read-only", short: "Three reviewers find bugs, a verifier checks them",
     text: "Three reviewers check your code at once for correctness, security, and design. A verifier then re-checks every finding and drops false alarms. Leave the box empty to review your current changes.",
-    meta: "Reviewers at Extra high, verifier at Max · your speed"
+    meta: "Reviewers at Extra high, verifier at Max · Fast"
   }
 };
 const MODE_NAMES = { plan: "Plan", ultra: "Ultra", ultraplan: "Ultraplan", ultrareview: "Ultrareview", delegate: "Delegate" };
-// Ultra, Ultraplan, and Ultrareview all run at Max effort; only Ultra also forces Fast.
+// Ultra, Ultraplan, and Ultrareview all run at Max effort with Fast on.
 const ULTRA_MODES = new Set(["ultra", "ultraplan", "ultrareview"]);
 const EFFORT_PIN_TITLES = {
   ultra: "Ultra pins Max effort",
@@ -73,6 +73,7 @@ const SLASH_COMMANDS = [
   { command: "/fast", detail: "Turn Fast mode on or off", insert: "/fast " },
   { command: "/stats", detail: "Show usage and achievements", insert: "/stats" },
   { command: "/memory", detail: "Show loaded SOLAR.md files", insert: "/memory" },
+  { command: "/theme", detail: "Choose dark or light", insert: "/theme " },
   { command: "/pets", detail: "Choose a pet or turn it off", insert: "/pets " },
   { command: "/quit", detail: "Close Solar", insert: "/quit" },
   { command: "/exit", detail: "Close Solar", insert: "/exit" }
@@ -105,6 +106,7 @@ let slashSelected = 0;
 hydrateIcons();
 app = await window.solar.state();
 document.body.classList.add(`platform-${app.platform}`);
+applyTheme();
 renderChrome();
 renderEmpty();
 void refreshChanges();
@@ -121,9 +123,9 @@ function renderChrome() {
   $("chat-sub").textContent = app.workspace ?? "";
   $("chat-sub").hidden = !app.workspace;
   $("model-label").textContent = app.models.find(model => model.id === app.model)?.name ?? app.model;
-  // Ultra modes run at Max effort (Ultra also with Fast on), so show that and lock those pickers.
+  // Ultra modes run at Max effort with Fast on, so show that and lock both pickers.
   const pinsEffort = ULTRA_MODES.has(mode);
-  const pinsFast = mode === "ultra";
+  const pinsFast = pinsEffort;
   const effort = pinsEffort ? "max" : app.effort;
   const fast = pinsFast || app.fast;
   $("effort-label").textContent = EFFORT_NAMES[effort] ?? effort;
@@ -150,6 +152,19 @@ function updateSendState() {
 }
 
 $("chat-sub").addEventListener("click", chooseWorkspace);
+$("theme-toggle").addEventListener("click", () => void setTheme(app.theme === "light" ? "dark" : "light").catch(error => toast(cleanError(error))));
+
+function applyTheme() {
+  document.documentElement.dataset.theme = app.theme;
+  const next = app.theme === "light" ? "dark" : "light";
+  $("theme-icon").replaceChildren(icon(next === "light" ? "sun" : "moon"));
+  $("theme-toggle").title = `Switch to the ${next} theme`;
+}
+
+async function setTheme(theme) {
+  app = await window.solar.setTheme(theme);
+  applyTheme();
+}
 $("new-chat").addEventListener("click", newChat);
 $("review-toggle").addEventListener("click", () => toggleReview());
 $("review-close").addEventListener("click", () => toggleReview(false));
@@ -242,7 +257,7 @@ const openModelMenu = () => openMenu($("model-button"), app.models.map(model => 
   run: async () => { app = await window.solar.setModel(model.id); renderChrome(); }
 })));
 
-const pinnedToast = id => { toast(id === "speed-button" ? "Ultra pins Fast speed. Switch to Chat to choose." : `${EFFORT_PIN_TITLES[mode]}. Switch to Chat to choose.`); };
+const pinnedToast = id => { toast(id === "speed-button" ? `${MODE_NAMES[mode]} always runs at Fast speed. Switch to Chat to choose.` : `${EFFORT_PIN_TITLES[mode]}. Switch to Chat to choose.`); };
 
 const openEffortMenu = () => $("effort-button").classList.contains("locked") ? pinnedToast("effort-button") : openMenu($("effort-button"), app.efforts.map(effort => ({
   label: EFFORT_NAMES[effort], detail: effort === "light" ? "Quickest replies" : effort === "max" ? "Deepest reasoning" : "", selected: effort === app.effort,
@@ -284,7 +299,7 @@ const PILL_TIPS = {
     return {
       title: "Speed", badge: locked || app.fast ? "Fast" : "Standard",
       text: "Fast gets replies sooner but uses more credits. Standard is the normal pace. Effort is separate: it sets how hard Solar thinks.",
-      meta: locked ? "Locked: Ultra pins Fast speed" : "Applies from the next message"
+      meta: locked ? `Locked: ${MODE_NAMES[mode]} always runs at Fast speed` : "Applies from the next message"
     };
   }
 };
@@ -465,6 +480,13 @@ const COMMANDS = {
     addNote("Memory", files.length
       ? preformatted(`Loaded SOLAR.md instructions (later files override earlier ones):\n${files.map(file => `${file.scope}: ${file.path}${file.truncated ? " (truncated)" : ""}`).join("\n")}`)
       : preformatted(`No SOLAR.md instructions are loaded. Create one at any of:\n${paths.map(item => `${item.scope}: ${item.path}`).join("\n")}`));
+  },
+  theme: async arg => {
+    const choice = arg.toLowerCase();
+    if (!choice) return addNote("Theme", `Current theme: ${app.theme}. Usage: /theme <dark|light>, or use the sun and moon button at the bottom of the sidebar.`);
+    if (choice !== "dark" && choice !== "light") return toast("Usage: /theme <dark|light>");
+    await setTheme(choice);
+    addNote("Theme", `Theme changed to ${choice}.`);
   },
   pets: async arg => {
     const choice = arg.toLowerCase();
