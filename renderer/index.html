@@ -60,6 +60,8 @@
       <footer class="composer-area">
         <button class="jump-latest" id="jump-latest" hidden><span class="icon" data-icon="arrow-up"></span>Jump to latest</button>
         <div class="composer" id="composer">
+          <pre class="pet" id="pet" hidden aria-hidden="true"></pre>
+          <div class="slash-menu" id="slash-menu" role="listbox" hidden></div>
           <div class="composer-frame" aria-hidden="true"></div>
           <div class="composer-body">
             <div class="attachments" id="attachments" hidden></div>
@@ -73,7 +75,10 @@
                   <button data-mode="chat" class="active">Chat</button>
                   <button data-mode="plan">Plan</button>
                   <button data-mode="ultra">Ultra</button>
+                  <button data-mode="ultraplan">Ultraplan</button>
+                  <button data-mode="ultrareview">Ultrareview</button>
                 </div>
+                <button class="pill mode-pill" id="mode-button" title="Mode"><span id="mode-label">Chat</span><span class="icon caret" data-icon="caret"></span></button>
               </div>
               <div class="bar-right">
                 <button class="pill" id="model-button"><span class="icon" data-icon="spark"></span><span id="model-label">Model</span><span class="icon caret" data-icon="caret"></span></button>
@@ -86,7 +91,7 @@
             </div>
           </div>
         </div>
-        <div class="composer-hint">Enter to send, Shift+Enter for a new line. Paste images with Ctrl+V.</div>
+        <div class="composer-hint">Enter to send, Shift+Enter for a new line, / for commands. Paste images with Ctrl+V.</div>
       </footer>
     </main>
 

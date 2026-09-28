@@ -5,7 +5,10 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SolarHarness } from "solar-harness/dist/harness.js";
 import { SOLAR_MODELS } from "solar-harness/dist/models.js";
-import { loadDefaultEffort } from "solar-harness/dist/settings.js";
+import { instructionPaths } from "solar-harness/dist/instructions.js";
+import { PET_NAMES, petSprite } from "solar-harness/dist/pets.js";
+import { loadDefaultEffort, saveDefaultEffort } from "solar-harness/dist/settings.js";
+import { formatStats } from "solar-harness/dist/stats.js";
 import { solarDirectory } from "solar-harness/dist/solar-dir.js";
 import { REASONING_EFFORTS } from "solar-harness/dist/types.js";
 import { SOLAR_VERSION_LABEL } from "solar-harness/dist/version.js";
@@ -20,6 +23,8 @@ let harness;
 let tracker;
 let busy = false;
 let preferences = {};
+// The last request /delegate hands to the planner, as the CLI keeps its brief.
+let lastRequest = "";
 
 function loadPreferences() {
   try { preferences = JSON.parse(readFileSync(preferencesPath(), "utf8")); } catch { preferences = {}; }
@@ -35,9 +40,12 @@ function openWorkspace(workspace) {
   const model = harness?.getModel() ?? preferences.model ?? SOLAR_MODELS[0].id;
   const reasoning = harness?.options?.reasoning ?? loadDefaultEffort();
   const fast = harness?.getFast() ?? false;
+  const autoApprove = harness?.getAutoPermissions().enabled ?? false;
   if (harness) { void harness.browser.close(); void harness.workspace.close(); }
   harness = new SolarHarness({ task: "", model, reasoning, cwd: workspace });
   harness.setFast(fast);
+  harness.setAutoPermissions(autoApprove);
+  lastRequest = "";
   harness.stats.startChat();
   tracker = new ChangeTracker(workspace);
   void tracker.snapshot();
@@ -53,6 +61,10 @@ function state() {
     model: harness?.getModel() ?? preferences.model ?? SOLAR_MODELS[0].id,
     effort: harness?.options?.reasoning ?? loadDefaultEffort(),
     fast: harness?.getFast() ?? false,
+    autoApprove: harness?.getAutoPermissions().enabled ?? false,
+    defaultEffort: loadDefaultEffort(),
+    pet: preferences.pet ?? "off",
+    pets: PET_NAMES,
     models: SOLAR_MODELS,
     efforts: REASONING_EFFORTS,
     platform: process.platform,
@@ -86,6 +98,30 @@ async function runTurn(turnId, work) {
   }
 }
 
+/** A finished reply plus any achievements it unlocked. */
+function reply(text) {
+  return { kind: "reply", reply: text, achievements: harness.takeAchievements() };
+}
+
+/** Drafts a sub-agent plan. With auto-approve on, the renderer launches it without the review card, as the CLI does. */
+async function delegationPlan(request, onActivity) {
+  const plan = await harness.plan(request, request, onActivity);
+  return { request, context: request, plan, autoApproved: harness.getAutoPermissions().enabled };
+}
+
+async function runTeam(turnId, plan, request, context, onActivity) {
+  const onProgress = agents => send("solar:agents", { turnId, agents: agents.map(agentView) });
+  return reply(await harness.executePlan(plan, request, context, onProgress, onActivity));
+}
+
+/** The parts of an AgentRecord the renderer shows; drops dates and session ids. */
+function agentView(agent) {
+  return {
+    id: agent.id, name: agent.name, title: agent.title, depth: agent.depth, status: agent.status,
+    reasoning: agent.reasoning, reasoningPinned: agent.reasoningPinned, latestActivity: agent.latestActivity, error: agent.error
+  };
+}
+
 function registerIpc() {
   ipcMain.handle("state:get", () => state());
 
@@ -106,16 +142,66 @@ function registerIpc() {
   ipcMain.handle("settings:fast", (_event, enabled) => { harness?.setFast(Boolean(enabled)); return state(); });
 
   ipcMain.handle("chat:send", (_event, { turnId, text, images = [], mode = "chat" }) => runTurn(turnId, async onActivity => {
-    if (mode === "plan" || mode === "ultraplan") return { kind: "plan", request: text, plan: await harness.planTask(text, mode === "ultraplan", onActivity) };
-    if (mode === "ultrareview") return { kind: "reply", reply: await harness.ultraReview(text, onActivity) };
+    if (mode === "plan" || mode === "ultraplan") return { kind: "plan", request: text, ultra: mode === "ultraplan", plan: await harness.planTask(text, mode === "ultraplan", onActivity) };
+    if (mode === "ultrareview") return reply(await harness.ultraReview(text, onActivity));
+    lastRequest = text;
     const result = mode === "ultra" ? await harness.converseUltra(text, onActivity, images) : await harness.converse(text, onActivity, undefined, images);
-    return { kind: "reply", reply: result.reply };
+    // Solar decided the task needs a team: draft the sub-agent plan in the same turn, like the CLI.
+    if (result.readyToDelegate) return { ...reply(result.reply), delegation: await delegationPlan(text, onActivity) };
+    return reply(result.reply);
   }));
 
   ipcMain.handle("chat:runPlan", (_event, { turnId, request, plan }) => runTurn(turnId, async onActivity => {
     const result = await harness.executeTaskPlan(request, plan, onActivity);
-    return { kind: "reply", reply: result.reply };
+    if (result.readyToDelegate) return { ...reply(result.reply), delegation: await delegationPlan(request, onActivity) };
+    return reply(result.reply);
   }));
+
+  // /delegate: plan a team for the last request.
+  ipcMain.handle("chat:delegate", (_event, { turnId }) => {
+    if (!lastRequest) throw new Error("First tell Solar what the team should accomplish.");
+    return runTurn(turnId, async onActivity => ({ kind: "delegation", delegation: await delegationPlan(lastRequest, onActivity) }));
+  });
+
+  // Runs the sub-agents the user accepted, streaming the team's progress to the turn.
+  ipcMain.handle("chat:runDelegation", (_event, { turnId, request, context, plan }) => runTurn(turnId, onActivity => runTeam(turnId, plan, request, context, onActivity)));
+
+  ipcMain.handle("agents:list", () => harness ? harness.manager.list().map(agentView) : []);
+  ipcMain.handle("agents:control", async (_event, { agentId, action, value }) => {
+    if (!harness) throw new Error("Open a folder first.");
+    const input = action === "reasoning" ? { action: "set_reasoning", agentId, reasoning: value }
+      : action === "context" ? { action: "inject_context", agentId, context: value }
+      : action === "cancel" ? { action: "cancel", agentId } : undefined;
+    if (!input || !agentId || (action === "context" && !value)) throw new Error("Usage: /agent <id-or-name> reasoning <light|medium|high|xhigh|max> | context <message> | cancel");
+    if (action === "reasoning" && !REASONING_EFFORTS.includes(value)) throw new Error(`Unknown effort: ${value}`);
+    const agents = await harness.tools.call("orchestrate", input);
+    return agents.map(agentView);
+  });
+
+  ipcMain.handle("settings:autoApprove", (_event, enabled) => { harness?.setAutoPermissions(Boolean(enabled)); return state(); });
+  ipcMain.handle("settings:defaultEffort", (_event, effort) => {
+    if (!REASONING_EFFORTS.includes(effort)) throw new Error(`Unknown effort: ${effort}`);
+    if (!demo) saveDefaultEffort(effort);
+    return state();
+  });
+  ipcMain.handle("settings:pet", (_event, pet) => {
+    if (pet !== "off" && !PET_NAMES.includes(pet)) throw new Error(`Unknown pet: ${pet}`);
+    preferences.pet = pet;
+    savePreferences();
+    return state();
+  });
+  // One full blink cycle of the engine's pet sprite; the renderer walks it along the composer.
+  ipcMain.handle("pets:frames", (_event, pet) => PET_NAMES.includes(pet) ? Array.from({ length: 56 }, (_, tick) => petSprite(pet, tick)) : []);
+
+  ipcMain.handle("info:stats", () => {
+    if (!harness) throw new Error("Open a folder first.");
+    return formatStats(harness.stats.snapshot());
+  });
+  ipcMain.handle("info:memory", () => {
+    if (!harness) throw new Error("Open a folder first.");
+    return { files: harness.getInstructionFiles().map(({ scope, path, truncated }) => ({ scope, path, truncated })), paths: instructionPaths(harness.getWorkspace()) };
+  });
+  ipcMain.handle("app:quit", () => app.quit());
 
   ipcMain.handle("chat:new", async () => {
     if (!harness) return { started: false };
@@ -129,6 +215,7 @@ function registerIpc() {
       if (response !== 0) return { started: false };
     }
     await harness.startNewSession();
+    lastRequest = "";
     tracker.setWorkspace(harness.getWorkspace());
     void tracker.snapshot();
     return { started: true, state: state() };

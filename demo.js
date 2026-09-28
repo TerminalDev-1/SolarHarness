@@ -44,10 +44,15 @@ export function prepareDemoWorkspace() {
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export function installDemoHarness() {
+  installDemoDelegation();
   SolarHarness.prototype.converse = async function demoConverse(message, onActivity) {
     const cwd = this.getWorkspace();
     const say = async (line, ms = 450) => { onActivity?.(line); await wait(ms); };
     if (/stress/i.test(message)) return stressTurn(cwd, say);
+    if (/team/i.test(message)) {
+      await say("Thinking: Splitting the work between two agents");
+      return { readyToDelegate: true, reply: "This splits cleanly into a layout pass and a copy pass, so I've drafted a two-agent team." };
+    }
     await say("Thinking: Reviewing the landing page structure");
     await say("Note: I'll inspect the workspace, then build the page and polish the styles.");
     await say("Running command: Get-ChildItem -Recurse src", 300);
@@ -122,6 +127,37 @@ export function installDemoHarness() {
   };
 }
 
+/** Scripted delegation: a two-agent plan, then agents that report progress and finish. */
+function installDemoDelegation() {
+  SolarHarness.prototype.plan = async function demoPlan(request, _context, onActivity) {
+    onActivity?.("Designing a named sub-agent plan at max reasoning");
+    await wait(400);
+    return {
+      summary: "Two agents work in parallel: one on layout, one on copy.",
+      tasks: [
+        { name: "Nova", title: "Layout pass", instructions: "Tighten the hero spacing and make the grid responsive." },
+        { name: "Vega", title: "Copy pass", instructions: "Rewrite the tagline and button text to be clearer." }
+      ]
+    };
+  };
+  SolarHarness.prototype.executePlan = async function demoExecutePlan(plan, _request, _context, onProgress, onActivity) {
+    const agents = plan.tasks.map((task, index) => ({
+      ...task, id: `agent-${index + 1}`, depth: 0, reasoningPinned: false, childIds: [], status: "running",
+      reasoning: this.options.reasoning, latestActivity: "Reading index.html", recentActivity: [], injectedContext: []
+    }));
+    onProgress(agents);
+    await wait(700);
+    agents[0].latestActivity = "Running command: npx prettier --check src";
+    onProgress(agents);
+    await wait(700);
+    for (const agent of agents) { agent.status = "completed"; agent.latestActivity = "Report ready"; }
+    onProgress(agents);
+    onActivity?.("Synthesizing sub-agent reports");
+    await wait(300);
+    return `${plan.tasks.map(task => `**${task.name}** handled the ${task.title.toLowerCase()}.`).join(" ")} Both reports are in.`;
+  };
+}
+
 /** A turn with many large files, for checking the layout holds up under big diffs. */
 async function stressTurn(cwd, say) {
   await say("Note: I'll generate a large batch of files.", 100);
@@ -132,6 +168,58 @@ async function stressTurn(cwd, say) {
     await say(`File: Created generated/module-${file}.js (400 lines)`, 10);
   }
   return { readyToDelegate: false, reply: "Generated 60 modules of 400 lines each." };
+}
+
+/**
+ * The CLI features: the / menu, local commands, the pet, Ultraplan and Ultrareview pins, and a delegated
+ * team (review card, accept/reject, live team panel). Prints `cli parity: ... OK` only if each shows up.
+ */
+async function checkCliParity(run, shot) {
+  const type = text => run(`(() => { const input = document.getElementById("input"); input.value = ${JSON.stringify(text)}; input.dispatchEvent(new Event("input")); })()`);
+  const enter = () => run(`document.getElementById("input").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))`);
+  const results = {};
+  await type("/");
+  await wait(200);
+  results.slashMenu = await run(`document.querySelectorAll("#slash-menu .slash-item").length`);
+  await shot("slash");
+  await type("/sta");
+  await wait(100);
+  results.filtered = await run(`[...document.querySelectorAll("#slash-menu .slash-command")].map(node => node.textContent).join()`);
+  await enter();
+  await wait(400);
+  await type("/pets fox");
+  await enter();
+  await wait(600);
+  results.notes = await run(`[...document.querySelectorAll(".note-title")].map(node => node.textContent).join()`);
+  results.pet = await run(`!document.getElementById("pet").hidden && document.getElementById("pet").textContent.includes("^")`);
+  for (const mode of ["ultraplan", "ultrareview"]) {
+    await run(`document.querySelector('[data-mode="${mode}"]').click()`);
+    await wait(150);
+    await type("");
+    results[mode] = await run(`[document.getElementById("effort-label").textContent, document.getElementById("effort-button").disabled, document.getElementById("speed-button").disabled, document.getElementById("send").disabled].join()`);
+  }
+  await run(`document.querySelector('[data-mode="chat"]').click()`);
+  await type("Build the page with a team");
+  await enter();
+  await wait(2200);
+  results.delegation = await run(`document.querySelectorAll(".delegation-card .task-row").length`);
+  await shot("delegation");
+  await run(`document.querySelectorAll(".delegation-card input")[1].click()`);
+  await wait(100);
+  results.runLabel = await run(`document.querySelector(".delegation-card .primary-button").textContent`);
+  await run(`document.querySelector(".delegation-card .primary-button").click()`);
+  await wait(900);
+  await shot("team");
+  await wait(1600);
+  results.team = await run(`[...document.querySelectorAll(".team .agent")].map(node => node.className).join()`);
+  results.teamReply = await run(`document.querySelector(".turn.solar:last-of-type .solar-body")?.textContent.includes("Nova") ?? false`);
+  await type("/pets off");
+  await enter();
+  await wait(300);
+  const ok = results.slashMenu === 20 && results.filtered === "/stats" && results.notes === "Stats,Pets" && results.pet
+    && results.ultraplan === "Max,true,false,true" && results.ultrareview === "Max,true,false,false"
+    && results.delegation === 2 && results.runLabel === "Run 1 sub-agent" && results.team === "agent completed" && results.teamReply;
+  console.log(`cli parity: ${JSON.stringify(results)} ${ok ? "OK" : "WRONG"}`);
 }
 
 /** Types a request, waits for the scripted turn, and saves screenshots of the key views. */
@@ -172,7 +260,11 @@ export async function captureScreenshots(window, directory) {
   await run(`[...document.querySelectorAll(".review-file")].find(row => row.textContent.includes("styles.css"))?.click()`);
   await wait(500);
   await shot("review");
+  // With the Review panel open the composer is narrow; its controls must still fit on one row.
+  const narrow = await run(`(() => { const bar = document.querySelector(".composer-bar"); const box = document.getElementById("composer").getBoundingClientRect(); const right = document.getElementById("send").getBoundingClientRect().right; return { barScroll: bar.scrollWidth, barWidth: bar.clientWidth, sendRight: Math.round(right), composerRight: Math.round(box.right), modePill: getComputedStyle(document.getElementById("mode-button")).display }; })()`);
+  console.log(`narrow composer: ${JSON.stringify(narrow)} ${narrow.barScroll <= narrow.barWidth && narrow.sendRight <= narrow.composerRight && narrow.modePill !== "none" ? "OK" : "OVERFLOWS"}`);
   await run(`document.getElementById("review-close").click()`);
+  await checkCliParity(run, shot);
   await run(`(() => { const input = document.getElementById("input"); input.value = "stress test with huge diffs"; input.dispatchEvent(new Event("input")); document.getElementById("send").click(); })()`);
   await wait(6000);
   await shot("stress");

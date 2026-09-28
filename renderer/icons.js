@@ -26,6 +26,7 @@ const paths = {
   note: '<path d="M4 6h16M4 12h16M4 18h10"/>',
   map: '<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
+  team: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A5 5 0 0 1 22 19"/>',
   dot: '<circle cx="12" cy="12" r="3"/>'
 };
 
