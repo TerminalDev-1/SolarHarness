@@ -1158,6 +1158,24 @@ test("Solar can hand a request to sub-agents when the user asks in words the pat
   assert.match(result.reply, /team of sub-agents: inspect this project read-only/);
 });
 
+test("the team summary reaches the user without the host envelope or control line", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "medium", cwd: process.cwd() });
+  harness.tools.call = async (name, input) => {
+    assert.equal(name, "spawn_sub_agent");
+    return { ...input, id: "agent-1", depth: 0, status: "completed", report: "README documents the CLI." };
+  };
+  harness.mainSessionId = "main";
+  const replies = [
+    JSON.stringify({ kind: "answer", reply: "Scout inventoried the project.\n\nSOLAR_STATE: READY" }),
+    JSON.stringify({ kind: "tool", tool: "browser", input: "{\"action\":\"snapshot\"}", reply: "" })
+  ];
+  harness.provider.resume = async () => ({ text: replies.shift(), sessionId: "main" });
+  const plan = { summary: "Inspect", tasks: [{ name: "Scout", title: "Inventory", instructions: "List files." }] };
+  assert.equal(await harness.executePlan(plan, "inspect", "inspect", () => {}), "Scout inventoried the project.");
+  // A synthesis that is only a tool request falls back to the sub-agents' own reports.
+  assert.match(await harness.executePlan(plan, "inspect", "inspect", () => {}), /^Sub-agent reports:[\s\S]*README documents the CLI\./);
+});
+
 test("an approved plan cannot switch back into planning", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   harness.provider.run = async () => ({ text: toolTurn("switch_mode", { mode: "plan", request: "again" }), sessionId: "main" });

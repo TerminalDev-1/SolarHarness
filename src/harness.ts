@@ -476,11 +476,13 @@ export class SolarHarness {
       ? await this.provider.resume(this.mainSessionId, synthesisPrompt, runOptions)
       : await this.provider.run([SOLAR_SYSTEM_PROMPT, workspaceInstructions(this.options.cwd), synthesisPrompt].filter(Boolean).join("\n\n"), runOptions);
     this.mainSessionId = synthesis.sessionId ?? this.mainSessionId;
-    this.mainTranscript.push(`Solar: ${synthesis.text}`);
+    // The main session answers in the structured host envelope; the user sees only its reply.
+    const summary = plainReply(synthesis.text) || `Sub-agent reports:\n\n${reports}`;
+    this.mainTranscript.push(`Solar: ${summary}`);
     if (/\b(?:build|create|make)\b[^.!?\n]*\b(?:website|web\s?page|landing page)\b/i.test(request) && hasRecentWebFile(this.options.cwd, startedAt)) {
       this.unlocked.push(...this.stats.recordWebsiteBuilt());
     }
-    return synthesis.text;
+    return summary;
   }
 
   getInstructionFiles(): InstructionFile[] {
@@ -701,6 +703,16 @@ function browserFallbackReply(result: BrowserResult | WebSearchHeadlessResult | 
   if (webQuery) return `I couldn't complete the headless web search for "${webQuery}". Please retry.`;
   if (result && "url" in result) return `The browser is open at ${result.url}. I couldn't get a complete response for the rest of the request.`;
   return "I couldn't get a complete response for that request. Please try again.";
+}
+
+/** A model reply without the host envelope (`{"kind":"answer",...}`), SOLAR_TOOL lines, or the SOLAR_STATE control line. */
+function plainReply(text: string): string {
+  let decoded = text.trim();
+  try { decoded = decodeHostTurn(decoded); } catch { /* not an envelope: keep the text */ }
+  return decoded
+    .replace(/^[ \t]*SOLAR_TOOL:[^\r\n]*(?:\r?\n|$)/gm, "")
+    .replace(/\s*SOLAR_STATE:\s*(?:READY|DISCOVER)\s*$/, "")
+    .trim();
 }
 
 function delegationRequested(message: string): boolean {
