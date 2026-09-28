@@ -83,6 +83,8 @@ let reviewSelected;
 let turnCounter = 0;
 // The mode of the turn in flight; /ultraplan and /ultrareview speed up the rainbow while they run.
 let activeTurnMode;
+// Whether this chat has a request /delegate can hand to a team (main.js keeps the request itself).
+let lastRequestSent = false;
 const turns = new Map();
 const history = [];
 let historyIndex = -1;
@@ -406,7 +408,10 @@ const onOff = arg => arg === "on" ? true : arg === "off" ? false : undefined;
 const COMMANDS = {
   help: () => addNote("Commands", commandList()),
   new: () => newChat(),
-  delegate: () => runTurn({ mode: "delegate", text: "Plan a team of sub-agents for the last request" }),
+  // Like the CLI, /delegate needs a request first; say so instead of starting a turn that can only fail.
+  delegate: () => lastRequestSent
+    ? runTurn({ mode: "delegate", text: "Plan a team of sub-agents for the last request" })
+    : addNote("Delegate", "First tell Solar what the team should accomplish, then use /delegate. You can also just ask for a team in your own words."),
   agents: async () => {
     const agents = await window.solar.agents();
     addNote("Team", agents.length ? teamList(agents) : "No sub-agents are assigned. Ask Solar to delegate when you want sub-agents.");
@@ -553,6 +558,7 @@ async function submit() {
 async function startTurn(turnMode, text) {
   const takesImages = turnMode === "chat" || turnMode === "ultra";
   const images = takesImages ? attachments : [];
+  if (takesImages) lastRequestSent = true;
   if (takesImages && images.length) { attachments = []; renderAttachments(); updateSendState(); }
   const message = text || (images.length ? `Take a look at the attached image${images.length === 1 ? "" : "s"}.` : "");
   // An empty Ultrareview reviews the current changes; the engine picks that scope itself.
@@ -567,7 +573,12 @@ thread.addEventListener("scroll", () => { stickToBottom = thread.scrollHeight - 
 const scrollToBottom = (force = false) => { if (force || stickToBottom) thread.scrollTop = thread.scrollHeight; updateJump(); };
 $("jump-latest").addEventListener("click", () => { stickToBottom = true; thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" }); });
 
-function clearThread() { $("thread-inner").replaceChildren(); turns.clear(); $("chat-title").textContent = "New chat"; }
+function clearThread() {
+  lastRequestSent = false;
+  $("thread-inner").replaceChildren();
+  turns.clear();
+  $("chat-title").textContent = "New chat";
+}
 
 function workspaceCard() {
   const card = el("button", "workspace-card");

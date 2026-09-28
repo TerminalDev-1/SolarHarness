@@ -251,7 +251,7 @@ async function checkCliParity(run, shot) {
   await type("/pets off");
   await enter();
   await wait(300);
-  const ok = results.slashMenu === 21 && results.filtered === "/stats" && results.notes === "Stats,Pets" && results.pet
+  const ok = results.slashMenu === 21 && results.filtered === "/stats" && results.notes === "Delegate,Stats,Pets" && results.pet
     && results.tabs === "Chat,Plan,Ultra" && results.ultraCommands === "/ultra,/ultraplan,/ultrareview"
     && results.tip === "Ultra,Can edit files" && results.delegation === 2 && results.lockedMenu
     && results.selfPlan === "Switched to Plan,Proposed plan,true"
@@ -266,6 +266,11 @@ export async function captureScreenshots(window, directory) {
   const shot = async name => writeFile(join(directory, `${name}.png`), (await window.webContents.capturePage()).toPNG());
   await wait(1200);
   await shot("empty");
+  // /delegate before any request: a hint, not a failed turn.
+  await run(`(() => { const input = document.getElementById("input"); input.value = "/delegate"; input.dispatchEvent(new Event("input")); input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); })()`);
+  await wait(300);
+  const earlyDelegate = await run(`[document.querySelector(".note-title")?.textContent, document.querySelectorAll(".error-card, .turn.user").length].join()`);
+  console.log(`early delegate: ${earlyDelegate} ${earlyDelegate === "Delegate,0" ? "OK" : "WRONG"}`);
   // Speed is a picker; Ultra must show and lock Max effort with Fast speed, then chat restores the real settings.
   await run(`document.getElementById("speed-button").click()`);
   await wait(300);
