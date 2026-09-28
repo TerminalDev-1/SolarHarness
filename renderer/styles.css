@@ -482,9 +482,9 @@ textarea::placeholder { color: var(--faint); }
 .pill span:not(.icon) { white-space: nowrap; }
 #speed-button.on { color: #ffd21f; background: rgba(255, 210, 31, 0.1); }
 #speed-button.on .caret { color: inherit; opacity: 0.6; }
-.pill:disabled { cursor: default; }
-.pill:disabled .caret { display: none; }
-.pill:disabled:not(.on) { background: none; color: var(--text-2); }
+.pill.locked { cursor: default; }
+.pill.locked .caret { display: none; }
+.pill.locked:not(.on) { background: none; color: var(--text-2); }
 .effort-meter { display: inline-flex; gap: 2px; align-items: flex-end; height: 12px; }
 .effort-meter i { width: 3px; border-radius: 1px; background: var(--surface-3); }
 .effort-meter i:nth-child(1) { height: 4px; } .effort-meter i:nth-child(2) { height: 6px; } .effort-meter i:nth-child(3) { height: 8px; }
@@ -668,7 +668,8 @@ label.task-row { cursor: pointer; }
 }
 .tip.open { opacity: 1; transform: none; }
 .tip-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13.5px; color: var(--text); }
-.tip-badge { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--sun-1); background: rgba(255, 169, 77, 0.14); }
+.tip-badge { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--text-2); background: var(--surface-3); }
+.tip-badge.edits { color: var(--sun-1); background: rgba(255, 169, 77, 0.14); }
 .tip-badge.safe { color: var(--add-text); background: var(--add-bg); }
 .tip-text { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
 .tip-meta { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }

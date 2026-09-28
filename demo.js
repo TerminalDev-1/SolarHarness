@@ -196,13 +196,29 @@ async function checkCliParity(run, shot) {
     await run(`document.querySelector('[data-mode="${mode}"]').click()`);
     await wait(150);
     await type("");
-    results[mode] = await run(`[document.getElementById("effort-label").textContent, document.getElementById("effort-button").disabled, document.getElementById("speed-button").disabled, document.getElementById("send").disabled].join()`);
+    results[mode] = await run(`[document.getElementById("effort-label").textContent, document.getElementById("effort-button").getAttribute("aria-disabled") === "true", document.getElementById("speed-button").getAttribute("aria-disabled") === "true", document.getElementById("send").disabled].join()`);
   }
   await run(`document.querySelector('[data-mode="ultrareview"]').dispatchEvent(new PointerEvent("pointerenter"))`);
   await wait(600);
   results.tip = await run(`document.getElementById("tip").hidden ? "" : document.querySelector("#tip strong").textContent + "," + document.querySelector("#tip .tip-badge").textContent`);
   await shot("mode-tip");
   await run(`document.querySelector('[data-mode="ultrareview"]').dispatchEvent(new PointerEvent("pointerleave"))`);
+  // Pickers have cards too; a pinned one explains the pin, and clicking it opens no menu.
+  const pillTip = async id => {
+    await run(`document.getElementById("${id}").dispatchEvent(new PointerEvent("pointerenter"))`);
+    await wait(500);
+    const text = await run(`document.getElementById("tip").hidden ? "" : [document.querySelector("#tip strong").textContent, document.querySelector("#tip .tip-badge").textContent, document.querySelector("#tip .tip-meta").textContent].join("|")`);
+    await run(`document.getElementById("${id}").dispatchEvent(new PointerEvent("pointerleave"))`);
+    return text;
+  };
+  results.effortTip = await pillTip("effort-button");
+  await shot("pill-tip");
+  await run(`document.getElementById("effort-button").click()`);
+  await wait(200);
+  results.lockedMenu = await run(`document.getElementById("menu").hidden`);
+  await run(`document.querySelector('[data-mode="chat"]').click()`);
+  results.speedTip = await pillTip("speed-button");
+  results.modelTip = await pillTip("model-button");
   await run(`document.querySelector('[data-mode="chat"]').click()`);
   await type("Build the page with a team");
   await enter();
@@ -223,7 +239,8 @@ async function checkCliParity(run, shot) {
   await wait(300);
   const ok = results.slashMenu === 20 && results.filtered === "/stats" && results.notes === "Stats,Pets" && results.pet
     && results.ultraplan === "Max,true,false,true" && results.ultrareview === "Max,true,false,false"
-    && results.tip === "Ultrareview,Read-only" && results.delegation === 2 && results.runLabel === "Run 1 sub-agent" && results.team === "agent completed" && results.teamReply;
+    && results.tip === "Ultrareview,Read-only" && results.delegation === 2 && results.lockedMenu
+    && results.effortTip.startsWith("Reasoning effort|Max|Locked: Ultrareview") && results.speedTip.startsWith("Speed|Standard|Applies") && results.modelTip.startsWith("Model|GPT-6 Luna|") && results.runLabel === "Run 1 sub-agent" && results.team === "agent completed" && results.teamReply;
   console.log(`cli parity: ${JSON.stringify(results)} ${ok ? "OK" : "WRONG"}`);
 }
 
@@ -243,7 +260,7 @@ export async function captureScreenshots(window, directory) {
   await run(`document.querySelector('[data-mode="ultra"]').click()`);
   await wait(300);
   await shot("ultra");
-  const pills = () => run(`["effort-label", "speed-label", "effort-button", "speed-button"].map(id => { const node = document.getElementById(id); return node.disabled ?? node.textContent; }).map(value => value === undefined ? "" : value)`);
+  const pills = () => run(`["effort-label", "speed-label", "effort-button", "speed-button"].map(id => { const node = document.getElementById(id); return node.tagName === "BUTTON" ? node.getAttribute("aria-disabled") === "true" : node.textContent; }).map(value => value === undefined ? "" : value)`);
   const ultra = await pills();
   await run(`document.querySelector('[data-mode="chat"]').click()`);
   await wait(200);

@@ -131,10 +131,11 @@ function renderChrome() {
   [...$("effort-meter").children].forEach((bar, index) => bar.classList.toggle("on", index <= level));
   $("speed-label").textContent = fast ? "Fast" : "Standard";
   $("speed-button").classList.toggle("on", fast);
-  $("effort-button").disabled = pinsEffort;
-  $("speed-button").disabled = pinsFast;
-  $("effort-button").title = EFFORT_PIN_TITLES[mode] ?? "Reasoning effort";
-  $("speed-button").title = pinsFast ? "Ultra pins Fast speed" : "Speed";
+  // Locked, not disabled: a pinned pill still shows its hover card explaining why.
+  for (const [id, locked] of [["effort-button", pinsEffort], ["speed-button", pinsFast]]) {
+    $(id).classList.toggle("locked", locked);
+    $(id).setAttribute("aria-disabled", String(locked));
+  }
   $("status-dot").classList.toggle("busy", busy);
   updateSendState();
 }
@@ -179,8 +180,8 @@ async function newChat() {
 for (const button of $("modes").querySelectorAll("button")) {
   button.addEventListener("click", () => { hideTip(); setMode(button.dataset.mode); });
   button.setAttribute("aria-describedby", "tip");
-  button.addEventListener("pointerenter", () => scheduleTip(button));
-  button.addEventListener("focus", () => showTip(button));
+  button.addEventListener("pointerenter", () => scheduleTip(button, () => modeTip(button)));
+  button.addEventListener("focus", () => showTip(button, modeTip(button)));
   button.addEventListener("pointerleave", hideTip);
   button.addEventListener("blur", hideTip);
 }
@@ -188,20 +189,26 @@ for (const button of $("modes").querySelectorAll("button")) {
 // ---------- mode hover cards ----------
 
 let tipTimer;
-function scheduleTip(button) {
+function scheduleTip(anchor, content) {
   clearTimeout(tipTimer);
-  // Once one card is open, moving to the next tab swaps it at once.
-  tipTimer = setTimeout(() => showTip(button), $("tip").hidden ? 350 : 0);
+  // Once one card is open, moving to the next control swaps it at once.
+  tipTimer = setTimeout(() => showTip(anchor, content()), $("tip").hidden ? 350 : 0);
 }
 
-function showTip(button) {
+function modeTip(button) {
   const info = MODE_INFO[button.dataset.mode];
+  return { title: button.textContent, badge: info.badge, badgeKind: info.badge === "Read-only" ? "safe" : "edits", text: info.text, meta: info.meta };
+}
+
+/** A hover card above `anchor`: a title with a badge, a description, and a footer line. */
+function showTip(anchor, { title, badge, badgeKind = "", text, meta }) {
+  if (!$("menu").hidden) return;
   const tip = $("tip");
   const head = el("div", "tip-head");
-  head.append(el("strong", "", button.textContent), el("span", `tip-badge${info.badge === "Read-only" ? " safe" : ""}`, info.badge));
-  tip.replaceChildren(head, el("p", "tip-text", info.text), el("div", "tip-meta", info.meta));
+  head.append(el("strong", "", title), el("span", `tip-badge ${badgeKind}`.trim(), badge));
+  tip.replaceChildren(head, el("p", "tip-text", text), el("div", "tip-meta", meta));
   tip.hidden = false;
-  const box = button.getBoundingClientRect();
+  const box = anchor.getBoundingClientRect();
   const left = Math.max(12, Math.min(box.left + box.width / 2 - tip.offsetWidth / 2, window.innerWidth - tip.offsetWidth - 12));
   tip.style.left = `${left}px`;
   tip.style.top = `${box.top - tip.offsetHeight - 10}px`;
@@ -235,12 +242,14 @@ const openModelMenu = () => openMenu($("model-button"), app.models.map(model => 
   run: async () => { app = await window.solar.setModel(model.id); renderChrome(); }
 })));
 
-const openEffortMenu = () => openMenu($("effort-button"), app.efforts.map(effort => ({
+const pinnedToast = id => { toast(id === "speed-button" ? "Ultra pins Fast speed. Switch to Chat to choose." : `${EFFORT_PIN_TITLES[mode]}. Switch to Chat to choose.`); };
+
+const openEffortMenu = () => $("effort-button").classList.contains("locked") ? pinnedToast("effort-button") : openMenu($("effort-button"), app.efforts.map(effort => ({
   label: EFFORT_NAMES[effort], detail: effort === "light" ? "Quickest replies" : effort === "max" ? "Deepest reasoning" : "", selected: effort === app.effort,
   run: async () => { app = await window.solar.setEffort(effort); renderChrome(); }
 })));
 
-const openSpeedMenu = () => openMenu($("speed-button"), [
+const openSpeedMenu = () => $("speed-button").classList.contains("locked") ? pinnedToast("speed-button") : openMenu($("speed-button"), [
   { label: "Fast", detail: "Quicker replies", fast: true },
   { label: "Standard", detail: "Normal speed", fast: false }
 ].map(speed => ({
@@ -248,9 +257,45 @@ const openSpeedMenu = () => openMenu($("speed-button"), [
   run: async () => { app = await window.solar.setFast(speed.fast); renderChrome(); }
 })));
 
-$("model-button").addEventListener("click", openModelMenu);
-$("effort-button").addEventListener("click", openEffortMenu);
-$("speed-button").addEventListener("click", openSpeedMenu);
+$("model-button").addEventListener("click", () => { hideTip(); openModelMenu(); });
+$("effort-button").addEventListener("click", () => { hideTip(); openEffortMenu(); });
+$("speed-button").addEventListener("click", () => { hideTip(); openSpeedMenu(); });
+
+// Hover cards for the pickers, built when shown so they describe the current setting.
+const PILL_TIPS = {
+  "model-button": () => {
+    const model = app.models.find(item => item.id === app.model);
+    return {
+      title: "Model", badge: model?.name ?? app.model,
+      text: model?.detail ? `${model.detail}. Switching keeps the conversation going on the new model.` : "Switching keeps the conversation going on the new model.",
+      meta: "New sub-agents use it too"
+    };
+  },
+  "effort-button": () => {
+    const locked = $("effort-button").classList.contains("locked");
+    return {
+      title: "Reasoning effort", badge: locked ? "Max" : EFFORT_NAMES[app.effort],
+      text: "How hard Solar thinks before it acts. Higher effort is more thorough, but slower and uses more tokens. Light is quickest.",
+      meta: locked ? `Locked: ${EFFORT_PIN_TITLES[mode]}` : `This session only. New sessions start at ${EFFORT_NAMES[app.defaultEffort]}; change that with /default-effort`
+    };
+  },
+  "speed-button": () => {
+    const locked = $("speed-button").classList.contains("locked");
+    return {
+      title: "Speed", badge: locked || app.fast ? "Fast" : "Standard",
+      text: "Fast gets replies sooner but uses more credits. Standard is the normal pace. Effort is separate: it sets how hard Solar thinks.",
+      meta: locked ? "Locked: Ultra pins Fast speed" : "Applies from the next message"
+    };
+  }
+};
+for (const [id, content] of Object.entries(PILL_TIPS)) {
+  const pill = $(id);
+  pill.setAttribute("aria-describedby", "tip");
+  pill.addEventListener("pointerenter", () => scheduleTip(pill, content));
+  pill.addEventListener("focus", () => showTip(pill, content()));
+  pill.addEventListener("pointerleave", hideTip);
+  pill.addEventListener("blur", hideTip);
+}
 
 // ---------- popover menu ----------
 
