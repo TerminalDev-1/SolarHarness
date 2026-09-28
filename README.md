@@ -144,8 +144,8 @@ command, and Esc closes the menu. Press Enter again to run the command.
 | `/help` | Lists the commands. |
 | `/ultra <task>` | Runs one task at Max effort with Fast mode on, then restores your settings. |
 | `/plan <task>` | Solar looks through the project without changing anything and proposes a plan for you to approve. |
-| `/ultraplan <task>` | Like `/plan`, at Max effort, with a second pass that checks the plan against the actual files. |
-| `/ultrareview [target]` | Reviews your code with three reviewers (correctness, security, design) working in parallel, then re-checks every finding and drops false alarms. With no target it reviews your uncommitted changes. |
+| `/ultraplan <task>` | Like `/plan`, at Max effort with Fast mode on, with a second pass that checks the plan against the actual files. |
+| `/ultrareview [target]` | Reviews your code with three reviewers (correctness, security, design) working in parallel, then re-checks every finding and drops false alarms, all with Fast mode on. With no target it reviews your uncommitted changes. |
 | `/effort` | Opens a picker to change effort for this session: Light, Medium, High, XHigh, or Max. `/effort high` sets it directly. |
 | `/default-effort <level>` | Changes the effort every new session starts with. It starts as Max. |
 | `/model` | Opens a picker to switch between **GPT-6 Luna** and **GPT-5.6 Luna**. `/model gpt-5.6-luna` switches directly. |
@@ -182,7 +182,7 @@ you choose **Execute**. **Keep planning** (or Esc) leaves everything as it is.
 `/ultra <task>` runs a single task at Max effort with Fast mode. While it runs, the
 rainbow frame turns deep purple and spins twice as fast, and the footer shows `max`
 and `Fast`. Your usual settings come back afterwards. `/ultraplan` and
-`/ultrareview` use the same look.
+`/ultrareview` also run with Fast mode and use the same look.
 
 ### Choosing a model
 

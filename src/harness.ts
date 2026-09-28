@@ -444,10 +444,10 @@ export class SolarHarness {
 
   /**
    * /plan and /ultraplan: a fresh read-only Codex session drafts a plan without changing the workspace.
-   * Ultra runs at max effort and adds a self-critique pass that re-checks the draft against the code.
+   * Ultra runs at max effort with Fast on and adds a self-critique pass that re-checks the draft against the code.
    */
   async planTask(request: string, ultra: boolean, onActivity?: (message: string) => void): Promise<string> {
-    const runOptions = { ...this.options, reasoning: ultra ? "max" as const : this.options.reasoning, fast: this.fast, role: "planner" as const, onEvent: onActivity, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
+    const runOptions = { ...this.options, reasoning: ultra ? "max" as const : this.options.reasoning, fast: ultra || this.fast, role: "planner" as const, onEvent: onActivity, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
     onActivity?.(`Plan: drafting the plan at ${runOptions.reasoning} effort`);
     const draft = await this.provider.run([
       SOLAR_SYSTEM_PROMPT,
@@ -491,10 +491,10 @@ export class SolarHarness {
 
   /**
    * /ultrareview: three read-only reviewers with different focuses run in parallel at xhigh effort,
-   * then a max-effort verifier re-checks every finding against the code and drops false positives.
+   * then a max-effort verifier re-checks every finding against the code and drops false positives. All run with Fast on.
    */
   async ultraReview(target: string, onActivity?: (message: string) => void): Promise<string> {
-    const base = { ...this.options, fast: this.fast, role: "planner" as const, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
+    const base = { ...this.options, fast: true, role: "planner" as const, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
     const scope = target.trim()
       ? `Review target: ${target.trim()}`
       : "Review target: if the workspace is a Git repository, review the uncommitted changes (git status and git diff, including untracked files), or the most recent commit when there are none. Otherwise review the source files in the workspace.";

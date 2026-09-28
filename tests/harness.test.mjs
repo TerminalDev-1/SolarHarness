@@ -1035,6 +1035,7 @@ test("/plan drafts read-only in a separate session and leaves the main session a
   assert.equal(runs.length, 1);
   assert.equal(runs[0].options.role, "planner");
   assert.equal(runs[0].options.reasoning, "medium");
+  assert.equal(runs[0].options.fast, false);
   assert.match(runs[0].prompt, /read-only sandbox/);
   assert.match(runs[0].prompt, /Request to plan: add a login form/);
   assert.ok(buildCodexRunArgs("x", runs[0].options).includes("read-only"));
@@ -1042,17 +1043,18 @@ test("/plan drafts read-only in a separate session and leaves the main session a
   assert.ok(buildCodexResumeArgs("s", "x", { ...runs[0].options, role: "main-agent" }).includes('sandbox_mode="workspace-write"'));
 });
 
-test("/ultraplan runs at max effort and returns the critiqued revision", async () => {
+test("/ultraplan runs at max effort with Fast on and returns the critiqued revision", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const calls = [];
-  harness.provider.run = async (_prompt, options) => { calls.push(["run", options.reasoning, options.role]); return { text: "draft plan", sessionId: "ultra-session" }; };
+  harness.provider.run = async (_prompt, options) => { calls.push(["run", options.reasoning, options.fast, options.role]); return { text: "draft plan", sessionId: "ultra-session" }; };
   harness.provider.resume = async (sessionId, prompt, options) => {
-    calls.push(["resume", options.reasoning, options.role, sessionId]);
+    calls.push(["resume", options.reasoning, options.fast, options.role, sessionId]);
     assert.match(prompt, /Critically review your draft plan/);
     return { text: "revised plan", sessionId };
   };
   assert.equal(await harness.planTask("migrate the database", true), "revised plan");
-  assert.deepEqual(calls, [["run", "max", "planner"], ["resume", "max", "planner", "ultra-session"]]);
+  assert.deepEqual(calls, [["run", "max", true, "planner"], ["resume", "max", true, "planner", "ultra-session"]]);
+  assert.equal(harness.getFast(), false);
 });
 
 test("an approved plan reaches the model without triggering wording heuristics", async () => {
@@ -1069,7 +1071,7 @@ test("an approved plan reaches the model without triggering wording heuristics",
   assert.match(prompt, /reviewed and approved this plan[\s\S]*Search for the footer component online/);
 });
 
-test("/ultrareview runs parallel read-only reviewers and a max-effort verifier", async () => {
+test("/ultrareview runs parallel read-only reviewers and a max-effort verifier, all with Fast on", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const calls = [];
   harness.provider.run = async (prompt, options) => {
@@ -1084,6 +1086,8 @@ test("/ultrareview runs parallel read-only reviewers and a max-effort verifier",
   assert.ok(calls.every(call => call.options.role === "planner"));
   assert.deepEqual(calls.slice(0, 3).map(call => call.options.reasoning), ["xhigh", "xhigh", "xhigh"]);
   assert.equal(calls[3].options.reasoning, "max");
+  assert.ok(calls.every(call => call.options.fast === true));
+  assert.equal(harness.getFast(), false);
   assert.ok(calls.every(call => /Review target: src\/app\.ts/.test(call.prompt)));
   assert.match(calls[3].prompt, /security reviewer:\nfailed: reviewer crashed/);
 });

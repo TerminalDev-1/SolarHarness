@@ -696,7 +696,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
 
       <RainbowInput
         width={contentWidth}
-        value={ultra && busy && !input ? `Solar is running ${ultra} at max effort${ultra === "ultra" ? " with Fast on" : ""}…`
+        value={ultra && busy && !input ? `Solar is running ${ultra} at max effort with Fast on…`
           : attaching === "picker" ? "Choose images in the file picker…"
           : attaching === "clipboard" ? "Pasting the image from your clipboard…"
           : attachments.length && !input && !busy ? `Ask about the image${attachments.length === 1 ? "" : "s"}, or press Enter to send` : pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingModel ? "Choose a model above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
@@ -707,7 +707,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
         tick={petTick}
       />
 
-      <Footer compact={compact} model={currentModel} reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast || (ultra === "ultra" && busy)} themeName={themeName} />
+      <Footer compact={compact} model={currentModel} reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast || (Boolean(ultra) && busy)} themeName={themeName} />
     </Box>
     </Box>
     </Box>
