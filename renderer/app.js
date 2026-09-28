@@ -49,9 +49,6 @@ window.solar.onDiff(diff => { turns.get(diff.turnId)?.diff(diff); scheduleChange
 
 function renderChrome() {
   $("version-label").textContent = `Solar ${app.version}`;
-  $("workspace-name").textContent = app.workspaceName ?? "No folder";
-  $("workspace-path").textContent = app.workspace ?? "Open a folder to begin";
-  $("workspace-card").title = app.workspace ? `${app.workspace}\nClick to open a different folder (Ctrl+O)` : "Open a folder (Ctrl+O)";
   $("chat-sub").textContent = app.workspace ?? "";
   $("model-label").textContent = app.models.find(model => model.id === app.model)?.name ?? app.model;
   $("effort-label").textContent = EFFORT_NAMES[app.effort] ?? app.effort;
@@ -69,7 +66,6 @@ function updateSendState() {
   $("composer").classList.toggle("plan", mode === "plan");
 }
 
-$("workspace-card").addEventListener("click", chooseWorkspace);
 $("new-chat").addEventListener("click", newChat);
 $("review-toggle").addEventListener("click", () => toggleReview());
 $("review-close").addEventListener("click", () => toggleReview(false));
@@ -217,6 +213,16 @@ $("jump-latest").addEventListener("click", () => { stickToBottom = true; thread.
 
 function clearThread() { $("thread-inner").replaceChildren(); turns.clear(); $("chat-title").textContent = "New chat"; }
 
+function workspaceCard() {
+  const card = el("button", "workspace-card");
+  card.title = `${app.workspace}\nClick to open a different folder (Ctrl+O)`;
+  const text = el("span", "workspace-text");
+  text.append(el("span", "workspace-name", app.workspaceName), el("span", "workspace-path", app.workspace));
+  card.append(icon("folder", "workspace-icon"), text, icon("swap", "chevron"));
+  card.addEventListener("click", chooseWorkspace);
+  return card;
+}
+
 function renderEmpty() {
   const inner = $("thread-inner");
   inner.replaceChildren();
@@ -231,7 +237,7 @@ function renderEmpty() {
     button.addEventListener("click", chooseWorkspace);
     hero.append(button);
   } else {
-    hero.append(el("h1", "", "What should we build today?"), el("p", "", `Working in ${app.workspaceName}.`));
+    hero.append(el("h1", "", "What should we build today?"), workspaceCard());
     const grid = el("div", "suggestions");
     for (const suggestion of SUGGESTIONS) {
       const card = el("button", "suggestion");
