@@ -15,7 +15,7 @@ import { parseHostToolCall } from "../dist/host-tool-call.js";
 import { decodeHostTurn, writeHostTurnSchema } from "../dist/host-turn.js";
 import { SOLAR_SYSTEM_PROMPT } from "../dist/system-prompt.js";
 import { SolarWebSearchHeadless } from "../dist/web-search-headless.js";
-import { SolarWorkspaceTool, runWorkspaceCommand } from "../dist/workspace-tool.js";
+import { SolarWorkspaceTool, runWorkspaceCommand, terminalLaunch } from "../dist/workspace-tool.js";
 import { StatsStore, formatStats } from "../dist/stats.js";
 import { sunColors, sunFrames } from "../dist/sun.js";
 import { SunActivity } from "../dist/ui.js";
@@ -283,6 +283,21 @@ test("workspace command returns output and exit code from the active workspace",
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("workspace terminal opens a visible window with the exact command in the workspace", async () => {
+  const command = `python "my app.py" --name 'Solar'`;
+  const windows = terminalLaunch("C:\\Users\\o'neil\\app", command, "win32");
+  const script = windows.args.at(-1);
+  assert.equal(windows.file, "powershell.exe");
+  assert.ok(script.includes("Start-Process -FilePath powershell.exe -WorkingDirectory 'C:\\Users\\o''neil\\app' -WindowStyle Normal"));
+  assert.match(script, /'-NoExit','-EncodedCommand'/);
+  assert.equal(Buffer.from(script.match(/'-EncodedCommand','([^']+)'/)[1], "base64").toString("utf16le"), command);
+  const mac = terminalLaunch("/tmp/it's", "npm start", "darwin");
+  assert.equal(mac.file, "osascript");
+  // The shell's '\'' escape gains a second backslash for the AppleScript string.
+  assert.equal(mac.args[1], `tell application "Terminal" to do script "cd '/tmp/it'\\\\''s' && npm start"`);
+  await assert.rejects(new SolarWorkspaceTool(tmpdir()).execute({ action: "terminal", command: " " }), /run, start, or terminal/);
 });
 
 test("workspace start keeps a local server running for browser testing until reset", async () => {

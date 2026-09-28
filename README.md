@@ -233,8 +233,9 @@ when you can, because they share the workspace.
 Solar chooses tools from a live registry on every turn, whatever words you use.
 
 - **`workspace_command`** runs a bounded command (2-minute limit, output capped),
-  starts a long-running process such as a dev server, or serves the workspace's
-  static files at a `localhost` URL. It uses PowerShell on Windows and `/bin/sh`
+  starts a long-running process such as a dev server, opens a visible terminal
+  window running an interactive app (a CLI, TUI, or terminal game) in the
+  workspace, or serves the workspace's static files at a `localhost` URL. It uses PowerShell on Windows and `/bin/sh`
   elsewhere.
 - **`browser`** drives one visible Playwright window: open pages, search Google or
   Bing, search YouTube, read an accessibility snapshot, take screenshots, move a
