@@ -52,10 +52,18 @@ function renderChrome() {
   $("chat-sub").textContent = app.workspace ?? "";
   $("chat-sub").hidden = !app.workspace;
   $("model-label").textContent = app.models.find(model => model.id === app.model)?.name ?? app.model;
-  $("effort-label").textContent = EFFORT_NAMES[app.effort] ?? app.effort;
-  const level = app.efforts.indexOf(app.effort);
+  // Ultra turns always run at Max effort with Fast on, so show that and lock both pickers.
+  const ultra = mode === "ultra";
+  const effort = ultra ? "max" : app.effort;
+  const fast = ultra || app.fast;
+  $("effort-label").textContent = EFFORT_NAMES[effort] ?? effort;
+  const level = app.efforts.indexOf(effort);
   [...$("effort-meter").children].forEach((bar, index) => bar.classList.toggle("on", index <= level));
-  $("fast-button").classList.toggle("on", app.fast);
+  $("speed-label").textContent = fast ? "Fast" : "Standard";
+  $("speed-button").classList.toggle("on", fast);
+  for (const id of ["effort-button", "speed-button"]) $(id).disabled = ultra;
+  $("effort-button").title = ultra ? "Ultra pins Max effort" : "Reasoning effort";
+  $("speed-button").title = ultra ? "Ultra pins Fast speed" : "Speed";
   $("status-dot").classList.toggle("busy", busy);
   updateSendState();
 }
@@ -103,7 +111,8 @@ function setMode(next) {
   mode = next;
   for (const button of $("modes").querySelectorAll("button")) button.classList.toggle("active", button.dataset.mode === mode);
   $("input").placeholder = MODE_PLACEHOLDERS[mode];
-  updateSendState();
+  closeMenu();
+  renderChrome();
 }
 
 $("model-button").addEventListener("click", event => openMenu(event.currentTarget, app.models.map(model => ({
@@ -116,7 +125,13 @@ $("effort-button").addEventListener("click", event => openMenu(event.currentTarg
   run: async () => { app = await window.solar.setEffort(effort); renderChrome(); }
 }))));
 
-$("fast-button").addEventListener("click", async () => { app = await window.solar.setFast(!app.fast); renderChrome(); });
+$("speed-button").addEventListener("click", event => openMenu(event.currentTarget, [
+  { label: "Fast", detail: "Quicker replies", fast: true },
+  { label: "Standard", detail: "Normal speed", fast: false }
+].map(speed => ({
+  label: speed.label, detail: speed.detail, selected: speed.fast === app.fast,
+  run: async () => { app = await window.solar.setFast(speed.fast); renderChrome(); }
+}))));
 
 // ---------- popover menu ----------
 

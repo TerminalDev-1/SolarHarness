@@ -479,7 +479,11 @@ textarea::placeholder { color: var(--faint); }
 .pill .icon { width: 14px; height: 14px; }
 .pill .caret { width: 12px; height: 12px; color: var(--faint); }
 .pill span:not(.icon) { white-space: nowrap; }
-.pill.toggle.on { color: #ffd21f; background: rgba(255, 210, 31, 0.1); }
+#speed-button.on { color: #ffd21f; background: rgba(255, 210, 31, 0.1); }
+#speed-button.on .caret { color: inherit; opacity: 0.6; }
+.pill:disabled { cursor: default; }
+.pill:disabled .caret { display: none; }
+.pill:disabled:not(.on) { background: none; color: var(--text-2); }
 .effort-meter { display: inline-flex; gap: 2px; align-items: flex-end; height: 12px; }
 .effort-meter i { width: 3px; border-radius: 1px; background: var(--surface-3); }
 .effort-meter i:nth-child(1) { height: 4px; } .effort-meter i:nth-child(2) { height: 6px; } .effort-meter i:nth-child(3) { height: 8px; }
@@ -509,7 +513,7 @@ textarea::placeholder { color: var(--faint); }
 
 /* Narrow composer (e.g. with the Review panel open): pills keep their icons and drop their words. */
 @container (max-width: 700px) {
-  #model-label, #fast-button span:not(.icon), .pill .caret { display: none; }
+  #model-label, #speed-label, .pill .caret { display: none; }
   .segmented button { padding: 0 8px; }
 }
 @container (max-width: 520px) {

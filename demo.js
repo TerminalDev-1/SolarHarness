@@ -141,6 +141,22 @@ export async function captureScreenshots(window, directory) {
   const shot = async name => writeFile(join(directory, `${name}.png`), (await window.webContents.capturePage()).toPNG());
   await wait(1200);
   await shot("empty");
+  // Speed is a picker; Ultra must show and lock Max effort with Fast speed, then chat restores the real settings.
+  await run(`document.getElementById("speed-button").click()`);
+  await wait(300);
+  await shot("speed");
+  await run(`[...document.querySelectorAll(".menu-item")].find(item => item.textContent.includes("Standard"))?.click()`);
+  await wait(300);
+  await run(`document.querySelector('[data-mode="ultra"]').click()`);
+  await wait(300);
+  await shot("ultra");
+  const pills = () => run(`["effort-label", "speed-label", "effort-button", "speed-button"].map(id => { const node = document.getElementById(id); return node.disabled ?? node.textContent; }).map(value => value === undefined ? "" : value)`);
+  const ultra = await pills();
+  await run(`document.querySelector('[data-mode="chat"]').click()`);
+  await wait(200);
+  const chat = await pills();
+  const pinned = ultra.join() === "Max,Fast,true,true" && chat[1] === "Standard" && chat[2] === false && chat[3] === false;
+  console.log(`ultra pins: ${JSON.stringify({ ultra, chat })} ${pinned ? "OK" : "WRONG"}`);
   await run(`(() => { const input = document.getElementById("input"); input.value = "Build a landing page for Aurora and make the button nicer"; input.dispatchEvent(new Event("input")); document.getElementById("send").click(); })()`);
   await wait(2400);
   await shot("working");
