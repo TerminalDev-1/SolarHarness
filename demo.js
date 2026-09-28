@@ -49,6 +49,13 @@ export function installDemoHarness() {
     const cwd = this.getWorkspace();
     const say = async (line, ms = 450) => { onActivity?.(line); await wait(ms); };
     if (/stress/i.test(message)) return stressTurn(cwd, say);
+    if (/plan (?:it|this) first/i.test(message)) {
+      // Solar decides to plan before touching anything (switch_mode plan).
+      await say("Mode: Plan");
+      await say("Plan: drafting the plan at max effort");
+      const plan = "1. Add a pricing section to `index.html`\n2. Style it in `src/styles.css`\n3. Check it in the browser";
+      return { readyToDelegate: false, reply: plan, plan: { request: message, plan, ultra: false } };
+    }
     if (/team/i.test(message)) {
       await say("Thinking: Splitting the work between two agents");
       return { readyToDelegate: true, reply: "This splits cleanly into a layout pass and a copy pass, so I've drafted a two-agent team." };
@@ -192,17 +199,18 @@ async function checkCliParity(run, shot) {
   await wait(600);
   results.notes = await run(`[...document.querySelectorAll(".note-title")].map(node => node.textContent).join()`);
   results.pet = await run(`!document.getElementById("pet").hidden && document.getElementById("pet").textContent.includes("^")`);
-  for (const mode of ["ultraplan", "ultrareview"]) {
-    await run(`document.querySelector('[data-mode="${mode}"]').click()`);
-    await wait(150);
-    await type("");
-    results[mode] = await run(`[document.getElementById("effort-label").textContent, document.getElementById("effort-button").getAttribute("aria-disabled") === "true", document.getElementById("speed-button").getAttribute("aria-disabled") === "true", document.getElementById("send").disabled].join()`);
-  }
-  await run(`document.querySelector('[data-mode="ultrareview"]').dispatchEvent(new PointerEvent("pointerenter"))`);
+  // Three tabs; Ultraplan and Ultrareview live in the / menu.
+  results.tabs = await run(`[...document.querySelectorAll("#modes button")].map(node => node.textContent).join()`);
+  await type("/ultra");
+  await wait(100);
+  results.ultraCommands = await run(`[...document.querySelectorAll("#slash-menu .slash-command")].map(node => node.textContent).join()`);
+  await type("");
+  await run(`document.querySelector('[data-mode="ultra"]').click()`);
+  await run(`document.querySelector('[data-mode="ultra"]').dispatchEvent(new PointerEvent("pointerenter"))`);
   await wait(600);
   results.tip = await run(`document.getElementById("tip").hidden ? "" : document.querySelector("#tip strong").textContent + "," + document.querySelector("#tip .tip-badge").textContent`);
   await shot("mode-tip");
-  await run(`document.querySelector('[data-mode="ultrareview"]').dispatchEvent(new PointerEvent("pointerleave"))`);
+  await run(`document.querySelector('[data-mode="ultra"]').dispatchEvent(new PointerEvent("pointerleave"))`);
   // Pickers have cards too; a pinned one explains the pin, and clicking it opens no menu.
   const pillTip = async id => {
     await run(`document.getElementById("${id}").dispatchEvent(new PointerEvent("pointerenter"))`);
@@ -219,6 +227,12 @@ async function checkCliParity(run, shot) {
   await run(`document.querySelector('[data-mode="chat"]').click()`);
   results.speedTip = await pillTip("speed-button");
   results.modelTip = await pillTip("model-button");
+  // Solar switches itself into Plan: the timeline says so and the plan waits for approval.
+  await type("Add pricing, but plan it first");
+  await enter();
+  await wait(1600);
+  results.selfPlan = await run(`[document.querySelector(".turn.solar:last-of-type .step.mode .step-label")?.textContent, document.querySelector(".turn.solar:last-of-type .plan-head > span:not(.icon)")?.textContent, Boolean(document.querySelector(".turn.solar:last-of-type .plan-actions .primary-button"))].join()`);
+  await shot("self-plan");
   await run(`document.querySelector('[data-mode="chat"]').click()`);
   await type("Build the page with a team");
   await enter();
@@ -238,9 +252,10 @@ async function checkCliParity(run, shot) {
   await enter();
   await wait(300);
   const ok = results.slashMenu === 21 && results.filtered === "/stats" && results.notes === "Stats,Pets" && results.pet
-    && results.ultraplan === "Max,true,true,true" && results.ultrareview === "Max,true,true,false"
-    && results.tip === "Ultrareview,Read-only" && results.delegation === 2 && results.lockedMenu
-    && results.effortTip.startsWith("Reasoning effort|Max|Locked: Ultrareview") && results.speedTip.startsWith("Speed|Standard|Applies") && results.modelTip.startsWith("Model|GPT-6 Luna|") && results.runLabel === "Run 1 sub-agent" && results.team === "agent completed" && results.teamReply;
+    && results.tabs === "Chat,Plan,Ultra" && results.ultraCommands === "/ultra,/ultraplan,/ultrareview"
+    && results.tip === "Ultra,Can edit files" && results.delegation === 2 && results.lockedMenu
+    && results.selfPlan === "Switched to Plan,Proposed plan,true"
+    && results.effortTip.startsWith("Reasoning effort|Max|Locked: Ultra pins Max effort") && results.speedTip.startsWith("Speed|Standard|Applies") && results.modelTip.startsWith("Model|GPT-6 Luna|") && results.runLabel === "Run 1 sub-agent" && results.team === "agent completed" && results.teamReply;
   console.log(`cli parity: ${JSON.stringify(results)} ${ok ? "OK" : "WRONG"}`);
 }
 
@@ -283,8 +298,8 @@ export async function captureScreenshots(window, directory) {
   await wait(500);
   await shot("review");
   // With the Review panel open the composer is narrow; its controls must still fit on one row.
-  const narrow = await run(`(() => { const bar = document.querySelector(".composer-bar"); const box = document.getElementById("composer").getBoundingClientRect(); const right = document.getElementById("send").getBoundingClientRect().right; return { barScroll: bar.scrollWidth, barWidth: bar.clientWidth, sendRight: Math.round(right), composerRight: Math.round(box.right), modePill: getComputedStyle(document.getElementById("mode-button")).display }; })()`);
-  console.log(`narrow composer: ${JSON.stringify(narrow)} ${narrow.barScroll <= narrow.barWidth && narrow.sendRight <= narrow.composerRight && narrow.modePill !== "none" ? "OK" : "OVERFLOWS"}`);
+  const narrow = await run(`(() => { const bar = document.querySelector(".composer-bar"); const box = document.getElementById("composer").getBoundingClientRect(); const right = document.getElementById("send").getBoundingClientRect().right; return { barScroll: bar.scrollWidth, barWidth: bar.clientWidth, sendRight: Math.round(right), composerRight: Math.round(box.right), tabs: getComputedStyle(document.getElementById("modes")).display }; })()`);
+  console.log(`narrow composer: ${JSON.stringify(narrow)} ${narrow.barScroll <= narrow.barWidth && narrow.sendRight <= narrow.composerRight && narrow.tabs !== "none" ? "OK" : "OVERFLOWS"}`);
   await run(`document.getElementById("review-close").click()`);
   await checkCliParity(run, shot);
   await run(`(() => { const input = document.getElementById("input"); input.value = "stress test with huge diffs"; input.dispatchEvent(new Event("input")); document.getElementById("send").click(); })()`);
@@ -299,11 +314,11 @@ export async function captureScreenshots(window, directory) {
   await run(`document.querySelector(".files-summary")?.scrollIntoView({ block: "center" })`);
   await wait(300);
   await shot("light");
-  await run(`document.querySelector('[data-mode="ultraplan"]').click()`);
-  await run(`document.querySelector('[data-mode="ultraplan"]').dispatchEvent(new PointerEvent("pointerenter"))`);
+  await run(`document.querySelector('[data-mode="ultra"]').click()`);
+  await run(`document.querySelector('[data-mode="ultra"]').dispatchEvent(new PointerEvent("pointerenter"))`);
   await wait(600);
-  await shot("light-ultraplan");
-  await run(`document.querySelector('[data-mode="ultraplan"]').dispatchEvent(new PointerEvent("pointerleave"))`);
+  await shot("light-ultra");
+  await run(`document.querySelector('[data-mode="ultra"]').dispatchEvent(new PointerEvent("pointerleave"))`);
   await run(`document.querySelector('[data-mode="chat"]').click()`);
   await run(`document.getElementById("review-toggle").click()`);
   await wait(900);

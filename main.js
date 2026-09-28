@@ -104,6 +104,11 @@ function reply(text) {
   return { kind: "reply", reply: text, achievements: harness.takeAchievements() };
 }
 
+/** Solar switched itself into plan or ultraplan (switch_mode): show the plan for approval, like /plan's. */
+function selfPlan(plan) {
+  return { kind: "plan", request: plan.request, plan: plan.plan, ultra: plan.ultra, achievements: harness.takeAchievements() };
+}
+
 /** Drafts a sub-agent plan. With auto-approve on, the renderer launches it without the review card, as the CLI does. */
 async function delegationPlan(request, onActivity) {
   const plan = await harness.plan(request, request, onActivity);
@@ -147,6 +152,7 @@ function registerIpc() {
     if (mode === "ultrareview") return reply(await harness.ultraReview(text, onActivity));
     lastRequest = text;
     const result = mode === "ultra" ? await harness.converseUltra(text, onActivity, images) : await harness.converse(text, onActivity, undefined, images);
+    if (result.plan) return selfPlan(result.plan);
     // Solar decided the task needs a team: draft the sub-agent plan in the same turn, like the CLI.
     if (result.readyToDelegate) return { ...reply(result.reply), delegation: await delegationPlan(text, onActivity) };
     return reply(result.reply);
@@ -154,6 +160,7 @@ function registerIpc() {
 
   ipcMain.handle("chat:runPlan", (_event, { turnId, request, plan }) => runTurn(turnId, async onActivity => {
     const result = await harness.executeTaskPlan(request, plan, onActivity);
+    if (result.plan) return selfPlan(result.plan);
     if (result.readyToDelegate) return { ...reply(result.reply), delegation: await delegationPlan(request, onActivity) };
     return reply(result.reply);
   }));

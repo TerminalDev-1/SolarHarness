@@ -14,9 +14,7 @@ const EFFORT_NAMES = { light: "Light", medium: "Medium", high: "High", xhigh: "E
 const MODE_PLACEHOLDERS = {
   chat: "Ask Solar to build, fix, or explain anything",
   plan: "Describe a task. Solar plans it read-only, then you approve",
-  ultra: "Ultra runs this task at Max effort with Fast on",
-  ultraplan: "Describe a task. A Max-effort plan with a self-critique, then you approve",
-  ultrareview: "What to review (optional). Empty reviews the current changes"
+  ultra: "Ultra runs this task at Max effort with Fast on"
 };
 // What each mode does, shown when hovering its tab and in the narrow-composer mode menu.
 const MODE_INFO = {
@@ -34,26 +32,14 @@ const MODE_INFO = {
     badge: "Can edit files", short: "Chat at the strongest settings, for hard tasks",
     text: "Like Chat, but for hard problems: this one task runs at the strongest settings, then your usual settings come back.",
     meta: "Max effort · Fast"
-  },
-  ultraplan: {
-    badge: "Read-only", short: "A deeper plan that critiques itself",
-    text: "A deeper Plan. Solar weighs at least two approaches, covers edge cases and tests, then critiques and revises its own draft. Nothing changes until you approve.",
-    meta: "Max effort · Fast"
-  },
-  ultrareview: {
-    badge: "Read-only", short: "Three reviewers find bugs, a verifier checks them",
-    text: "Three reviewers check your code at once for correctness, security, and design. A verifier then re-checks every finding and drops false alarms. Leave the box empty to review your current changes.",
-    meta: "Reviewers at Extra high, verifier at Max · Fast"
   }
 };
+// Solar can also switch into Plan, Ultraplan, Ultrareview, or Ultra by itself; /ultraplan and /ultrareview start them directly.
+const MODE_TIP_FOOTNOTE = "Solar can also switch modes on its own, or when you ask in plain words.";
 const MODE_NAMES = { plan: "Plan", ultra: "Ultra", ultraplan: "Ultraplan", ultrareview: "Ultrareview", delegate: "Delegate" };
-// Ultra, Ultraplan, and Ultrareview all run at Max effort with Fast on.
+// Ultra, Ultraplan, and Ultrareview turns all run at Max effort with Fast on.
 const ULTRA_MODES = new Set(["ultra", "ultraplan", "ultrareview"]);
-const EFFORT_PIN_TITLES = {
-  ultra: "Ultra pins Max effort",
-  ultraplan: "Ultraplan runs at Max effort",
-  ultrareview: "Ultrareview reviews at Extra high and verifies at Max"
-};
+const EFFORT_PIN_TITLES = { ultra: "Ultra pins Max effort" };
 // The CLI's slash commands. A trailing space in `insert` means the command takes an argument.
 const SLASH_COMMANDS = [
   { command: "/help", detail: "Show available controls", insert: "/help" },
@@ -95,6 +81,8 @@ let stickToBottom = true;
 let reviewFiles = [];
 let reviewSelected;
 let turnCounter = 0;
+// The mode of the turn in flight; /ultraplan and /ultrareview speed up the rainbow while they run.
+let activeTurnMode;
 const turns = new Map();
 const history = [];
 let historyIndex = -1;
@@ -145,9 +133,9 @@ function renderChrome() {
 function updateSendState() {
   const typed = $("input").value.trim();
   const command = typed.startsWith("/");
-  $("send").disabled = (busy && !command) || (!app.workspace && !command) || (!typed && !attachments.length && mode !== "ultrareview");
+  $("send").disabled = (busy && !command) || (!app.workspace && !command) || (!typed && !attachments.length);
   $("composer").classList.toggle("busy", busy);
-  $("composer").classList.toggle("ultra", ULTRA_MODES.has(mode));
+  $("composer").classList.toggle("ultra", ULTRA_MODES.has(mode) || (busy && ULTRA_MODES.has(activeTurnMode)));
   $("composer").classList.toggle("plan", mode === "plan");
 }
 
@@ -212,7 +200,7 @@ function scheduleTip(anchor, content) {
 
 function modeTip(button) {
   const info = MODE_INFO[button.dataset.mode];
-  return { title: button.textContent, badge: info.badge, badgeKind: info.badge === "Read-only" ? "safe" : "edits", text: info.text, meta: info.meta };
+  return { title: button.textContent, badge: info.badge, badgeKind: info.badge === "Read-only" ? "safe" : "edits", text: info.text, meta: `${info.meta}. ${MODE_TIP_FOOTNOTE}` };
 }
 
 /** A hover card above `anchor`: a title with a badge, a description, and a footer line. */
@@ -236,17 +224,9 @@ function hideTip() {
   $("tip").hidden = true;
 }
 
-// In a narrow composer the five modes collapse into one pill with a menu.
-$("mode-button").addEventListener("click", () => openMenu($("mode-button"), [...$("modes").querySelectorAll("button")].map(button => ({
-  label: button.textContent, detail: MODE_INFO[button.dataset.mode].short, selected: button.dataset.mode === mode,
-  run: () => setMode(button.dataset.mode)
-}))));
-
 function setMode(next) {
   mode = next;
   for (const button of $("modes").querySelectorAll("button")) button.classList.toggle("active", button.dataset.mode === mode);
-  $("mode-label").textContent = MODE_NAMES[mode] ?? "Chat";
-  $("mode-button").classList.toggle("ultra", ULTRA_MODES.has(mode));
   $("input").placeholder = MODE_PLACEHOLDERS[mode];
   closeMenu();
   renderChrome();
@@ -563,7 +543,7 @@ function renderAttachments() {
 async function submit() {
   const text = input.value.trim();
   if (text.startsWith("/") && await runCommand(text)) return;
-  if (busy || !app.workspace || (!text && !attachments.length && mode !== "ultrareview")) return;
+  if (busy || !app.workspace || (!text && !attachments.length)) return;
   remember(text);
   clearInput();
   await startTurn(mode, text);
@@ -648,6 +628,7 @@ async function runTurn({ text, display = text, images = [], mode: turnMode = "ch
   if (!plan && !delegation) addUserMessage(display, images, turnMode);
   const turn = createSolarTurn(turnId, delegation ? "team" : turnMode);
   turns.set(turnId, turn);
+  activeTurnMode = plan || delegation ? undefined : turnMode;
   busy = true;
   renderChrome();
   scrollToBottom(true);
@@ -657,7 +638,7 @@ async function runTurn({ text, display = text, images = [], mode: turnMode = "ch
       : delegation ? await window.solar.runDelegation({ turnId, request: delegation.request, context: delegation.context, plan: delegation.plan })
       : turnMode === "delegate" ? await window.solar.delegate({ turnId })
       : await window.solar.send({ turnId, text, images, mode: turnMode });
-    if (result.kind === "plan") turn.finishPlan(result.request, result.plan, result.ultra);
+    if (result.kind === "plan") turn.finishPlan(result.request, result.plan, result.ultra, result.achievements);
     else turn.finish(result.reply, result);
   } catch (error) {
     turn.fail(cleanError(error));
@@ -721,6 +702,8 @@ function createSolarTurn(turnId, turnMode) {
       lastText = text;
       const parsed = classify(text);
       if (!parsed) return;
+      // Solar switched itself into an Ultra mode mid-turn: the turn takes on the Ultra look.
+      if (parsed.kind === "mode" && /^Ultra/.test(parsed.mode)) article.classList.add("ultra");
       if (parsed.status) status.textContent = parsed.status;
       if (parsed.kind === "file") return;
       if (parsed.kind === "command-done") {
@@ -767,16 +750,12 @@ function createSolarTurn(turnId, turnMode) {
       if (!stepCount) steps.remove();
       if (reply || !delegation) body.append(renderMarkdown(reply || "Done."));
       if (files.size) body.append(filesSummary());
-      for (const achievement of achievements) {
-        const badge = el("div", "achievement");
-        badge.append(el("span", "achievement-mark", "◆"), document.createTextNode(`Achievement unlocked: ${achievement}`));
-        body.append(badge);
-      }
+      for (const achievement of achievements) body.append(achievementBadge(achievement));
       if (delegation) body.append(delegationCard(delegation));
       avatar.classList.remove("working");
       status.textContent = "";
     },
-    finishPlan(request, plan, ultra) {
+    finishPlan(request, plan, ultra, achievements = []) {
       done();
       toggleLabel.textContent = summary();
       if (!stepCount) steps.remove();
@@ -796,6 +775,7 @@ function createSolarTurn(turnId, turnMode) {
       actions.append(run, dismiss);
       card.append(header, renderMarkdown(plan), actions);
       body.append(card);
+      for (const achievement of achievements) body.append(achievementBadge(achievement));
       avatar.classList.remove("working");
       status.textContent = "";
     },
@@ -913,6 +893,12 @@ function taskList(tasks, onToggle) {
   return list;
 }
 
+function achievementBadge(achievement) {
+  const badge = el("div", "achievement");
+  badge.append(el("span", "achievement-mark", "◆"), document.createTextNode(`Achievement unlocked: ${achievement}`));
+  return badge;
+}
+
 /** Sub-agents exactly as the harness reports them. */
 function teamList(agents) {
   const list = el("div", "team-list");
@@ -1003,6 +989,7 @@ function classify(text) {
   if ((match = text.match(/^Browser: (.+)$/))) return { kind: "web", icon: "globe", label: "Browser", detail: match[1], status: "Using the browser" };
   if ((match = text.match(/^Image: (.+)$/))) return { kind: "image", icon: "image", label: "Looking at", detail: match[1], status: `Looking at ${match[1]}` };
   if (text.startsWith("File: ")) return { kind: "file" };
+  if ((match = text.match(/^Mode: ([^,]+)(?:, (.+))?$/))) return { kind: "mode", mode: match[1], icon: "spark", label: `Switched to ${match[1]}`, detail: match[2], status: `Switched to ${match[1]}` };
   if ((match = text.match(/^(?:Plan|Review): (.+)$/))) return { kind: "stage", icon: "map", label: capitalize(match[1]), status: capitalize(match[1]) };
   if (/^Inspecting runtime operations/.test(text)) return { kind: "stage", icon: "map", label: text, status: text };
   if (/^\s*[{[]/.test(text)) return undefined;
