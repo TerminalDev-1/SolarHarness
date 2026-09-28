@@ -1092,6 +1092,76 @@ test("/ultrareview runs parallel read-only reviewers and a max-effort verifier, 
   assert.match(calls[3].prompt, /security reviewer:\nfailed: reviewer crashed/);
 });
 
+const toolTurn = (tool, input) => JSON.stringify({ kind: "tool", tool, input: JSON.stringify(input), reply: "" });
+const answerTurn = reply => JSON.stringify({ kind: "answer", tool: "none", input: "", reply });
+
+test("Solar can switch itself into plan mode, which ends the turn with a plan awaiting approval", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "medium", cwd: process.cwd() });
+  const roles = [];
+  harness.provider.run = async (prompt, options) => {
+    roles.push(options.role);
+    if (options.role === "planner") return { text: "1. Add the form\n2. Test it", sessionId: "plan-session" };
+    assert.match(prompt, /switch_mode/);
+    return { text: toolTurn("switch_mode", { mode: "plan", request: "add a login form" }), sessionId: "main" };
+  };
+  harness.provider.resume = async () => { throw new Error("a plan switch must end the turn without resuming the main session"); };
+  const result = await harness.converse("I'd like to see a plan before you add a login form");
+  assert.deepEqual(result.plan, { request: "add a login form", plan: "1. Add the form\n2. Test it", ultra: false });
+  assert.equal(result.reply, "1. Add the form\n2. Test it");
+  assert.deepEqual(roles, ["main-agent", "planner"]);
+  assert.equal(harness.tools.getOperations({ tool: "switch_mode" }).at(-1).status, "succeeded");
+});
+
+test("switching to ultra raises only the rest of this turn to max effort with Fast on", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const seen = [];
+  harness.provider.run = async (_prompt, options) => { seen.push([options.reasoning, options.fast]); return { text: toolTurn("switch_mode", { mode: "ultra" }), sessionId: "main" }; };
+  harness.provider.resume = async (_id, prompt, options) => {
+    seen.push([options.reasoning, options.fast]);
+    assert.match(prompt, /Host tool switch_mode result: \{"mode":"ultra","reasoning":"max","fast":true\}/);
+    return { text: answerTurn("Solved it at full strength."), sessionId: "main" };
+  };
+  const result = await harness.converse("this bug is really hard, go all out");
+  assert.equal(result.reply, "Solved it at full strength.");
+  assert.equal(result.plan, undefined);
+  assert.deepEqual(seen, [["light", false], ["max", true]]);
+  assert.equal(harness.options.reasoning, "light");
+  assert.equal(harness.getFast(), false);
+});
+
+test("switching to ultrareview runs the review and hands its verified report back to Solar", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async (prompt, options) => {
+    if (options.role === "planner") return { text: /verifier/.test(prompt) ? "Confirmed: high app.ts:3 null dereference" : "high app.ts:3", sessionId: "review" };
+    return { text: toolTurn("switch_mode", { mode: "ultrareview", request: "src/app.ts" }), sessionId: "main" };
+  };
+  harness.provider.resume = async (_id, prompt) => {
+    assert.match(prompt, /"mode":"ultrareview","report":"Confirmed: high app\.ts:3 null dereference"/);
+    return { text: answerTurn("One confirmed issue: a null dereference in app.ts:3."), sessionId: "main" };
+  };
+  const result = await harness.converse("audit src/app.ts for me");
+  assert.equal(result.reply, "One confirmed issue: a null dereference in app.ts:3.");
+});
+
+test("an approved plan cannot switch back into planning", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async () => ({ text: toolTurn("switch_mode", { mode: "plan", request: "again" }), sessionId: "main" });
+  harness.provider.resume = async (_id, prompt) => {
+    assert.match(prompt, /already approved/);
+    return { text: answerTurn("Carried out the plan."), sessionId: "main" };
+  };
+  const result = await harness.executeTaskPlan("add a footer", "1. Edit footer");
+  assert.equal(result.plan, undefined);
+  assert.equal(result.reply, "Carried out the plan.");
+});
+
+test("switch_mode is offered in the host schema and rejects unknown modes", async () => {
+  const path = await writeHostTurnSchema(process.cwd(), false);
+  assert.ok(JSON.parse(await readFile(path, "utf8")).properties.tool.enum.includes("switch_mode"));
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  await assert.rejects(harness.tools.call("switch_mode", { mode: "turbo" }), /switch_mode requires mode/);
+});
+
 test("/ultrareview fails honestly when every reviewer fails", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   harness.provider.run = async () => { throw new Error("codex offline"); };

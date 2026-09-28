@@ -26,6 +26,10 @@ export type RuntimeOperation = {
   error?: string;
 };
 export type RuntimeOperationsInput = { tool?: string; limit?: number };
+export const SOLAR_MODES = ["plan", "ultraplan", "ultrareview", "ultra"] as const;
+export type SolarMode = typeof SOLAR_MODES[number];
+/** `request` is what to plan, or the review target (empty reviews the current changes); ultra ignores it. */
+export type SwitchModeInput = { mode: SolarMode; request?: string };
 
 /** Runtime tool boundary. Tool contracts live here, never in a system prompt. */
 export class ToolRegistry {
@@ -114,6 +118,16 @@ export function registerHarnessTools(dependencies: {
     description: "Change the reasoning effort used for a specific sub-agent or sub-delegate's next exchange.",
     exampleInput: { agentId: "agent-name", effortLevel: "light" },
     execute: async input => dependencies.setReasoning(input.agentId, input.effortLevel)
+  });
+  // The conversation loop carries out the switch; the registry validates it and records it in runtime_operations.
+  registry.register<SwitchModeInput, SwitchModeInput>({
+    name: "switch_mode",
+    description: "Switch how Solar handles the current request: plan (read-only plan the user approves before changes), ultraplan (Max-effort plan with a self-critique), ultrareview (parallel read-only code review with verified findings), or ultra (Max effort with Fast for the rest of this task).",
+    exampleInput: { mode: "plan", request: "add a login form" },
+    execute: async input => {
+      if (!input || !SOLAR_MODES.includes(input.mode)) throw new Error(`switch_mode requires mode ${SOLAR_MODES.join(", ")}.`);
+      return { mode: input.mode, request: typeof input.request === "string" ? input.request : "" };
+    }
   });
   registry.register<SetAutoPermissionsInput, AutoPermissionsState>({
     name: "set-auto-permissions",

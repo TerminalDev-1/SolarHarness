@@ -389,6 +389,8 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
     setAutoApprove(harness.getAutoPermissions().enabled);
     setAgents(harness.manager.list());
     addReply(response.reply);
+    // Solar switched itself into plan or ultraplan: the plan waits for approval like /plan's.
+    if (response.plan) setPendingTaskPlan({ ...response.plan, cursor: 0 });
     for (const achievement of harness.takeAchievements()) addMessage({ role: "solar", text: `◆ Achievement unlocked: ${achievement}` });
     if (response.readyToDelegate) {
       await preparePlan(nextBrief.join("\n"), nextBrief.join("\n"));

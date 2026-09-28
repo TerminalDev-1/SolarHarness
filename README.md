@@ -243,6 +243,11 @@ Solar chooses tools from a live registry on every turn, whatever words you use.
   fields, press keys, scroll, and go back or forward. The window has a blue tint and
   a "Solar Harness is controlling the browser" notice. It stays open between turns,
   and a new window opens if you closed it. Chromium is tried first, then Edge.
+- **`switch_mode`** lets Solar move itself into Plan, Ultraplan, Ultrareview, or
+  Ultra when you ask in your own words ("plan this first", "review my code
+  thoroughly", "go all out") or when it judges the task needs it. Plans still
+  wait for your approval before anything changes, and Ultra only lasts for the
+  current task.
 - **`web_search_headless`** searches Google without a window, falls back to Bing
   when Google blocks automation, and can read a source page by URL. Solar cites the
   URLs it used.
