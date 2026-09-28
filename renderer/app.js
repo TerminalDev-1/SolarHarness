@@ -50,6 +50,7 @@ window.solar.onDiff(diff => { turns.get(diff.turnId)?.diff(diff); scheduleChange
 function renderChrome() {
   $("version-label").textContent = `Solar ${app.version}`;
   $("chat-sub").textContent = app.workspace ?? "";
+  $("chat-sub").hidden = !app.workspace;
   $("model-label").textContent = app.models.find(model => model.id === app.model)?.name ?? app.model;
   $("effort-label").textContent = EFFORT_NAMES[app.effort] ?? app.effort;
   const level = app.efforts.indexOf(app.effort);
@@ -66,6 +67,7 @@ function updateSendState() {
   $("composer").classList.toggle("plan", mode === "plan");
 }
 
+$("chat-sub").addEventListener("click", chooseWorkspace);
 $("new-chat").addEventListener("click", newChat);
 $("review-toggle").addEventListener("click", () => toggleReview());
 $("review-close").addEventListener("click", () => toggleReview(false));
