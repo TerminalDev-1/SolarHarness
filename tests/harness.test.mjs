@@ -1143,6 +1143,21 @@ test("switching to ultrareview runs the review and hands its verified report bac
   assert.equal(result.reply, "One confirmed issue: a null dereference in app.ts:3.");
 });
 
+test("Solar can hand a request to sub-agents when the user asks in words the patterns miss", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "medium", cwd: process.cwd() });
+  const message = "delegate read me only a read only cohort of agents that inspects this project";
+  harness.provider.run = async prompt => {
+    assert.match(prompt, /Work alone unless the user explicitly asks, in any wording, for delegation/);
+    assert.doesNotMatch(prompt, /Do not propose sub-agents/);
+    return { text: toolTurn("switch_mode", { mode: "delegate", request: "inspect this project read-only" }), sessionId: "main" };
+  };
+  harness.provider.resume = async () => { throw new Error("a delegate switch must end the turn without resuming the main session"); };
+  const result = await harness.converse(message);
+  assert.equal(result.readyToDelegate, true);
+  assert.equal(result.plan, undefined);
+  assert.match(result.reply, /team of sub-agents: inspect this project read-only/);
+});
+
 test("an approved plan cannot switch back into planning", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   harness.provider.run = async () => ({ text: toolTurn("switch_mode", { mode: "plan", request: "again" }), sessionId: "main" });

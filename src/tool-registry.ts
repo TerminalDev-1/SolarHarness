@@ -26,9 +26,9 @@ export type RuntimeOperation = {
   error?: string;
 };
 export type RuntimeOperationsInput = { tool?: string; limit?: number };
-export const SOLAR_MODES = ["plan", "ultraplan", "ultrareview", "ultra"] as const;
+export const SOLAR_MODES = ["plan", "ultraplan", "ultrareview", "ultra", "delegate"] as const;
 export type SolarMode = typeof SOLAR_MODES[number];
-/** `request` is what to plan, or the review target (empty reviews the current changes); ultra ignores it. */
+/** `request` is what to plan, the review target (empty reviews the current changes), or the team's task; ultra ignores it. */
 export type SwitchModeInput = { mode: SolarMode; request?: string };
 
 /** Runtime tool boundary. Tool contracts live here, never in a system prompt. */
@@ -122,7 +122,7 @@ export function registerHarnessTools(dependencies: {
   // The conversation loop carries out the switch; the registry validates it and records it in runtime_operations.
   registry.register<SwitchModeInput, SwitchModeInput>({
     name: "switch_mode",
-    description: "Switch how Solar handles the current request: plan (read-only plan the user approves before changes), ultraplan (Max-effort plan with a self-critique), ultrareview (parallel read-only code review with verified findings), or ultra (Max effort with Fast for the rest of this task).",
+    description: "Switch how Solar handles the current request: plan (read-only plan the user approves before changes), ultraplan (Max-effort plan with a self-critique), ultrareview (parallel read-only code review with verified findings), ultra (Max effort with Fast for the rest of this task), or delegate (hand the request to a team of sub-agents; only when the user explicitly asked for delegation, sub-agents, or a team).",
     exampleInput: { mode: "plan", request: "add a login form" },
     execute: async input => {
       if (!input || !SOLAR_MODES.includes(input.mode)) throw new Error(`switch_mode requires mode ${SOLAR_MODES.join(", ")}.`);

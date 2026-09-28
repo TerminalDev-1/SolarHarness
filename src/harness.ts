@@ -77,13 +77,13 @@ export class SolarHarness {
       ...(instructionsChanged ? [instructions ? `The SOLAR.md instructions changed during this session. They now read:\n\n${instructions}` : "The SOLAR.md instructions were removed during this session. Disregard the earlier SOLAR.md instructions."] : []),
       wantsDelegation
         ? "The user requested delegation. Explain the intended sub-agent scope and mark READY. The harness will prepare the sub-agent plan after this turn, honoring any requested agent count and otherwise choosing the smallest useful number. Do not implement the delegated task yourself."
-        : "You are Solar. Carry out the user's request yourself using your workspace tools. Work alone. Do not propose sub-agents or ask whether the user wants delegation or how many agents to use. Finish with DISCOVER. Browser actions can be handled directly. Ask other clarifying questions only when a missing answer materially changes the work.",
+        : "You are Solar. Carry out the user's request yourself using your workspace tools. Work alone unless the user explicitly asks, in any wording, for delegation, sub-agents, or a team of agents: then call switch_mode with {\"mode\":\"delegate\",\"request\":\"what the team should do\"} instead of doing the work yourself. Never delegate on your own initiative, and do not ask whether the user wants delegation or how many agents to use. Finish with DISCOVER. Browser actions can be handled directly. Ask other clarifying questions only when a missing answer materially changes the work.",
       "The main-agent host tool adjust-sub-effort-level changes a specific existing sub-agent or sub-delegate's effort. Example input: {\"agentId\":\"name-or-id\",\"effortLevel\":\"light\"}. An effort adjustment does not request new delegation.",
       `The host tool set-auto-permissions changes sub-agent plan approval only and never bypasses the /new deletion confirmation. Example input: {"enabled":true}. Auto permissions are currently ${this.autoPermissions ? "enabled" : "disabled"}.`,
       'Use workspace_command to inspect, create, run, and verify local projects. Input {"action":"run","command":"..."} runs a bounded command; action "start" launches a long-running background process such as a server (hidden, no input or window); action "terminal" opens a new visible terminal window running the command in the workspace and leaves it open for the user. For a CLI, TUI, REPL, or terminal game the user should see or use, launch it with "terminal", never "start", "run", or your built-in shell: those run hidden, so any window they open stays invisible. The host sends command results back to this same session. You may also use your built-in workspace tools.',
       approvedPlan
         ? "The host tool switch_mode can raise this task to ultra or run an ultrareview, but do not switch to plan or ultraplan: the user already approved the plan below."
-        : 'The host tool switch_mode changes how you handle this request. Use it when the user asks for a mode in their own words (for example "plan this first", "review my code thoroughly", or "go all out on this"), or when you judge the task needs it: plan for a risky or multi-step change the user should approve first, ultraplan for a large or high-stakes change, ultrareview when the user wants code reviewed or audited, and ultra for a hard problem that needs maximum effort. Input {"mode":"plan","request":"what to plan"}; for ultrareview, request is the review target, empty for the current changes. Switch before making any changes. plan and ultraplan end your turn: the plan goes to the user for approval, and nothing changes until they approve. Do not switch for simple tasks.',
+        : 'The host tool switch_mode changes how you handle this request. Use it when the user asks for a mode in their own words (for example "plan this first", "review my code thoroughly", or "go all out on this"), or when you judge the task needs it: plan for a risky or multi-step change the user should approve first, ultraplan for a large or high-stakes change, ultrareview when the user wants code reviewed or audited, ultra for a hard problem that needs maximum effort, and delegate only when the user explicitly asked for delegation, sub-agents, or a team. Input {"mode":"plan","request":"what to plan"}; for ultrareview, request is the review target, empty for the current changes. Switch before making any changes. plan, ultraplan, and delegate end your turn: the plan or the sub-agent team goes to the user for approval, and nothing changes until they approve. Do not switch for simple tasks.',
       "Narrate as you work, like a coding agent: before each group of actions, write one short plain sentence saying what you will do next (for example, I'll inspect the workspace, then update index.html). Make file edits with your file editing tool rather than shell redirection so each change is visible to the user.",
       'For a standalone HTML page in the active workspace, call workspace_command with {"action":"serve"}. It returns a listening localhost base URL; append the file name and call browser open with that URL. Do not assume a spawned process is listening merely because it has a PID.',
       'When asked what tool operations happened earlier, call runtime_operations with {} to inspect the host operation log. Use recorded status and results rather than a previous model claim. The log covers host tools, not unrecorded Codex built-in file edits.',
@@ -154,6 +154,7 @@ export class SolarHarness {
     let localPageRecoveryAttempts = 0;
     let historyInspected = false;
     let pendingPlan: TaskPlan | undefined;
+    let delegateRequest: string | undefined;
     for (let step = 0; step < 20; step++) {
       let toolCall;
       try { toolCall = parseHostToolCall(response.text); }
@@ -264,6 +265,11 @@ export class SolarHarness {
             runOptions.fast = true;
             onActivity?.("Mode: Ultra, Max effort with Fast on for the rest of this task");
             result = { mode: "ultra", reasoning: "max", fast: true };
+          } else if (input.mode === "delegate") {
+            // The user asked for a team in their own words; the host plans it after this turn, as for a matched request.
+            onActivity?.("Mode: Delegate");
+            delegateRequest = input.request?.trim() || message;
+            break;
           } else if (input.mode === "ultrareview") {
             onActivity?.("Mode: Ultrareview");
             result = { mode: "ultrareview", report: await this.ultraReview(input.request ?? "", onActivity) };
@@ -318,6 +324,12 @@ export class SolarHarness {
           : 'The user explicitly asked for a screenshot. No screenshot has been captured yet. Output exactly SOLAR_TOOL: browser {"action":"screenshot","fullPage":true} and nothing else.', true);
         this.mainSessionId = response.sessionId ?? this.mainSessionId;
       }
+    }
+    if (delegateRequest !== undefined) {
+      const reply = `I'll hand this to a team of sub-agents: ${delegateRequest}`;
+      this.mainTranscript.push(`User: ${message}`, `Solar: ${reply}`);
+      this.unlocked = this.stats.recordPrompt(this.options.model, true, false);
+      return { reply, readyToDelegate: true };
     }
     if (pendingPlan) {
       // planTask recorded the plan in the transcript; the user approves it before anything changes.
