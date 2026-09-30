@@ -49,6 +49,7 @@ const SLASH_COMMANDS = [
   { command: "/ultraplan", detail: "Max-effort plan with a self-critique", insert: "/ultraplan " },
   { command: "/ultrareview", detail: "Parallel review with verified findings", insert: "/ultrareview" },
   { command: "/delegate", detail: "Prepare an agent plan for the last request", insert: "/delegate" },
+  { command: "/sidebyside", detail: "Two recorded agents discuss a topic", insert: "/sidebyside " },
   { command: "/agents", detail: "Show assigned agents", insert: "/agents" },
   { command: "/agent", detail: "Control an assigned agent", insert: "/agent " },
   { command: "/auto-approve", detail: "Set plan approval on or off", insert: "/auto-approve " },
@@ -65,7 +66,11 @@ const SLASH_COMMANDS = [
   { command: "/exit", detail: "Close Solar", insert: "/exit" }
 ];
 // Commands that change the session; like the CLI, they wait until Solar finishes.
-const WAIT_WHILE_BUSY = new Set(["new", "delegate", "model", "effort", "speed", "fast"]);
+const WAIT_WHILE_BUSY = new Set(["new", "delegate", "sidebyside", "model", "effort", "speed", "fast"]);
+const MEETING_SPEAKERS = ["Aurora", "Helios"];
+const MEETING_HINT = "Enter sends to both sessions. Tab switches pane, PgUp and PgDn scroll it, /sidebyside close leaves.";
+const MEETING_BUSY = "Aurora and Helios are still talking. Wait for this round to finish.";
+const CHAT_HINT = $("composer-hint").textContent;
 const SUGGESTIONS = [
   { title: "Explain this codebase", detail: "Walk me through how it fits together", prompt: "Explain how this codebase is structured and how the main pieces fit together." },
   { title: "Find and fix a bug", detail: "Hunt down something broken", prompt: "Look for a bug in this project, explain it, and fix it." },
@@ -90,6 +95,8 @@ const history = [];
 let historyIndex = -1;
 let slashMatches = [];
 let slashSelected = 0;
+// The open /sidebyside meeting: its two panes replace the thread until it is closed.
+let meeting = null;
 
 // ---------- boot ----------
 
@@ -105,6 +112,7 @@ void showPet();
 window.solar.onActivity(({ turnId, text }) => turns.get(turnId)?.activity(text));
 window.solar.onDiff(diff => { turns.get(diff.turnId)?.diff(diff); scheduleChangesRefresh(); });
 window.solar.onAgents(({ turnId, agents }) => turns.get(turnId)?.agents(agents));
+window.solar.onMeeting(event => meetingEvent(event));
 
 // ---------- chrome: sidebar, top bar, composer controls ----------
 
@@ -113,8 +121,8 @@ function renderChrome() {
   $("chat-sub").textContent = app.workspace ?? "";
   $("chat-sub").hidden = !app.workspace;
   $("model-label").textContent = app.models.find(model => model.id === app.model)?.name ?? app.model;
-  // Ultra modes run at Max effort with Fast on, so show that and lock both pickers.
-  const pinsEffort = ULTRA_MODES.has(mode);
+  // Ultra modes run at Max effort with Fast on, so show that and lock both pickers. A meeting uses the session's own settings.
+  const pinsEffort = ULTRA_MODES.has(mode) && !meeting;
   const pinsFast = pinsEffort;
   const effort = pinsEffort ? "max" : app.effort;
   const fast = pinsFast || app.fast;
@@ -129,6 +137,13 @@ function renderChrome() {
     $(id).setAttribute("aria-disabled", String(locked));
   }
   $("status-dot").classList.toggle("busy", busy);
+  // In a meeting the composer talks to both sessions: no mode tabs, and images wait for the normal chat.
+  $("modes").hidden = Boolean(meeting);
+  $("attach").hidden = Boolean(meeting);
+  $("meeting-tag").hidden = !meeting;
+  $("attachments").hidden = Boolean(meeting) || !attachments.length;
+  $("input").placeholder = meeting ? (meeting.busy ? "Aurora and Helios are conversing..." : "Send a message to both sessions") : MODE_PLACEHOLDERS[mode];
+  $("composer-hint").textContent = meeting ? MEETING_HINT : CHAT_HINT;
   updateSendState();
 }
 
@@ -137,8 +152,9 @@ function updateSendState() {
   const command = typed.startsWith("/");
   $("send").disabled = (busy && !command) || (!app.workspace && !command) || (!typed && !attachments.length);
   $("composer").classList.toggle("busy", busy);
-  $("composer").classList.toggle("ultra", ULTRA_MODES.has(mode) || (busy && ULTRA_MODES.has(activeTurnMode)));
-  $("composer").classList.toggle("plan", mode === "plan");
+  $("composer").classList.toggle("ultra", (!meeting && ULTRA_MODES.has(mode)) || (busy && ULTRA_MODES.has(activeTurnMode)));
+  $("composer").classList.toggle("plan", !meeting && mode === "plan");
+  $("composer").classList.toggle("meeting", Boolean(meeting));
 }
 
 $("chat-sub").addEventListener("click", chooseWorkspace);
@@ -164,7 +180,7 @@ async function chooseWorkspace() {
     const previous = app.workspace;
     app = await window.solar.chooseWorkspace();
     renderChrome();
-    if (app.workspace !== previous) { clearThread(); renderEmpty(); await refreshChanges(); }
+    if (app.workspace !== previous) { closeMeeting({ quiet: true }); clearThread(); renderEmpty(); await refreshChanges(); }
   } catch (error) { toast(error.message); }
 }
 
@@ -174,6 +190,7 @@ async function newChat() {
     const result = await window.solar.newChat();
     if (!result.started) return;
     app = result.state;
+    closeMeeting({ quiet: true });
     renderChrome();
     clearThread();
     renderEmpty();
@@ -334,6 +351,13 @@ input.addEventListener("keydown", event => {
     if (event.key === "Tab" || (event.key === "Enter" && !event.shiftKey)) { event.preventDefault(); chooseSlashCommand(slashMatches[slashSelected]); return; }
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeSlashMenu(); return; }
   }
+  // Like the CLI's meeting view: Tab selects a pane, PgUp and PgDn scroll only that pane.
+  if (meeting && ["Tab", "PageUp", "PageDown"].includes(event.key) && !event.ctrlKey && !event.altKey) {
+    event.preventDefault();
+    if (event.key === "Tab") selectPane(1 - meeting.selected);
+    else { const body = meeting.panes[meeting.selected].body; body.scrollBy({ top: (event.key === "PageUp" ? -0.8 : 0.8) * body.clientHeight }); }
+    return;
+  }
   if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); return; }
   // Like the CLI: Up and Down walk through earlier messages while the box is empty or browsing them.
   if ((event.key === "ArrowUp" || event.key === "ArrowDown") && history.length && (historyIndex >= 0 || !input.value) && !event.shiftKey) {
@@ -391,6 +415,11 @@ async function runCommand(line) {
   const turnMode = ["plan", "ultra", "ultraplan", "ultrareview"].includes(name) ? name : undefined;
   const handler = COMMANDS[name];
   if (!turnMode && !handler) return false;
+  // Other commands return to the normal chat, as in the CLI; never while the sessions are mid-round.
+  if (meeting && name !== "sidebyside") {
+    if (meeting.busy) { toast(MEETING_BUSY); return true; }
+    closeMeeting();
+  }
   if (busy && (turnMode || WAIT_WHILE_BUSY.has(name))) { toast("Solar is still working. Wait for it to finish first."); return true; }
   if (turnMode && !app.workspace) { toast("Open a folder first."); return true; }
   if (turnMode && !arg && turnMode !== "ultrareview" && !(turnMode === "ultra" && attachments.length)) { toast(`Add a task after /${name}.`); return true; }
@@ -412,6 +441,19 @@ const COMMANDS = {
   delegate: () => lastRequestSent
     ? runTurn({ mode: "delegate", text: "Plan a team of sub-agents for the last request" })
     : addNote("Delegate", "First tell Solar what the team should accomplish, then use /delegate. You can also just ask for a team in your own words."),
+  sidebyside: async arg => {
+    if (arg.toLowerCase() === "close") {
+      if (!meeting) return addNote("Side-by-side", "No meeting is open. Start one with /sidebyside <topic>.");
+      return meeting.busy ? toast(MEETING_BUSY) : closeMeeting();
+    }
+    const usage = "Usage: /sidebyside <meeting topic>, or /sidebyside close. Aurora and Helios discuss the topic in two recorded, read-only sessions.";
+    if (!arg) return meeting ? toast(usage) : addNote("Side-by-side", usage);
+    if (!app.workspace) return toast("Open a folder first.");
+    // A new topic starts two fresh sessions.
+    closeMeeting();
+    openMeeting(arg);
+    await talkInMeeting(arg, false);
+  },
   agents: async () => {
     const agents = await window.solar.agents();
     addNote("Team", agents.length ? teamList(agents) : "No sub-agents are assigned. Ask Solar to delegate when you want sub-agents.");
@@ -548,6 +590,12 @@ function renderAttachments() {
 async function submit() {
   const text = input.value.trim();
   if (text.startsWith("/") && await runCommand(text)) return;
+  if (meeting) {
+    if (busy || !text) return;
+    // A follow-up resumes both existing sessions; an unknown /command leaves the meeting, as in the CLI.
+    if (!text.startsWith("/")) { remember(text); clearInput(); await talkInMeeting(text, true); return; }
+    closeMeeting();
+  }
   if (busy || !app.workspace || (!text && !attachments.length)) return;
   remember(text);
   clearInput();
@@ -937,6 +985,129 @@ function addNote(title, ...content) {
   $("thread-inner").append(article);
   scrollToBottom(true);
 }
+
+// ---------- side-by-side meetings ----------
+
+function openMeeting(topic) {
+  meeting = { topic, selected: 0, busy: false, turnId: 0, panes: MEETING_SPEAKERS.map(meetingPane) };
+  $("meeting-topic").textContent = topic;
+  $("meeting-panes").replaceChildren(...meeting.panes.map(pane => pane.root));
+  $("meeting-recordings").hidden = true;
+  $("meeting-note").hidden = true;
+  $("meeting").hidden = false;
+  $("thread").hidden = true;
+  $("jump-latest").hidden = true;
+  selectPane(0);
+  renderChrome();
+}
+
+/** One session's pane: speaker, status, session ID, latest activity, and its own scrolling history. */
+function meetingPane(speaker, index) {
+  const root = el("div", `pane ${speaker.toLowerCase()}`);
+  root.dataset.status = "starting";
+  const head = el("div", "pane-head");
+  const avatar = el("span", "avatar");
+  const status = el("span", "pane-status", "Starting");
+  head.append(avatar, el("strong", "pane-name", speaker), status);
+  const session = el("div", "pane-session", "Session: starting");
+  const activity = el("div", "pane-activity", "Starting independent session");
+  const body = el("div", "pane-body");
+  const foot = el("div", "pane-foot", "Latest messages");
+  root.append(head, session, activity, body, foot);
+  root.addEventListener("pointerdown", () => selectPane(index));
+  const pane = { speaker, root, avatar, status, session, activity, body, foot, stick: true, round: 0 };
+  body.addEventListener("scroll", () => {
+    pane.stick = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+    foot.textContent = pane.stick ? "Latest messages" : "Viewing earlier messages";
+  });
+  return pane;
+}
+
+function selectPane(index) {
+  meeting.selected = index;
+  meeting.panes.forEach((pane, item) => pane.root.classList.toggle("selected", item === index));
+}
+
+function paneMessage(pane, from, text) {
+  const you = from === "You";
+  const message = el("div", `pane-message${you ? " you" : ""}`);
+  message.append(el("div", "pane-from", you ? "You" : `${from} · round ${pane.round}`), you ? el("div", "pane-text", text) : renderMarkdown(text));
+  pane.body.append(message);
+  if (pane.stick) pane.body.scrollTop = pane.body.scrollHeight;
+}
+
+/** Status and messages exactly as the harness reports them for each session. */
+function meetingEvent({ turnId, speaker, text, sessionId, status, activity }) {
+  const pane = meeting?.turnId === turnId && meeting.panes.find(item => item.speaker === speaker);
+  if (!pane) return;
+  if (text !== undefined) { pane.round++; paneMessage(pane, speaker, text); return; }
+  pane.root.dataset.status = status;
+  pane.status.textContent = capitalize(status);
+  pane.session.textContent = `Session: ${sessionId ?? "starting"}`;
+  pane.activity.textContent = activity;
+  pane.avatar.classList.toggle("working", status === "running");
+  pane.avatar.classList.toggle("failed", status === "failed");
+}
+
+/** Sends the topic or a follow-up to both sessions: three rounds, then each saves a readback. */
+async function talkInMeeting(text, continuing) {
+  const current = meeting;
+  current.turnId = ++turnCounter;
+  current.busy = true;
+  for (const pane of current.panes) { pane.round = 0; pane.stick = true; paneMessage(pane, "You", text); }
+  $("meeting-note").hidden = true;
+  busy = true;
+  renderChrome();
+  try {
+    const result = await window.solar.meeting({ turnId: current.turnId, topic: text, continuing });
+    current.recordings = result.recordings;
+    current.readback = result.readback;
+    $("meeting-recordings").hidden = false;
+    meetingNote("Both sessions saved their readbacks. Send another message to continue in the same sessions, or leave with /sidebyside close.");
+  } catch (error) {
+    meetingNote(cleanError(error), true);
+  } finally {
+    current.busy = false;
+    busy = false;
+    renderChrome();
+    void refreshChanges();
+  }
+}
+
+function meetingNote(text, failed = false) {
+  const note = $("meeting-note");
+  note.replaceChildren(icon(failed ? "alert" : "check"), el("span", "", text));
+  note.classList.toggle("failed", failed);
+  note.hidden = false;
+}
+
+/** Back to Solar chat. The sessions stay resumable in the engine until /new; a note records the meeting in the thread. */
+function closeMeeting({ quiet = false } = {}) {
+  if (!meeting) return;
+  const { topic, recordings, readback } = meeting;
+  meeting = null;
+  $("meeting").hidden = true;
+  $("thread").hidden = false;
+  renderChrome();
+  if (quiet) return;
+  const content = [`Returned to Solar chat from the meeting on "${topic}".${recordings ? " Recordings and session notes are saved." : ""}`];
+  if (readback) {
+    const details = el("details", "note-details");
+    details.append(el("summary", "", "Readbacks"), renderMarkdown(readback));
+    content.push(details);
+  }
+  if (recordings) {
+    const open = el("button", "ghost-button small");
+    open.append(icon("folder"), document.createTextNode("Open recordings"));
+    open.addEventListener("click", () => void window.solar.openFile(recordings));
+    content.push(open);
+  }
+  addNote("Side-by-side", ...content);
+  $("input").focus();
+}
+
+$("meeting-close").addEventListener("click", () => meeting?.busy ? toast(MEETING_BUSY) : closeMeeting());
+$("meeting-recordings").addEventListener("click", () => { if (meeting?.recordings) void window.solar.openFile(meeting.recordings); });
 
 // ---------- pet ----------
 

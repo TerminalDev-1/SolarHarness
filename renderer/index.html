@@ -58,6 +58,22 @@
         <div class="thread-inner" id="thread-inner"></div>
       </section>
 
+      <section class="meeting" id="meeting" hidden>
+        <header class="meeting-head">
+          <div class="meeting-title">
+            <span class="icon" data-icon="team"></span>
+            <span>Side-by-side</span>
+            <span class="meeting-topic" id="meeting-topic"></span>
+          </div>
+          <div class="meeting-actions">
+            <button class="ghost-button small" id="meeting-recordings" title="Open the transcript.jsonl and session_notes.md recordings" hidden><span class="icon" data-icon="folder"></span>Recordings</button>
+            <button class="ghost-button small" id="meeting-close" title="Leave the meeting (/sidebyside close)"><span class="icon" data-icon="close"></span>Leave</button>
+          </div>
+        </header>
+        <div class="meeting-panes" id="meeting-panes"></div>
+        <div class="meeting-note" id="meeting-note" hidden></div>
+      </section>
+
       <footer class="composer-area">
         <button class="jump-latest" id="jump-latest" hidden><span class="icon" data-icon="arrow-up"></span>Jump to latest</button>
         <div class="composer" id="composer">
@@ -77,6 +93,7 @@
                   <button data-mode="plan">Plan</button>
                   <button data-mode="ultra">Ultra</button>
                 </div>
+                <span class="meeting-tag" id="meeting-tag" hidden><span class="icon" data-icon="team"></span>To Aurora and Helios</span>
               </div>
               <div class="bar-right">
                 <button class="pill" id="model-button"><span class="icon" data-icon="spark"></span><span id="model-label">Model</span><span class="icon caret" data-icon="caret"></span></button>
@@ -89,7 +106,7 @@
             </div>
           </div>
         </div>
-        <div class="composer-hint">Enter to send, Shift+Enter for a new line, / for commands. Paste images with Ctrl+V.</div>
+        <div class="composer-hint" id="composer-hint">Enter to send, Shift+Enter for a new line, / for commands. Paste images with Ctrl+V.</div>
       </footer>
     </main>
 

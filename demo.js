@@ -45,6 +45,7 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export function installDemoHarness() {
   installDemoDelegation();
+  installDemoMeeting();
   SolarHarness.prototype.converse = async function demoConverse(message, onActivity) {
     const cwd = this.getWorkspace();
     const say = async (line, ms = 450) => { onActivity?.(line); await wait(ms); };
@@ -165,6 +166,66 @@ function installDemoDelegation() {
   };
 }
 
+/** Scripted /sidebyside: two sessions, three rounds each, reported the way the engine reports them. */
+function installDemoMeeting() {
+  const ids = { Aurora: "019a4c2e-demo-aurora", Helios: "019a4c2f-demo-helios" };
+  const lines = {
+    Aurora: ["Opening view: keep the pricing cards on the warm sun palette and let one plan stand out.", "Agreed on contrast. I'd still keep **one** accent color so the page doesn't feel busy.", "Readback: sun palette, one highlighted plan, contrast checked in both themes. Proposed only; nothing was changed."],
+    Helios: ["Opening view: start from contrast. Gold on white fails in the light theme.", "Then the highlighted card uses the orange end of the gradient, and body text stays neutral.", "Readback: agree with Aurora. Validation needed: a contrast check on each card. Proposed only."]
+  };
+  SolarHarness.prototype.sideBySide = async function demoSideBySide(_task, _onActivity, onMessage, { continue: continuing = false, onSession } = {}) {
+    for (let round = 0; round < 3; round++) {
+      for (const name of ["Aurora", "Helios"]) onSession?.(name, round || continuing ? ids[name] : undefined, "running", round ? "Thinking: Weighing the peer's last message" : "Discussing with peer");
+      await wait(350);
+      for (const name of ["Aurora", "Helios"]) {
+        onMessage?.(name, lines[name][round]);
+        onSession?.(name, ids[name], "completed", round === 2 ? "Readback saved" : "Waiting for peer");
+      }
+    }
+    return `Side-by-side meeting complete.
+
+Aurora:
+${lines.Aurora[2]}
+
+Helios:
+${lines.Helios[2]}`;
+  };
+}
+
+/**
+ * /sidebyside: two panes replace the thread, each with its own session and history; a follow-up resumes both,
+ * Tab switches panes, and /sidebyside close returns to chat with a note. Prints `side by side: ... OK` only if all hold.
+ */
+async function checkSideBySide(run, shot) {
+  const command = async text => { await run(`(() => { const input = document.getElementById("input"); input.value = ${JSON.stringify(text)}; input.dispatchEvent(new Event("input")); input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); })()`); };
+  const panes = () => run(`[...document.querySelectorAll("#meeting-panes .pane")].map(pane => [pane.querySelector(".pane-name").textContent, pane.querySelector(".pane-status").textContent, pane.querySelector(".pane-session").textContent, pane.querySelectorAll(".pane-message").length].join("|")).join(";")`);
+  const results = {};
+  await command("/sidebyside How should the pricing page use the sun palette?");
+  await wait(450);
+  await shot("meeting-working");
+  results.working = await run(`[document.querySelector("#meeting-panes .pane").dataset.status, document.querySelector("#meeting-panes .avatar.working") !== null].join()`);
+  await wait(1400);
+  await shot("meeting");
+  results.first = await panes();
+  results.view = await run(`[document.getElementById("thread").hidden, document.getElementById("meeting-tag").hidden, document.getElementById("attach").hidden, document.getElementById("modes").hidden, document.getElementById("meeting-note").hidden].join()`);
+  await run(`document.getElementById("input").dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }))`);
+  results.selected = await run(`[...document.querySelectorAll("#meeting-panes .pane")].findIndex(pane => pane.classList.contains("selected"))`);
+  await command("Which color should the highlighted card use?");
+  await wait(1700);
+  results.followUp = await panes();
+  results.layout = await run(`(() => { const box = document.getElementById("composer").getBoundingClientRect(); const body = document.querySelector(".pane-body").getBoundingClientRect(); return box.bottom <= innerHeight && body.bottom <= box.top && document.documentElement.scrollHeight <= innerHeight; })()`);
+  await command("/sidebyside close");
+  await wait(400);
+  await shot("meeting-closed");
+  results.closed = await run(`[document.getElementById("meeting").hidden, document.getElementById("thread").hidden, [...document.querySelectorAll(".note-title")].at(-1)?.textContent, [...document.querySelectorAll(".turn.note")].at(-1)?.textContent.includes("Open recordings")].join()`);
+  const done = "Completed|Session: 019a4c2";
+  const ok = results.working === "running,true" && results.view === "true,false,true,true,false" && results.selected === 1 && results.layout
+    && results.first === `Aurora|${done}e-demo-aurora|4;Helios|${done}f-demo-helios|4`
+    && results.followUp === `Aurora|${done}e-demo-aurora|8;Helios|${done}f-demo-helios|8`
+    && results.closed === "true,false,Side-by-side,true";
+  console.log(`side by side: ${JSON.stringify(results)} ${ok ? "OK" : "WRONG"}`);
+}
+
 /** A turn with many large files, for checking the layout holds up under big diffs. */
 async function stressTurn(cwd, say) {
   await say("Note: I'll generate a large batch of files.", 100);
@@ -251,7 +312,7 @@ async function checkCliParity(run, shot) {
   await type("/pets off");
   await enter();
   await wait(300);
-  const ok = results.slashMenu === 21 && results.filtered === "/stats" && results.notes === "Delegate,Stats,Pets" && results.pet
+  const ok = results.slashMenu === 22 && results.filtered === "/stats" && results.notes === "Delegate,Stats,Pets" && results.pet
     && results.tabs === "Chat,Plan,Ultra" && results.ultraCommands === "/ultra,/ultraplan,/ultrareview"
     && results.tip === "Ultra,Can edit files" && results.delegation === 2 && results.lockedMenu
     && results.selfPlan === "Switched to Plan,Proposed plan,true"
@@ -307,6 +368,7 @@ export async function captureScreenshots(window, directory) {
   console.log(`narrow composer: ${JSON.stringify(narrow)} ${narrow.barScroll <= narrow.barWidth && narrow.sendRight <= narrow.composerRight && narrow.tabs !== "none" ? "OK" : "OVERFLOWS"}`);
   await run(`document.getElementById("review-close").click()`);
   await checkCliParity(run, shot);
+  await checkSideBySide(run, shot);
   await run(`(() => { const input = document.getElementById("input"); input.value = "stress test with huge diffs"; input.dispatchEvent(new Event("input")); document.getElementById("send").click(); })()`);
   await wait(6000);
   await shot("stress");

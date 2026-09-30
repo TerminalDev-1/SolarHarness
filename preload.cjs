@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld("solar", {
   newChat: () => ipcRenderer.invoke("chat:new"),
   delegate: request => ipcRenderer.invoke("chat:delegate", request),
   runDelegation: request => ipcRenderer.invoke("chat:runDelegation", request),
+  meeting: request => ipcRenderer.invoke("chat:meeting", request),
   agents: () => ipcRenderer.invoke("agents:list"),
   controlAgent: request => ipcRenderer.invoke("agents:control", request),
   setAutoApprove: enabled => ipcRenderer.invoke("settings:autoApprove", enabled),
@@ -34,5 +35,6 @@ contextBridge.exposeInMainWorld("solar", {
   revealFile: path => ipcRenderer.invoke("file:reveal", path),
   onActivity: listen("solar:activity"),
   onDiff: listen("solar:diff"),
-  onAgents: listen("solar:agents")
+  onAgents: listen("solar:agents"),
+  onMeeting: listen("solar:meeting")
 });

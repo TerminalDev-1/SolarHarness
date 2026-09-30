@@ -99,6 +99,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   width: 18px; height: 18px; border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #fff3c4, var(--sun-1) 30%, var(--sun-2) 60%, var(--sun-3));
   box-shadow: 0 0 14px rgba(255, 169, 77, 0.55), 0 0 32px rgba(255, 107, 61, 0.25);
+  /* The ring around the disk echoes the CLI's (o) Solar icon. */
+  outline: 1.5px solid rgba(255, 169, 77, 0.7); outline-offset: 2.5px;
 }
 
 .new-chat {
@@ -255,11 +257,19 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .mode-tag.ultra, .mode-tag.ultraplan, .mode-tag.ultrareview { background: rgba(155, 92, 255, 0.18); color: #cdb3ff; }
 
 .solar-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.avatar { width: 22px; height: 22px; border-radius: 50%; flex: none;
+.avatar { position: relative; width: 22px; height: 22px; border-radius: 50%; flex: none;
   background: radial-gradient(circle at 36% 34%, #fff3c4, var(--sun-1) 28%, var(--sun-2) 60%, var(--sun-3));
   box-shadow: 0 0 12px rgba(255, 169, 77, 0.4);
 }
 .avatar.working { animation: glow 1.6s ease-in-out infinite; }
+/* Like the CLI's working sun: the disk stays solid and round while its rays and golden glow pulse. */
+.avatar::before {
+  content: ""; position: absolute; inset: -6px; border-radius: 50%; opacity: 0; pointer-events: none;
+  background: repeating-conic-gradient(var(--sun-2) 0 9deg, transparent 9deg 30deg);
+  -webkit-mask: radial-gradient(circle, transparent 12.5px, #000 13px); mask: radial-gradient(circle, transparent 12.5px, #000 13px);
+}
+.avatar.working::before { animation: rays 1.6s ease-in-out infinite; }
+.turn.ultra .avatar::before { background: repeating-conic-gradient(#c49bff 0 9deg, transparent 9deg 30deg); }
 .avatar.failed { background: radial-gradient(circle at 36% 34%, #ffd0cc, var(--del)); box-shadow: 0 0 12px rgba(248, 81, 73, 0.4); }
 .turn.ultra .avatar { background: radial-gradient(circle at 36% 34%, #f2e6ff, #c49bff 30%, var(--ultra) 65%, #5b2bd6); box-shadow: 0 0 14px rgba(155, 92, 255, 0.55); }
 .solar-name { font-weight: 600; }
@@ -581,7 +591,8 @@ textarea::placeholder { color: var(--faint); }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pulse { 50% { opacity: 0.45; } }
-@keyframes glow { 50% { box-shadow: 0 0 22px rgba(255, 169, 77, 0.85), 0 0 40px rgba(255, 107, 61, 0.35); transform: scale(1.06); } }
+@keyframes glow { 50% { box-shadow: 0 0 22px rgba(255, 169, 77, 0.85), 0 0 40px rgba(255, 107, 61, 0.35); } }
+@keyframes rays { 0%, 100% { opacity: 0.35; scale: 0.9; } 50% { opacity: 1; scale: 1.06; } }
 @keyframes glow-ring { 50% { box-shadow: 0 0 0 4px rgba(255, 169, 77, 0.12); } }
 @keyframes breathe { 50% { box-shadow: 0 0 56px rgba(255, 169, 77, 0.7), 0 0 150px rgba(255, 107, 61, 0.45), inset -8px -10px 24px rgba(200, 60, 20, 0.35); } }
 @keyframes turn { to { rotate: 360deg; } }
@@ -755,3 +766,40 @@ label.task-row { cursor: pointer; }
 [data-theme="light"] .review-diff-head { background: rgba(251, 250, 248, 0.94); }
 [data-theme="light"] .diff-row.add .ln { color: rgba(26, 127, 55, 0.8); }
 [data-theme="light"] .diff-row.del .ln { color: rgba(180, 35, 24, 0.8); }
+
+/* ---------- side-by-side meetings (/sidebyside) ---------- */
+
+.meeting { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 14px 24px 12px; animation: fade 0.2s ease both; }
+.meeting-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.meeting-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+.meeting-title .icon { width: 16px; height: 16px; flex: none; color: var(--sun-text); }
+.meeting-topic { min-width: 0; font-weight: 400; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meeting-actions { flex: none; display: flex; gap: 6px; }
+.meeting-panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.pane { min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); transition: border-color 0.15s, box-shadow 0.15s; }
+.pane.selected { border-color: rgba(255, 169, 77, 0.45); box-shadow: 0 0 0 3px rgba(255, 169, 77, 0.08); }
+.pane-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px 0; }
+.pane-name { font-size: 14px; }
+.pane.helios .avatar { background: radial-gradient(circle at 36% 34%, #ffe1c4, var(--sun-2) 28%, var(--sun-3) 65%, #c2410c); }
+.pane-status { margin-left: auto; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--text-2); background: var(--surface-3); }
+.pane[data-status="running"] .pane-status { color: var(--sun-text); background: rgba(255, 169, 77, 0.14); }
+.pane[data-status="completed"] .pane-status { color: var(--add-text); background: var(--add-bg); }
+.pane[data-status="failed"] .pane-status { color: var(--del-text); background: var(--del-bg); }
+.pane-session, .pane-activity { padding-left: 46px; padding-right: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pane-session { padding-top: 4px; font: 11.5px var(--mono); color: var(--faint); }
+.pane-activity { padding-top: 2px; padding-bottom: 10px; font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.pane-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 12px 14px; user-select: text; }
+.pane-from { margin-bottom: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.pane-message .markdown { font-size: 13.5px; }
+.pane-text { padding: 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); font-size: 13.5px; white-space: pre-wrap; word-wrap: break-word; }
+.pane-foot { flex: none; padding: 6px 14px; font-size: 11px; color: var(--faint); border-top: 1px solid var(--line); }
+.meeting-note { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; font-size: 12.5px; color: var(--text-2); background: var(--add-bg); border: 1px solid rgba(46, 160, 67, 0.25); }
+.meeting-note .icon { flex: none; width: 15px; height: 15px; color: var(--add-text); }
+.meeting-note.failed { background: var(--del-bg); border-color: rgba(248, 81, 73, 0.3); }
+.meeting-note.failed .icon { color: var(--del-text); }
+.meeting-tag { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 9px; font-size: 12.5px; white-space: nowrap; color: var(--sun-text); background: rgba(255, 169, 77, 0.1); }
+.meeting-tag .icon { width: 14px; height: 14px; }
+.note-details summary { cursor: pointer; font-size: 13px; color: var(--sun-link); }
+.note-details .markdown { margin-top: 8px; font-size: 13.5px; }
+[data-theme="light"] .pane { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -18px rgba(0, 0, 0, 0.3); }
+[data-theme="light"] .meeting-note:not(.failed) .icon { color: var(--add); }
