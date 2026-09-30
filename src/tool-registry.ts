@@ -26,6 +26,10 @@ export type RuntimeOperation = {
   error?: string;
 };
 export type RuntimeOperationsInput = { tool?: string; limit?: number };
+export const SOLAR_MODES = ["plan", "ultraplan", "ultrareview", "ultra", "delegate"] as const;
+export type SolarMode = typeof SOLAR_MODES[number];
+/** `request` is what to plan, the review target (empty reviews the current changes), or the team's task; ultra ignores it. */
+export type SwitchModeInput = { mode: SolarMode; request?: string };
 
 /** Runtime tool boundary. Tool contracts live here, never in a system prompt. */
 export class ToolRegistry {
@@ -115,6 +119,16 @@ export function registerHarnessTools(dependencies: {
     exampleInput: { agentId: "agent-name", effortLevel: "light" },
     execute: async input => dependencies.setReasoning(input.agentId, input.effortLevel)
   });
+  // The conversation loop carries out the switch; the registry validates it and records it in runtime_operations.
+  registry.register<SwitchModeInput, SwitchModeInput>({
+    name: "switch_mode",
+    description: "Switch how Solar handles the current request: plan (read-only plan the user approves before changes), ultraplan (Max-effort plan with a self-critique), ultrareview (parallel read-only code review with verified findings), ultra (Max effort with Fast for the rest of this task), or delegate (hand the request to a team of sub-agents; only when the user explicitly asked for delegation, sub-agents, or a team).",
+    exampleInput: { mode: "plan", request: "add a login form" },
+    execute: async input => {
+      if (!input || !SOLAR_MODES.includes(input.mode)) throw new Error(`switch_mode requires mode ${SOLAR_MODES.join(", ")}.`);
+      return { mode: input.mode, request: typeof input.request === "string" ? input.request : "" };
+    }
+  });
   registry.register<SetAutoPermissionsInput, AutoPermissionsState>({
     name: "set-auto-permissions",
     description: "Enable or disable automatic approval of future sub-agent plans. This does not bypass the destructive /new confirmation.",
@@ -138,7 +152,7 @@ export function registerHarnessTools(dependencies: {
   });
   registry.register<WorkspaceCommandInput, WorkspaceCommandResult>({
     name: "workspace_command",
-    description: "Run a command, start a long-running process, or serve static files from the active workspace on localhost. The serve action returns its listening URL. Use to inspect, create, run, and verify local projects.",
+    description: "Run a command, start a long-running background process, open a visible terminal window running a command (action terminal, for interactive CLI or terminal apps), or serve static files from the active workspace on localhost. The serve action returns its listening URL. Use to inspect, create, run, and verify local projects.",
     exampleInput: { action: "serve" },
     execute: dependencies.workspaceCommand
   });

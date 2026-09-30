@@ -12,9 +12,14 @@ import { SOLAR_SYSTEM_PROMPT } from "./system-prompt.js";
 import { findImagePaths, imageArgs } from "./images.js";
 import { displayPath } from "./file-changes.js";
 import { loadInstructions, workspaceInstructions, type InstructionFile } from "./instructions.js";
-import { registerHarnessTools, type AdjustSubEffortLevelInput, type AutoPermissionsState, type RuntimeOperation, type RuntimeOperationsInput, type SetAutoPermissionsInput, type SpawnSubAgentInput, type ToolRegistry } from "./tool-registry.js";
+import { registerHarnessTools, type AdjustSubEffortLevelInput, type AutoPermissionsState, type RuntimeOperation, type RuntimeOperationsInput, type SetAutoPermissionsInput, type SpawnSubAgentInput, type SwitchModeInput, type ToolRegistry } from "./tool-registry.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type HarnessOptions, type ReasoningEffort, type SolarModelProvider } from "./types.js";
 import { StatsStore } from "./stats.js";
+
+/** A plan Solar drafted, read-only, that waits for the user's approval before anything changes. */
+export type TaskPlan = { request: string; plan: string; ultra: boolean };
+/** `plan` is set when Solar switched itself into plan or ultraplan mode during the turn. */
+export type ConverseResult = { reply: string; readyToDelegate: boolean; plan?: TaskPlan };
 
 export class SolarHarness {
   readonly provider: SolarModelProvider;
@@ -51,7 +56,7 @@ export class SolarHarness {
    * `approvedPlan` is sent to the model but kept out of the wording heuristics, which read only `message`.
    * `attachedImages` come from the + picker or a clipboard paste, alongside any image paths in the message.
    */
-  async converse(message: string, onActivity?: (message: string) => void, approvedPlan?: string, attachedImages: readonly string[] = []): Promise<{ reply: string; readyToDelegate: boolean }> {
+  async converse(message: string, onActivity?: (message: string) => void, approvedPlan?: string, attachedImages: readonly string[] = []): Promise<ConverseResult> {
     const startedAt = Date.now();
     const standaloneAutoPermissions = standaloneAutoPermissionRequest(message);
     if (standaloneAutoPermissions !== undefined) {
@@ -61,7 +66,7 @@ export class SolarHarness {
       return { reply, readyToDelegate: false };
     }
     const agentRoster = this.manager.list().map(agent => `${agent.depth ? "  sub-delegate" : "sub-agent"} ${agent.name} [${agent.id}]: ${agent.title} (${agent.status}, ${agent.reasoning}${agent.reasoningPinned ? ", pinned" : ""})`).join("\n") || "No sub-agents exist yet.";
-    const hostToolManifest = JSON.stringify(this.tools.list().filter(tool => ["browser", "workspace_command", "web_search_headless", "runtime_operations", "set-auto-permissions", "adjust-sub-effort-level"].includes(tool.name)));
+    const hostToolManifest = JSON.stringify(this.tools.list().filter(tool => ["browser", "workspace_command", "web_search_headless", "runtime_operations", "set-auto-permissions", "adjust-sub-effort-level", "switch_mode"].includes(tool.name)));
     const wantsDelegation = delegationRequested(message);
     const images = [...new Set([...attachedImages, ...findImagePaths(message, this.options.cwd)])].slice(0, 8);
     for (const image of images) onActivity?.(`Image: ${displayPath(this.options.cwd, image)}`);
@@ -72,10 +77,13 @@ export class SolarHarness {
       ...(instructionsChanged ? [instructions ? `The SOLAR.md instructions changed during this session. They now read:\n\n${instructions}` : "The SOLAR.md instructions were removed during this session. Disregard the earlier SOLAR.md instructions."] : []),
       wantsDelegation
         ? "The user requested delegation. Explain the intended sub-agent scope and mark READY. The harness will prepare the sub-agent plan after this turn, honoring any requested agent count and otherwise choosing the smallest useful number. Do not implement the delegated task yourself."
-        : "You are Solar. Carry out the user's request yourself using your workspace tools. Work alone. Do not propose sub-agents or ask whether the user wants delegation or how many agents to use. Finish with DISCOVER. Browser actions can be handled directly. Ask other clarifying questions only when a missing answer materially changes the work.",
+        : "You are Solar. Carry out the user's request yourself using your workspace tools. Work alone unless the user explicitly asks, in any wording, for delegation, sub-agents, or a team of agents: then call switch_mode with {\"mode\":\"delegate\",\"request\":\"what the team should do\"} instead of doing the work yourself. Never delegate on your own initiative, and do not ask whether the user wants delegation or how many agents to use. Finish with DISCOVER. Browser actions can be handled directly. Ask other clarifying questions only when a missing answer materially changes the work.",
       "The main-agent host tool adjust-sub-effort-level changes a specific existing sub-agent or sub-delegate's effort. Example input: {\"agentId\":\"name-or-id\",\"effortLevel\":\"light\"}. An effort adjustment does not request new delegation.",
       `The host tool set-auto-permissions changes sub-agent plan approval only and never bypasses the /new deletion confirmation. Example input: {"enabled":true}. Auto permissions are currently ${this.autoPermissions ? "enabled" : "disabled"}.`,
-      'Use workspace_command to inspect, create, run, and verify local projects. Input {"action":"run","command":"..."} runs a bounded command; action "start" launches a long-running process. The host sends command results back to this same session. You may also use your built-in workspace tools.',
+      'Use workspace_command to inspect, create, run, and verify local projects. Input {"action":"run","command":"..."} runs a bounded command; action "start" launches a long-running background process such as a server (hidden, no input or window); action "terminal" opens a new visible terminal window running the command in the workspace and leaves it open for the user. For a CLI, TUI, REPL, or terminal game the user should see or use, launch it with "terminal", never "start", "run", or your built-in shell: those run hidden, so any window they open stays invisible. The host sends command results back to this same session. You may also use your built-in workspace tools.',
+      approvedPlan
+        ? "The host tool switch_mode can raise this task to ultra or run an ultrareview, but do not switch to plan or ultraplan: the user already approved the plan below."
+        : 'The host tool switch_mode changes how you handle this request. Use it when the user asks for a mode in their own words (for example "plan this first", "review my code thoroughly", or "go all out on this"), or when you judge the task needs it: plan for a risky or multi-step change the user should approve first, ultraplan for a large or high-stakes change, ultrareview when the user wants code reviewed or audited, ultra for a hard problem that needs maximum effort, and delegate only when the user explicitly asked for delegation, sub-agents, or a team. Input {"mode":"plan","request":"what to plan"}; for ultrareview, request is the review target, empty for the current changes. Switch before making any changes. plan, ultraplan, and delegate end your turn: the plan or the sub-agent team goes to the user for approval, and nothing changes until they approve. Do not switch for simple tasks.',
       "Narrate as you work, like a coding agent: before each group of actions, write one short plain sentence saying what you will do next (for example, I'll inspect the workspace, then update index.html). Make file edits with your file editing tool rather than shell redirection so each change is visible to the user.",
       'For a standalone HTML page in the active workspace, call workspace_command with {"action":"serve"}. It returns a listening localhost base URL; append the file name and call browser open with that URL. Do not assume a spawned process is listening merely because it has a PID.',
       'When asked what tool operations happened earlier, call runtime_operations with {} to inspect the host operation log. Use recorded status and results rather than a previous model claim. The log covers host tools, not unrecorded Codex built-in file edits.',
@@ -145,6 +153,8 @@ export class SolarHarness {
     let unsupportedBrowserClaimRetries = 0;
     let localPageRecoveryAttempts = 0;
     let historyInspected = false;
+    let pendingPlan: TaskPlan | undefined;
+    let delegateRequest: string | undefined;
     for (let step = 0; step < 20; step++) {
       let toolCall;
       try { toolCall = parseHostToolCall(response.text); }
@@ -199,7 +209,7 @@ export class SolarHarness {
       if (runtimeHistoryRequested && !historyInspected && toolCall.name !== "runtime_operations") {
         toolCall = { name: "runtime_operations", input: {}, raw: "" };
       }
-      let result: BrowserResult | WebSearchHeadlessResult | WorkspaceCommandResult | RuntimeOperation[] | AutoPermissionsState | AgentRecord | { error: string };
+      let result: BrowserResult | WebSearchHeadlessResult | WorkspaceCommandResult | RuntimeOperation[] | AutoPermissionsState | AgentRecord | { mode: string; reasoning?: string; fast?: boolean; report?: string } | { error: string };
       try {
         if (runtimeHistoryRequested && toolCall.name !== "runtime_operations") {
           throw new Error("This is a question about prior actions. Use runtime_operations; do not run a new action to answer it.");
@@ -247,6 +257,30 @@ export class SolarHarness {
           const input = toolCall.input as WorkspaceCommandInput;
           onActivity?.(`Workspace: ${input.command}`);
           result = await this.tools.call<WorkspaceCommandInput, WorkspaceCommandResult>("workspace_command", input);
+        } else if (toolCall.name === "switch_mode") {
+          const input = await this.tools.call<SwitchModeInput, SwitchModeInput>("switch_mode", toolCall.input as SwitchModeInput);
+          if (input.mode === "ultra") {
+            // The rest of this turn runs at the strongest settings; the session's own settings are untouched.
+            runOptions.reasoning = "max";
+            runOptions.fast = true;
+            onActivity?.("Mode: Ultra, Max effort with Fast on for the rest of this task");
+            result = { mode: "ultra", reasoning: "max", fast: true };
+          } else if (input.mode === "delegate") {
+            // The user asked for a team in their own words; the host plans it after this turn, as for a matched request.
+            onActivity?.("Mode: Delegate");
+            delegateRequest = input.request?.trim() || message;
+            break;
+          } else if (input.mode === "ultrareview") {
+            onActivity?.("Mode: Ultrareview");
+            result = { mode: "ultrareview", report: await this.ultraReview(input.request ?? "", onActivity) };
+          } else {
+            if (approvedPlan) throw new Error("This turn carries out a plan the user already approved. Do not plan again; continue the work.");
+            const ultra = input.mode === "ultraplan";
+            onActivity?.(`Mode: ${ultra ? "Ultraplan" : "Plan"}`);
+            const request = input.request?.trim() || message;
+            pendingPlan = { request, plan: await this.planTask(request, ultra, onActivity), ultra };
+            break;
+          }
         } else if (toolCall.name === "set-auto-permissions") {
           result = await this.tools.call<SetAutoPermissionsInput, AutoPermissionsState>("set-auto-permissions", toolCall.input as SetAutoPermissionsInput);
           permissionsToolCalled = true;
@@ -290,6 +324,17 @@ export class SolarHarness {
           : 'The user explicitly asked for a screenshot. No screenshot has been captured yet. Output exactly SOLAR_TOOL: browser {"action":"screenshot","fullPage":true} and nothing else.', true);
         this.mainSessionId = response.sessionId ?? this.mainSessionId;
       }
+    }
+    if (delegateRequest !== undefined) {
+      const reply = `I'll hand this to a team of sub-agents: ${delegateRequest}`;
+      this.mainTranscript.push(`User: ${message}`, `Solar: ${reply}`);
+      this.unlocked = this.stats.recordPrompt(this.options.model, true, false);
+      return { reply, readyToDelegate: true };
+    }
+    if (pendingPlan) {
+      // planTask recorded the plan in the transcript; the user approves it before anything changes.
+      this.unlocked = this.stats.recordPrompt(this.options.model, true, false);
+      return { reply: pendingPlan.plan, readyToDelegate: false, plan: pendingPlan };
     }
     if (/^\s*SOLAR_TOOL:/m.test(response.text)) {
       response = await resumeTurn("Host action limit reached for this turn. Summarize what you found now, without another tool call. Finish with SOLAR_STATE: DISCOVER.");
@@ -471,11 +516,13 @@ export class SolarHarness {
       ? await this.provider.resume(this.mainSessionId, synthesisPrompt, runOptions)
       : await this.provider.run([SOLAR_SYSTEM_PROMPT, workspaceInstructions(this.options.cwd), synthesisPrompt].filter(Boolean).join("\n\n"), runOptions);
     this.mainSessionId = synthesis.sessionId ?? this.mainSessionId;
-    this.mainTranscript.push(`Solar: ${synthesis.text}`);
+    // The main session answers in the structured host envelope; the user sees only its reply.
+    const summary = plainReply(synthesis.text) || `Sub-agent reports:\n\n${reports}`;
+    this.mainTranscript.push(`Solar: ${summary}`);
     if (/\b(?:build|create|make)\b[^.!?\n]*\b(?:website|web\s?page|landing page)\b/i.test(request) && hasRecentWebFile(this.options.cwd, startedAt)) {
       this.unlocked.push(...this.stats.recordWebsiteBuilt());
     }
-    return synthesis.text;
+    return summary;
   }
 
   getInstructionFiles(): InstructionFile[] {
@@ -484,10 +531,10 @@ export class SolarHarness {
 
   /**
    * /plan and /ultraplan: a fresh read-only Codex session drafts a plan without changing the workspace.
-   * Ultra runs at max effort and adds a self-critique pass that re-checks the draft against the code.
+   * Ultra runs at max effort with Fast on and adds a self-critique pass that re-checks the draft against the code.
    */
   async planTask(request: string, ultra: boolean, onActivity?: (message: string) => void): Promise<string> {
-    const runOptions = { ...this.options, reasoning: ultra ? "max" as const : this.options.reasoning, fast: this.fast, role: "planner" as const, onEvent: onActivity, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
+    const runOptions = { ...this.options, reasoning: ultra ? "max" as const : this.options.reasoning, fast: ultra || this.fast, role: "planner" as const, onEvent: onActivity, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
     onActivity?.(`Plan: drafting the plan at ${runOptions.reasoning} effort`);
     const draft = await this.provider.run([
       SOLAR_SYSTEM_PROMPT,
@@ -512,7 +559,7 @@ export class SolarHarness {
   }
 
   /** /ultra: runs one task at max effort with Fast on, then restores the previous settings. */
-  async converseUltra(message: string, onActivity?: (message: string) => void, attachedImages: readonly string[] = []): Promise<{ reply: string; readyToDelegate: boolean }> {
+  async converseUltra(message: string, onActivity?: (message: string) => void, attachedImages: readonly string[] = []): Promise<ConverseResult> {
     const reasoning = this.options.reasoning;
     const fast = this.fast;
     this.setReasoning("max");
@@ -525,16 +572,16 @@ export class SolarHarness {
   }
 
   /** Runs a reviewed /plan or /ultraplan through the normal main-agent loop. */
-  async executeTaskPlan(request: string, plan: string, onActivity?: (message: string) => void): Promise<{ reply: string; readyToDelegate: boolean }> {
+  async executeTaskPlan(request: string, plan: string, onActivity?: (message: string) => void): Promise<ConverseResult> {
     return this.converse(request, onActivity, plan);
   }
 
   /**
    * /ultrareview: three read-only reviewers with different focuses run in parallel at xhigh effort,
-   * then a max-effort verifier re-checks every finding against the code and drops false positives.
+   * then a max-effort verifier re-checks every finding against the code and drops false positives. All run with Fast on.
    */
   async ultraReview(target: string, onActivity?: (message: string) => void): Promise<string> {
-    const base = { ...this.options, fast: this.fast, role: "planner" as const, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
+    const base = { ...this.options, fast: true, role: "planner" as const, onUsage: (input: number, output: number) => this.stats.recordUsage(input, output) };
     const scope = target.trim()
       ? `Review target: ${target.trim()}`
       : "Review target: if the workspace is a Git repository, review the uncommitted changes (git status and git diff, including untracked files), or the most recent commit when there are none. Otherwise review the source files in the workspace.";
@@ -696,6 +743,16 @@ function browserFallbackReply(result: BrowserResult | WebSearchHeadlessResult | 
   if (webQuery) return `I couldn't complete the headless web search for "${webQuery}". Please retry.`;
   if (result && "url" in result) return `The browser is open at ${result.url}. I couldn't get a complete response for the rest of the request.`;
   return "I couldn't get a complete response for that request. Please try again.";
+}
+
+/** A model reply without the host envelope (`{"kind":"answer",...}`), SOLAR_TOOL lines, or the SOLAR_STATE control line. */
+function plainReply(text: string): string {
+  let decoded = text.trim();
+  try { decoded = decodeHostTurn(decoded); } catch { /* not an envelope: keep the text */ }
+  return decoded
+    .replace(/^[ \t]*SOLAR_TOOL:[^\r\n]*(?:\r?\n|$)/gm, "")
+    .replace(/\s*SOLAR_STATE:\s*(?:READY|DISCOVER)\s*$/, "")
+    .trim();
 }
 
 function delegationRequested(message: string): boolean {

@@ -143,8 +143,8 @@ command, and Esc closes the menu. Press Enter again to run the command.
 | `/help` | Lists the commands. |
 | `/ultra <task>` | Runs one task at Max effort with Fast mode on, then restores your settings. |
 | `/plan <task>` | Solar looks through the project without changing anything and proposes a plan for you to approve. |
-| `/ultraplan <task>` | Like `/plan`, at Max effort, with a second pass that checks the plan against the actual files. |
-| `/ultrareview [target]` | Reviews your code with three reviewers (correctness, security, design) working in parallel, then re-checks every finding and drops false alarms. With no target it reviews your uncommitted changes. |
+| `/ultraplan <task>` | Like `/plan`, at Max effort with Fast mode on, with a second pass that checks the plan against the actual files. |
+| `/ultrareview [target]` | Reviews your code with three reviewers (correctness, security, design) working in parallel, then re-checks every finding and drops false alarms, all with Fast mode on. With no target it reviews your uncommitted changes. |
 | `/effort` | Opens a picker to change effort for this session: Light, Medium, High, XHigh, or Max. `/effort high` sets it directly. |
 | `/default-effort <level>` | Changes the effort every new session starts with. It starts as Max. |
 | `/model` | Opens a picker to switch between **GPT-6 Luna** and **GPT-5.6 Luna**. `/model gpt-5.6-luna` switches directly. |
@@ -182,7 +182,7 @@ you choose **Execute**. **Keep planning** (or Esc) leaves everything as it is.
 `/ultra <task>` runs a single task at Max effort with Fast mode. While it runs, the
 rainbow frame turns deep purple and spins twice as fast, and the footer shows `max`
 and `Fast`. Your usual settings come back afterwards. `/ultraplan` and
-`/ultrareview` use the same look.
+`/ultrareview` also run with Fast mode and use the same look.
 
 ### Choosing a model
 
@@ -250,8 +250,9 @@ when you can, because they share the workspace.
 Solar chooses tools from a live registry on every turn, whatever words you use.
 
 - **`workspace_command`** runs a bounded command (2-minute limit, output capped),
-  starts a long-running process such as a dev server, or serves the workspace's
-  static files at a `localhost` URL. It uses PowerShell on Windows and `/bin/sh`
+  starts a long-running process such as a dev server, opens a visible terminal
+  window running an interactive app (a CLI, TUI, or terminal game) in the
+  workspace, or serves the workspace's static files at a `localhost` URL. It uses PowerShell on Windows and `/bin/sh`
   elsewhere.
 - **`browser`** drives one visible Playwright window: open pages, search Google or
   Bing, search YouTube, read an accessibility snapshot, take screenshots, move a
@@ -259,6 +260,12 @@ Solar chooses tools from a live registry on every turn, whatever words you use.
   fields, press keys, scroll, and go back or forward. The window has a blue tint and
   a "Solar Harness is controlling the browser" notice. It stays open between turns,
   and a new window opens if you closed it. Chromium is tried first, then Edge.
+- **`switch_mode`** lets Solar move itself into Plan, Ultraplan, Ultrareview, or
+  Ultra when you ask in your own words ("plan this first", "review my code
+  thoroughly", "go all out") or when it judges the task needs it. Plans still
+  wait for your approval before anything changes, and Ultra only lasts for the
+  current task. It also hands work to a team of sub-agents, but only when you
+  ask for that, however you phrase it.
 - **`web_search_headless`** searches Google without a window, falls back to Bing
   when Google blocks automation, and can read a source page by URL. Solar cites the
   URLs it used.

@@ -3,8 +3,8 @@ import { createServer, type Server } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, relative, resolve, sep } from "node:path";
 
-export type WorkspaceCommandInput = { action: "run" | "start" | "serve"; command?: string; port?: number };
-export type WorkspaceCommandResult = { command?: string; exitCode?: number | null; stdout?: string; stderr?: string; pid?: number; started?: boolean; url?: string };
+export type WorkspaceCommandInput = { action: "run" | "start" | "serve" | "terminal"; command?: string; port?: number };
+export type WorkspaceCommandResult = { command?: string; exitCode?: number | null; stdout?: string; stderr?: string; pid?: number; started?: boolean; url?: string; terminal?: boolean };
 
 const OUTPUT_LIMIT = 32_000;
 const TIMEOUT_MS = 120_000;
@@ -20,10 +20,11 @@ export class SolarWorkspaceTool {
 
   async execute(input: WorkspaceCommandInput): Promise<WorkspaceCommandResult> {
     if (input?.action === "serve") return this.serve(input.port);
-    if (!input || (input.action !== "run" && input.action !== "start") || typeof input.command !== "string" || !input.command.trim()) {
-      throw new Error("workspace_command requires action run or start with a nonempty command, or action serve.");
+    if (!input || !["run", "start", "terminal"].includes(input.action) || typeof input.command !== "string" || !input.command.trim()) {
+      throw new Error("workspace_command requires action run, start, or terminal with a nonempty command, or action serve.");
     }
     if (input.action === "start") return this.start(input.command);
+    if (input.action === "terminal") return openTerminal(this.cwd, input.command);
     return runWorkspaceCommand(this.cwd, input);
   }
 
@@ -105,6 +106,44 @@ export async function runWorkspaceCommand(cwd: string, input: WorkspaceCommandIn
     child.on("error", error => { clearTimeout(timer); reject(error); });
     child.on("close", exitCode => { clearTimeout(timer); resolve({ command: input.command, exitCode, stdout, stderr }); });
   });
+}
+
+/**
+ * Opens a new, visible terminal window running `command` in the workspace and leaves it open.
+ * `run` and `start` (and Codex's own shell) run hidden, and a window launched from a hidden process
+ * inherits that: Windows Terminal started directly from there stays invisible. Start-Process
+ * asks for a normal window explicitly. The window belongs to the user, so reset never closes it.
+ */
+export async function openTerminal(cwd: string, command: string): Promise<WorkspaceCommandResult> {
+  const launch = terminalLaunch(cwd, command);
+  const child = spawn(launch.file, launch.args, { cwd, shell: false, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+  let stdout = "";
+  let stderr = "";
+  child.stdout?.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
+  child.stderr?.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+  const exitCode = await new Promise<number | null>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", resolve);
+  });
+  if (exitCode !== 0) throw new Error(`Could not open a terminal window: ${stderr.trim() || `exit code ${exitCode}`}`);
+  const pid = Number.parseInt(stdout.trim(), 10);
+  return { command, started: true, terminal: true, ...(Number.isInteger(pid) ? { pid } : {}) };
+}
+
+/** The launcher for a visible terminal on this platform. Exported for tests. */
+export function terminalLaunch(cwd: string, command: string, platform: NodeJS.Platform = process.platform): { file: string; args: string[] } {
+  if (platform === "win32") {
+    // Start-Process joins its arguments without quoting, so the command travels base64-encoded.
+    const encoded = Buffer.from(command, "utf16le").toString("base64");
+    const script = `(Start-Process -FilePath powershell.exe -WorkingDirectory '${cwd.replace(/'/g, "''")}' -WindowStyle Normal -PassThru -ArgumentList '-NoExit','-EncodedCommand','${encoded}').Id`;
+    return { file: "powershell.exe", args: ["-NoProfile", "-NonInteractive", "-Command", script] };
+  }
+  const shellQuote = (text: string): string => `'${text.replace(/'/g, `'\\''`)}'`;
+  if (platform === "darwin") {
+    const inner = `cd ${shellQuote(cwd)} && ${command}`.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    return { file: "osascript", args: ["-e", `tell application "Terminal" to do script "${inner}"`, "-e", 'tell application "Terminal" to activate'] };
+  }
+  return { file: "/bin/sh", args: ["-c", `x-terminal-emulator -e sh -c ${shellQuote(`${command}; exec "\${SHELL:-sh}"`)} >/dev/null 2>&1 &`] };
 }
 
 function spawnShell(cwd: string, command: string, stdio: ["ignore", "ignore" | "pipe", "ignore" | "pipe"], detached: boolean): ChildProcess {

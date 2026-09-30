@@ -15,7 +15,7 @@ import { parseHostToolCall } from "../dist/host-tool-call.js";
 import { decodeHostTurn, writeHostTurnSchema } from "../dist/host-turn.js";
 import { SOLAR_SYSTEM_PROMPT } from "../dist/system-prompt.js";
 import { SolarWebSearchHeadless } from "../dist/web-search-headless.js";
-import { SolarWorkspaceTool, runWorkspaceCommand } from "../dist/workspace-tool.js";
+import { SolarWorkspaceTool, runWorkspaceCommand, terminalLaunch } from "../dist/workspace-tool.js";
 import { StatsStore, formatStats } from "../dist/stats.js";
 import { sunColors, sunFrames } from "../dist/sun.js";
 import { SunActivity } from "../dist/ui.js";
@@ -283,6 +283,21 @@ test("workspace command returns output and exit code from the active workspace",
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("workspace terminal opens a visible window with the exact command in the workspace", async () => {
+  const command = `python "my app.py" --name 'Solar'`;
+  const windows = terminalLaunch("C:\\Users\\o'neil\\app", command, "win32");
+  const script = windows.args.at(-1);
+  assert.equal(windows.file, "powershell.exe");
+  assert.ok(script.includes("Start-Process -FilePath powershell.exe -WorkingDirectory 'C:\\Users\\o''neil\\app' -WindowStyle Normal"));
+  assert.match(script, /'-NoExit','-EncodedCommand'/);
+  assert.equal(Buffer.from(script.match(/'-EncodedCommand','([^']+)'/)[1], "base64").toString("utf16le"), command);
+  const mac = terminalLaunch("/tmp/it's", "npm start", "darwin");
+  assert.equal(mac.file, "osascript");
+  // The shell's '\'' escape gains a second backslash for the AppleScript string.
+  assert.equal(mac.args[1], `tell application "Terminal" to do script "cd '/tmp/it'\\\\''s' && npm start"`);
+  await assert.rejects(new SolarWorkspaceTool(tmpdir()).execute({ action: "terminal", command: " " }), /run, start, or terminal/);
 });
 
 test("workspace start keeps a local server running for browser testing until reset", async () => {
@@ -1020,6 +1035,7 @@ test("/plan drafts read-only in a separate session and leaves the main session a
   assert.equal(runs.length, 1);
   assert.equal(runs[0].options.role, "planner");
   assert.equal(runs[0].options.reasoning, "medium");
+  assert.equal(runs[0].options.fast, false);
   assert.match(runs[0].prompt, /read-only sandbox/);
   assert.match(runs[0].prompt, /Request to plan: add a login form/);
   assert.ok(buildCodexRunArgs("x", runs[0].options).includes("read-only"));
@@ -1027,17 +1043,18 @@ test("/plan drafts read-only in a separate session and leaves the main session a
   assert.ok(buildCodexResumeArgs("s", "x", { ...runs[0].options, role: "main-agent" }).includes('sandbox_mode="workspace-write"'));
 });
 
-test("/ultraplan runs at max effort and returns the critiqued revision", async () => {
+test("/ultraplan runs at max effort with Fast on and returns the critiqued revision", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const calls = [];
-  harness.provider.run = async (_prompt, options) => { calls.push(["run", options.reasoning, options.role]); return { text: "draft plan", sessionId: "ultra-session" }; };
+  harness.provider.run = async (_prompt, options) => { calls.push(["run", options.reasoning, options.fast, options.role]); return { text: "draft plan", sessionId: "ultra-session" }; };
   harness.provider.resume = async (sessionId, prompt, options) => {
-    calls.push(["resume", options.reasoning, options.role, sessionId]);
+    calls.push(["resume", options.reasoning, options.fast, options.role, sessionId]);
     assert.match(prompt, /Critically review your draft plan/);
     return { text: "revised plan", sessionId };
   };
   assert.equal(await harness.planTask("migrate the database", true), "revised plan");
-  assert.deepEqual(calls, [["run", "max", "planner"], ["resume", "max", "planner", "ultra-session"]]);
+  assert.deepEqual(calls, [["run", "max", true, "planner"], ["resume", "max", true, "planner", "ultra-session"]]);
+  assert.equal(harness.getFast(), false);
 });
 
 test("an approved plan reaches the model without triggering wording heuristics", async () => {
@@ -1054,7 +1071,7 @@ test("an approved plan reaches the model without triggering wording heuristics",
   assert.match(prompt, /reviewed and approved this plan[\s\S]*Search for the footer component online/);
 });
 
-test("/ultrareview runs parallel read-only reviewers and a max-effort verifier", async () => {
+test("/ultrareview runs parallel read-only reviewers and a max-effort verifier, all with Fast on", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   const calls = [];
   harness.provider.run = async (prompt, options) => {
@@ -1069,8 +1086,113 @@ test("/ultrareview runs parallel read-only reviewers and a max-effort verifier",
   assert.ok(calls.every(call => call.options.role === "planner"));
   assert.deepEqual(calls.slice(0, 3).map(call => call.options.reasoning), ["xhigh", "xhigh", "xhigh"]);
   assert.equal(calls[3].options.reasoning, "max");
+  assert.ok(calls.every(call => call.options.fast === true));
+  assert.equal(harness.getFast(), false);
   assert.ok(calls.every(call => /Review target: src\/app\.ts/.test(call.prompt)));
   assert.match(calls[3].prompt, /security reviewer:\nfailed: reviewer crashed/);
+});
+
+const toolTurn = (tool, input) => JSON.stringify({ kind: "tool", tool, input: JSON.stringify(input), reply: "" });
+const answerTurn = reply => JSON.stringify({ kind: "answer", tool: "none", input: "", reply });
+
+test("Solar can switch itself into plan mode, which ends the turn with a plan awaiting approval", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "medium", cwd: process.cwd() });
+  const roles = [];
+  harness.provider.run = async (prompt, options) => {
+    roles.push(options.role);
+    if (options.role === "planner") return { text: "1. Add the form\n2. Test it", sessionId: "plan-session" };
+    assert.match(prompt, /switch_mode/);
+    return { text: toolTurn("switch_mode", { mode: "plan", request: "add a login form" }), sessionId: "main" };
+  };
+  harness.provider.resume = async () => { throw new Error("a plan switch must end the turn without resuming the main session"); };
+  const result = await harness.converse("I'd like to see a plan before you add a login form");
+  assert.deepEqual(result.plan, { request: "add a login form", plan: "1. Add the form\n2. Test it", ultra: false });
+  assert.equal(result.reply, "1. Add the form\n2. Test it");
+  assert.deepEqual(roles, ["main-agent", "planner"]);
+  assert.equal(harness.tools.getOperations({ tool: "switch_mode" }).at(-1).status, "succeeded");
+});
+
+test("switching to ultra raises only the rest of this turn to max effort with Fast on", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  const seen = [];
+  harness.provider.run = async (_prompt, options) => { seen.push([options.reasoning, options.fast]); return { text: toolTurn("switch_mode", { mode: "ultra" }), sessionId: "main" }; };
+  harness.provider.resume = async (_id, prompt, options) => {
+    seen.push([options.reasoning, options.fast]);
+    assert.match(prompt, /Host tool switch_mode result: \{"mode":"ultra","reasoning":"max","fast":true\}/);
+    return { text: answerTurn("Solved it at full strength."), sessionId: "main" };
+  };
+  const result = await harness.converse("this bug is really hard, go all out");
+  assert.equal(result.reply, "Solved it at full strength.");
+  assert.equal(result.plan, undefined);
+  assert.deepEqual(seen, [["light", false], ["max", true]]);
+  assert.equal(harness.options.reasoning, "light");
+  assert.equal(harness.getFast(), false);
+});
+
+test("switching to ultrareview runs the review and hands its verified report back to Solar", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async (prompt, options) => {
+    if (options.role === "planner") return { text: /verifier/.test(prompt) ? "Confirmed: high app.ts:3 null dereference" : "high app.ts:3", sessionId: "review" };
+    return { text: toolTurn("switch_mode", { mode: "ultrareview", request: "src/app.ts" }), sessionId: "main" };
+  };
+  harness.provider.resume = async (_id, prompt) => {
+    assert.match(prompt, /"mode":"ultrareview","report":"Confirmed: high app\.ts:3 null dereference"/);
+    return { text: answerTurn("One confirmed issue: a null dereference in app.ts:3."), sessionId: "main" };
+  };
+  const result = await harness.converse("audit src/app.ts for me");
+  assert.equal(result.reply, "One confirmed issue: a null dereference in app.ts:3.");
+});
+
+test("Solar can hand a request to sub-agents when the user asks in words the patterns miss", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "medium", cwd: process.cwd() });
+  const message = "delegate read me only a read only cohort of agents that inspects this project";
+  harness.provider.run = async prompt => {
+    assert.match(prompt, /Work alone unless the user explicitly asks, in any wording, for delegation/);
+    assert.doesNotMatch(prompt, /Do not propose sub-agents/);
+    return { text: toolTurn("switch_mode", { mode: "delegate", request: "inspect this project read-only" }), sessionId: "main" };
+  };
+  harness.provider.resume = async () => { throw new Error("a delegate switch must end the turn without resuming the main session"); };
+  const result = await harness.converse(message);
+  assert.equal(result.readyToDelegate, true);
+  assert.equal(result.plan, undefined);
+  assert.match(result.reply, /team of sub-agents: inspect this project read-only/);
+});
+
+test("the team summary reaches the user without the host envelope or control line", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "medium", cwd: process.cwd() });
+  harness.tools.call = async (name, input) => {
+    assert.equal(name, "spawn_sub_agent");
+    return { ...input, id: "agent-1", depth: 0, status: "completed", report: "README documents the CLI." };
+  };
+  harness.mainSessionId = "main";
+  const replies = [
+    JSON.stringify({ kind: "answer", reply: "Scout inventoried the project.\n\nSOLAR_STATE: READY" }),
+    JSON.stringify({ kind: "tool", tool: "browser", input: "{\"action\":\"snapshot\"}", reply: "" })
+  ];
+  harness.provider.resume = async () => ({ text: replies.shift(), sessionId: "main" });
+  const plan = { summary: "Inspect", tasks: [{ name: "Scout", title: "Inventory", instructions: "List files." }] };
+  assert.equal(await harness.executePlan(plan, "inspect", "inspect", () => {}), "Scout inventoried the project.");
+  // A synthesis that is only a tool request falls back to the sub-agents' own reports.
+  assert.match(await harness.executePlan(plan, "inspect", "inspect", () => {}), /^Sub-agent reports:[\s\S]*README documents the CLI\./);
+});
+
+test("an approved plan cannot switch back into planning", async () => {
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async () => ({ text: toolTurn("switch_mode", { mode: "plan", request: "again" }), sessionId: "main" });
+  harness.provider.resume = async (_id, prompt) => {
+    assert.match(prompt, /already approved/);
+    return { text: answerTurn("Carried out the plan."), sessionId: "main" };
+  };
+  const result = await harness.executeTaskPlan("add a footer", "1. Edit footer");
+  assert.equal(result.plan, undefined);
+  assert.equal(result.reply, "Carried out the plan.");
+});
+
+test("switch_mode is offered in the host schema and rejects unknown modes", async () => {
+  const path = await writeHostTurnSchema(process.cwd(), false);
+  assert.ok(JSON.parse(await readFile(path, "utf8")).properties.tool.enum.includes("switch_mode"));
+  const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
+  await assert.rejects(harness.tools.call("switch_mode", { mode: "turbo" }), /switch_mode requires mode/);
 });
 
 test("/ultrareview fails honestly when every reviewer fails", async () => {
