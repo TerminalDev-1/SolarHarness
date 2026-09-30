@@ -398,6 +398,14 @@ export async function captureScreenshots(window, directory) {
   const chat = await pills();
   const pinned = ultra.join() === "Max,Fast,true,true" && chat[1] === "Standard" && chat[2] === false && chat[3] === false;
   console.log(`ultra pins: ${JSON.stringify({ ultra, chat })} ${pinned ? "OK" : "WRONG"}`);
+  // The official OpenAI mark sits on the model pill and beside every model in its picker.
+  await run(`document.getElementById("model-button").click()`);
+  await wait(300);
+  await shot("model");
+  const logo = await run(`(() => { const official = node => node?.querySelector("svg path")?.getAttribute("d").startsWith("M22.2819") === true; const rows = [...document.querySelectorAll("#menu .menu-item")]; return { pill: official(document.querySelector("#model-button .openai")), rows: rows.length, marked: rows.filter(row => official(row.querySelector(".menu-icon"))).length }; })()`);
+  await run(`document.querySelector("#menu .menu-item.selected").click()`);
+  await wait(200);
+  console.log(`openai logo: ${JSON.stringify(logo)} ${logo.pill && logo.rows >= 2 && logo.marked === logo.rows ? "OK" : "WRONG"}`);
   await run(`(() => { const input = document.getElementById("input"); input.value = "Build a landing page for Aurora and make the button nicer"; input.dispatchEvent(new Event("input")); document.getElementById("send").click(); })()`);
   await wait(2400);
   await shot("working");

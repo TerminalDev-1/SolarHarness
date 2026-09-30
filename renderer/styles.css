@@ -827,5 +827,5 @@ label.task-row { cursor: pointer; }
 
 /* Review lives on each finished response now. */
 .files-summary-head .review-button { margin-left: auto; }
-.pill .icon.openai { width: 16px; height: 16px; }
-.pill .icon.openai svg { stroke-width: 1.4; }
+.pill .icon.openai { width: 15px; height: 15px; }
+.menu-icon { flex: none; width: 18px; height: 18px; color: var(--text); }

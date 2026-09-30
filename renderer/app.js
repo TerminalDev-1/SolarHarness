@@ -289,7 +289,7 @@ function setMode(next) {
 }
 
 const openModelMenu = () => openMenu($("model-button"), app.models.map(model => ({
-  label: model.name, detail: model.detail, selected: model.id === app.model,
+  label: model.name, detail: model.detail, selected: model.id === app.model, icon: "openai",
   run: async () => { app = await window.solar.setModel(model.id); renderChrome(); }
 })));
 
@@ -354,6 +354,7 @@ function openMenu(anchor, items) {
   const menu = $("menu");
   menu.replaceChildren(...items.map(item => {
     const button = el("button", `menu-item${item.selected ? " selected" : ""}`);
+    if (item.icon) button.append(icon(item.icon, "menu-icon"));
     const text = el("span", "menu-text");
     text.append(el("span", "menu-label", item.label));
     if (item.detail) text.append(el("span", "menu-detail", item.detail));
