@@ -203,7 +203,9 @@ async function checkSideBySide(run, shot) {
   await command("/sidebyside How should the pricing page use the sun palette?");
   await wait(450);
   await shot("meeting-working");
-  results.working = await run(`[document.querySelector("#meeting-panes .pane").dataset.status, document.querySelector("#meeting-panes .avatar.working") !== null].join()`);
+  results.working = await run(`[document.querySelector("#meeting-panes .pane").dataset.status, document.querySelector("#meeting-panes .avatar.working") !== null, document.querySelectorAll("#meeting-panes .pane-body .pane-live").length].join()`);
+  // In a meeting the composer frame keeps its normal thickness.
+  results.frame = await run(`getComputedStyle(document.getElementById("composer")).paddingTop`);
   await wait(1400);
   await shot("meeting");
   results.first = await panes();
@@ -219,7 +221,7 @@ async function checkSideBySide(run, shot) {
   await shot("meeting-closed");
   results.closed = await run(`[document.getElementById("meeting").hidden, document.getElementById("thread").hidden, [...document.querySelectorAll(".note-title")].at(-1)?.textContent, [...document.querySelectorAll(".turn.note")].at(-1)?.textContent.includes("Open recordings")].join()`);
   const done = "Completed|Session: 019a4c2";
-  const ok = results.working === "running,true" && results.view === "true,false,true,true,false" && results.selected === 1 && results.layout
+  const ok = results.working === "running,true,2" && results.frame === "1.5px" && results.view === "true,false,true,true,false" && results.selected === 1 && results.layout
     && results.first === `Aurora|${done}e-demo-aurora|4;Helios|${done}f-demo-helios|4`
     && results.followUp === `Aurora|${done}e-demo-aurora|8;Helios|${done}f-demo-helios|8`
     && results.closed === "true,false,Side-by-side,true";

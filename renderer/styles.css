@@ -257,19 +257,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .mode-tag.ultra, .mode-tag.ultraplan, .mode-tag.ultrareview { background: rgba(155, 92, 255, 0.18); color: #cdb3ff; }
 
 .solar-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.avatar { position: relative; width: 22px; height: 22px; border-radius: 50%; flex: none;
+.avatar { width: 22px; height: 22px; border-radius: 50%; flex: none;
   background: radial-gradient(circle at 36% 34%, #fff3c4, var(--sun-1) 28%, var(--sun-2) 60%, var(--sun-3));
   box-shadow: 0 0 12px rgba(255, 169, 77, 0.4);
 }
 .avatar.working { animation: glow 1.6s ease-in-out infinite; }
-/* Like the CLI's working sun: the disk stays solid and round while its rays and golden glow pulse. */
-.avatar::before {
-  content: ""; position: absolute; inset: -6px; border-radius: 50%; opacity: 0; pointer-events: none;
-  background: repeating-conic-gradient(var(--sun-2) 0 9deg, transparent 9deg 30deg);
-  -webkit-mask: radial-gradient(circle, transparent 12.5px, #000 13px); mask: radial-gradient(circle, transparent 12.5px, #000 13px);
-}
-.avatar.working::before { animation: rays 1.6s ease-in-out infinite; }
-.turn.ultra .avatar::before { background: repeating-conic-gradient(#c49bff 0 9deg, transparent 9deg 30deg); }
 .avatar.failed { background: radial-gradient(circle at 36% 34%, #ffd0cc, var(--del)); box-shadow: 0 0 12px rgba(248, 81, 73, 0.4); }
 .turn.ultra .avatar { background: radial-gradient(circle at 36% 34%, #f2e6ff, #c49bff 30%, var(--ultra) 65%, #5b2bd6); box-shadow: 0 0 14px rgba(155, 92, 255, 0.55); }
 .solar-name { font-weight: 600; }
@@ -591,8 +583,7 @@ textarea::placeholder { color: var(--faint); }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pulse { 50% { opacity: 0.45; } }
-@keyframes glow { 50% { box-shadow: 0 0 22px rgba(255, 169, 77, 0.85), 0 0 40px rgba(255, 107, 61, 0.35); } }
-@keyframes rays { 0%, 100% { opacity: 0.35; scale: 0.9; } 50% { opacity: 1; scale: 1.06; } }
+@keyframes glow { 50% { box-shadow: 0 0 22px rgba(255, 169, 77, 0.85), 0 0 40px rgba(255, 107, 61, 0.35); transform: scale(1.06); } }
 @keyframes glow-ring { 50% { box-shadow: 0 0 0 4px rgba(255, 169, 77, 0.12); } }
 @keyframes breathe { 50% { box-shadow: 0 0 56px rgba(255, 169, 77, 0.7), 0 0 150px rgba(255, 107, 61, 0.45), inset -8px -10px 24px rgba(200, 60, 20, 0.35); } }
 @keyframes turn { to { rotate: 360deg; } }
@@ -792,6 +783,9 @@ label.task-row { cursor: pointer; }
 .pane-from { margin-bottom: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
 .pane-message .markdown { font-size: 13.5px; }
 .pane-text { padding: 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); font-size: 13.5px; white-space: pre-wrap; word-wrap: break-word; }
+.pane-live { display: flex; flex-direction: column; gap: 3px; padding: 8px 12px; border-radius: 10px; border: 1px dashed var(--line-2); }
+.pane-live-title { font-size: 12.5px; color: var(--sun-text); }
+.pane-live-step { font: 12px/1.45 var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pane-foot { flex: none; padding: 6px 14px; font-size: 11px; color: var(--faint); border-top: 1px solid var(--line); }
 .meeting-note { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; font-size: 12.5px; color: var(--text-2); background: var(--add-bg); border: 1px solid rgba(46, 160, 67, 0.25); }
 .meeting-note .icon { flex: none; width: 15px; height: 15px; color: var(--add-text); }

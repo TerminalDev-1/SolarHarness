@@ -154,7 +154,7 @@ function updateSendState() {
   $("composer").classList.toggle("busy", busy);
   $("composer").classList.toggle("ultra", (!meeting && ULTRA_MODES.has(mode)) || (busy && ULTRA_MODES.has(activeTurnMode)));
   $("composer").classList.toggle("plan", !meeting && mode === "plan");
-  $("composer").classList.toggle("meeting", Boolean(meeting));
+  $("composer").classList.toggle("in-meeting", Boolean(meeting));
 }
 
 $("chat-sub").addEventListener("click", chooseWorkspace);
@@ -1009,13 +1009,13 @@ function meetingPane(speaker, index) {
   const avatar = el("span", "avatar");
   const status = el("span", "pane-status", "Starting");
   head.append(avatar, el("strong", "pane-name", speaker), status);
-  const session = el("div", "pane-session", "Session: starting");
+  const session = el("div", "pane-session", "Session: new (its ID arrives with the first reply)");
   const activity = el("div", "pane-activity", "Starting independent session");
   const body = el("div", "pane-body");
   const foot = el("div", "pane-foot", "Latest messages");
   root.append(head, session, activity, body, foot);
   root.addEventListener("pointerdown", () => selectPane(index));
-  const pane = { speaker, root, avatar, status, session, activity, body, foot, stick: true, round: 0 };
+  const pane = { speaker, root, avatar, status, session, activity, body, foot, stick: true, round: 0, live: undefined };
   body.addEventListener("scroll", () => {
     pane.stick = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
     foot.textContent = pane.stick ? "Latest messages" : "Viewing earlier messages";
@@ -1027,6 +1027,23 @@ function selectPane(index) {
   meeting.selected = index;
   meeting.panes.forEach((pane, item) => pane.root.classList.toggle("selected", item === index));
 }
+
+/** A reply only arrives at the end of each round, so the steps the session reports meanwhile show in its pane. */
+function liveStep(pane, activity) {
+  if (!activity || /^\s*[{[]/.test(activity)) return;
+  if (!pane.live) {
+    pane.live = el("div", "pane-live");
+    pane.live.append(el("div", "pane-live-title", `${pane.speaker} is working on round ${pane.round + 1}`));
+    pane.body.append(pane.live);
+  }
+  if (pane.live.lastChild.textContent === activity) return;
+  pane.live.append(el("div", "pane-live-step", activity));
+  // Keep the title and the latest few steps.
+  while (pane.live.children.length > 7) pane.live.children[1].remove();
+  if (pane.stick) pane.body.scrollTop = pane.body.scrollHeight;
+}
+
+function endLive(pane) { pane.live?.remove(); pane.live = undefined; }
 
 function paneMessage(pane, from, text) {
   const you = from === "You";
@@ -1040,10 +1057,12 @@ function paneMessage(pane, from, text) {
 function meetingEvent({ turnId, speaker, text, sessionId, status, activity }) {
   const pane = meeting?.turnId === turnId && meeting.panes.find(item => item.speaker === speaker);
   if (!pane) return;
-  if (text !== undefined) { pane.round++; paneMessage(pane, speaker, text); return; }
+  if (text !== undefined) { endLive(pane); pane.round++; paneMessage(pane, speaker, text); return; }
   pane.root.dataset.status = status;
   pane.status.textContent = capitalize(status);
-  pane.session.textContent = `Session: ${sessionId ?? "starting"}`;
+  if (sessionId) pane.session.textContent = `Session: ${sessionId}`;
+  if (status === "running") liveStep(pane, activity);
+  else endLive(pane);
   pane.activity.textContent = activity;
   pane.avatar.classList.toggle("working", status === "running");
   pane.avatar.classList.toggle("failed", status === "failed");
