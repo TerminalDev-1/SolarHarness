@@ -174,12 +174,16 @@ function registerIpc() {
   // Runs the sub-agents the user accepted, streaming the team's progress to the turn.
   ipcMain.handle("chat:runDelegation", (_event, { turnId, request, context, plan }) => runTurn(turnId, onActivity => runTeam(turnId, plan, request, context, onActivity)));
 
-  // /sidebyside: Aurora and Helios, two recorded read-only sessions, talk for three rounds. `continuing`
+  // /sidebyside: Aurora carries out the request (and edits), Helios verifies read-only, over three rounds. `continuing`
   // resumes the same two sessions with a follow-up; each pane's status and messages stream as solar:meeting.
-  ipcMain.handle("chat:meeting", (_event, { turnId, topic, continuing = false }) => runTurn(turnId, async () => {
+  ipcMain.handle("chat:meeting", (_event, { turnId, topic, continuing = false }) => runTurn(turnId, async onActivity => {
     const readback = await harness.sideBySide(topic, undefined,
       (speaker, text) => send("solar:meeting", { turnId, speaker, text }),
-      { continue: continuing, onSession: (speaker, sessionId, status, activity) => send("solar:meeting", { turnId, speaker, sessionId, status, activity }) });
+      { continue: continuing, onSession: (speaker, sessionId, status, activity) => {
+        send("solar:meeting", { turnId, speaker, sessionId, status, activity });
+        // Aurora's file edits land in the Review panel like any turn's.
+        if (activity.startsWith("File: ")) onActivity(activity);
+      } });
     return { kind: "meeting", readback, recordings: await solarDirectory(harness.getWorkspace(), "sessions") };
   }));
 

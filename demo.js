@@ -170,12 +170,18 @@ function installDemoDelegation() {
 function installDemoMeeting() {
   const ids = { Aurora: "019a4c2e-demo-aurora", Helios: "019a4c2f-demo-helios" };
   const lines = {
-    Aurora: ["Opening view: keep the pricing cards on the warm sun palette and let one plan stand out.", "Agreed on contrast. I'd still keep **one** accent color so the page doesn't feel busy.", "Readback: sun palette, one highlighted plan, contrast checked in both themes. Proposed only; nothing was changed."],
-    Helios: ["Opening view: start from contrast. Gold on white fails in the light theme.", "Then the highlighted card uses the orange end of the gradient, and body text stays neutral.", "Readback: agree with Aurora. Validation needed: a contrast check on each card. Proposed only."]
+    Aurora: ["Created `src/pricing.css` with rounded plan cards and a featured plan on the brand color.", "Helios is right about contrast, so the featured card keeps dark text on the orange end of the gradient.", "Readback: created `src/pricing.css` (plan cards, featured plan). Helios verified contrast; a check in the light theme is still needed."],
+    Helios: ["Inspected `src/styles.css`: gold on white would fail contrast in the light theme. The featured card needs dark text.", "Checked `src/pricing.css`: the radius and featured class are in place and nothing else changed.", "Readback: verified Aurora's `src/pricing.css`. Remaining: confirm contrast in the light theme."]
   };
   SolarHarness.prototype.sideBySide = async function demoSideBySide(_task, _onActivity, onMessage, { continue: continuing = false, onSession } = {}) {
+    const cwd = this.getWorkspace();
     for (let round = 0; round < 3; round++) {
-      for (const name of ["Aurora", "Helios"]) onSession?.(name, round || continuing ? ids[name] : undefined, "running", round ? "Thinking: Weighing the peer's last message" : "Discussing with peer");
+      for (const name of ["Aurora", "Helios"]) onSession?.(name, round || continuing ? ids[name] : undefined, "running", round ? "Thinking: Weighing the peer's last message" : name === "Aurora" ? "Working on the request" : "Inspecting and verifying");
+      // Aurora carries out the request and is the only one who edits.
+      if (round === 0 && !continuing) {
+        await writeFile(join(cwd, "src", "pricing.css"), ".plan { border-radius: 16px; }\n.plan.featured { background: var(--brand); }\n");
+        onSession?.("Aurora", undefined, "running", "File: Created src/pricing.css (2 lines)");
+      }
       await wait(350);
       for (const name of ["Aurora", "Helios"]) {
         onMessage?.(name, lines[name][round]);
@@ -209,6 +215,8 @@ async function checkSideBySide(run, shot) {
   await wait(1400);
   await shot("meeting");
   results.first = await panes();
+  results.edit = await run(`[...document.querySelectorAll("#side-changes .side-file")].some(row => row.textContent.includes("pricing.css"))`);
+  results.roles = await run(`[...document.querySelectorAll("#meeting-panes .pane-role")].map(node => node.textContent).join()`);
   results.view = await run(`[document.getElementById("thread").hidden, document.getElementById("meeting-tag").hidden, document.getElementById("attach").hidden, document.getElementById("modes").hidden, document.getElementById("meeting-note").hidden].join()`);
   await run(`document.getElementById("input").dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }))`);
   results.selected = await run(`[...document.querySelectorAll("#meeting-panes .pane")].findIndex(pane => pane.classList.contains("selected"))`);
@@ -221,7 +229,8 @@ async function checkSideBySide(run, shot) {
   await shot("meeting-closed");
   results.closed = await run(`[document.getElementById("meeting").hidden, document.getElementById("thread").hidden, [...document.querySelectorAll(".note-title")].at(-1)?.textContent, [...document.querySelectorAll(".turn.note")].at(-1)?.textContent.includes("Open recordings")].join()`);
   const done = "Completed|Session: 019a4c2";
-  const ok = results.working === "running,true,2" && results.frame === "1.5px" && results.view === "true,false,true,true,false" && results.selected === 1 && results.layout
+  const ok = results.working === "running,true,2" && results.frame === "1.5px" && results.view === "true,false,true,true,false" && results.selected === 1 && results.layout && results.edit
+    && results.roles === "Does the work · edits,Checks · read-only"
     && results.first === `Aurora|${done}e-demo-aurora|4;Helios|${done}f-demo-helios|4`
     && results.followUp === `Aurora|${done}e-demo-aurora|8;Helios|${done}f-demo-helios|8`
     && results.closed === "true,false,Side-by-side,true";

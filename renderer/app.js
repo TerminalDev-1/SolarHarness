@@ -49,7 +49,7 @@ const SLASH_COMMANDS = [
   { command: "/ultraplan", detail: "Max-effort plan with a self-critique", insert: "/ultraplan " },
   { command: "/ultrareview", detail: "Parallel review with verified findings", insert: "/ultrareview" },
   { command: "/delegate", detail: "Prepare an agent plan for the last request", insert: "/delegate" },
-  { command: "/sidebyside", detail: "Two recorded agents discuss a topic", insert: "/sidebyside " },
+  { command: "/sidebyside", detail: "Two recorded agents work on a request", insert: "/sidebyside " },
   { command: "/agents", detail: "Show assigned agents", insert: "/agents" },
   { command: "/agent", detail: "Control an assigned agent", insert: "/agent " },
   { command: "/auto-approve", detail: "Set plan approval on or off", insert: "/auto-approve " },
@@ -443,13 +443,13 @@ const COMMANDS = {
     : addNote("Delegate", "First tell Solar what the team should accomplish, then use /delegate. You can also just ask for a team in your own words."),
   sidebyside: async arg => {
     if (arg.toLowerCase() === "close") {
-      if (!meeting) return addNote("Side-by-side", "No meeting is open. Start one with /sidebyside <topic>.");
+      if (!meeting) return addNote("Side-by-side", "No side-by-side session is open. Start one with /sidebyside <request>.");
       return meeting.busy ? toast(MEETING_BUSY) : closeMeeting();
     }
-    const usage = "Usage: /sidebyside <meeting topic>, or /sidebyside close. Aurora and Helios discuss the topic in two recorded, read-only sessions.";
+    const usage = "Usage: /sidebyside <request>, or /sidebyside close. Aurora carries out the request and makes the edits; Helios inspects and verifies from a read-only session.";
     if (!arg) return meeting ? toast(usage) : addNote("Side-by-side", usage);
     if (!app.workspace) return toast("Open a folder first.");
-    // A new topic starts two fresh sessions.
+    // A new request starts two fresh sessions.
     closeMeeting();
     openMeeting(arg);
     await talkInMeeting(arg, false);
@@ -1008,9 +1008,9 @@ function meetingPane(speaker, index) {
   const head = el("div", "pane-head");
   const avatar = el("span", "avatar");
   const status = el("span", "pane-status", "Starting");
-  head.append(avatar, el("strong", "pane-name", speaker), status);
+  head.append(avatar, el("strong", "pane-name", speaker), el("span", "pane-role", index ? "Checks · read-only" : "Does the work · edits"), status);
   const session = el("div", "pane-session", "Session: new (its ID arrives with the first reply)");
-  const activity = el("div", "pane-activity", "Starting independent session");
+  const activity = el("div", "pane-activity", index ? "Starting a read-only session to inspect and verify" : "Starting a session to carry out the request");
   const body = el("div", "pane-body");
   const foot = el("div", "pane-foot", "Latest messages");
   root.append(head, session, activity, body, foot);
@@ -1068,7 +1068,7 @@ function meetingEvent({ turnId, speaker, text, sessionId, status, activity }) {
   pane.avatar.classList.toggle("failed", status === "failed");
 }
 
-/** Sends the topic or a follow-up to both sessions: three rounds, then each saves a readback. */
+/** Sends the request or a follow-up to both sessions: three rounds, then each saves a readback. */
 async function talkInMeeting(text, continuing) {
   const current = meeting;
   current.turnId = ++turnCounter;
@@ -1109,7 +1109,7 @@ function closeMeeting({ quiet = false } = {}) {
   $("thread").hidden = false;
   renderChrome();
   if (quiet) return;
-  const content = [`Returned to Solar chat from the meeting on "${topic}".${recordings ? " Recordings and session notes are saved." : ""}`];
+  const content = [`Returned to Solar chat from the side-by-side session on "${topic}".${recordings ? " Recordings and session notes are saved." : ""}`];
   if (readback) {
     const details = el("details", "note-details");
     details.append(el("summary", "", "Readbacks"), renderMarkdown(readback));

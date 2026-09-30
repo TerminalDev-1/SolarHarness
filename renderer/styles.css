@@ -771,6 +771,7 @@ label.task-row { cursor: pointer; }
 .pane.selected { border-color: rgba(255, 169, 77, 0.45); box-shadow: 0 0 0 3px rgba(255, 169, 77, 0.08); }
 .pane-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px 0; }
 .pane-name { font-size: 14px; }
+.pane-role { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .pane.helios .avatar { background: radial-gradient(circle at 36% 34%, #ffe1c4, var(--sun-2) 28%, var(--sun-3) 65%, #c2410c); }
 .pane-status { margin-left: auto; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--text-2); background: var(--surface-3); }
 .pane[data-status="running"] .pane-status { color: var(--sun-text); background: rgba(255, 169, 77, 0.14); }
