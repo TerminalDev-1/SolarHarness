@@ -213,7 +213,7 @@ const require = createRequire(import.meta.url);
 const xtermDirectory = join(require.resolve("@xterm/xterm/package.json"), "..");
 const executablePath = chromium.executablePath();
 const browser = existsSync(executablePath)
-  ? await chromium.launch({ executablePath })
+  ? await chromium.launch({ executablePath }).catch(() => chromium.launch({ channel: "msedge" }))
   : await chromium.launch({ channel: "msedge" });
 await mkdir(output, { recursive: true });
 try {
