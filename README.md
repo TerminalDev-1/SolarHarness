@@ -82,7 +82,7 @@ answer would change the work.
 
 ![Solar at work: the sun, what it is thinking, and each step so far](docs/images/working.png)
 
-- The **sun** grows and shrinks while Solar works. Beside it is what Solar is doing
+- The **sun** keeps a solid round disk while its rays and golden glow pulse. Beside it is what Solar is doing
   right now, often a summary of its thinking, and how long it has been going
   (`42s`, then `4m 02s`, then `1h 02m 05s`).
 - Below the sun are the latest **steps**:

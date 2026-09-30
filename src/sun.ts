@@ -1,55 +1,28 @@
-// A five-line solar halo breathes around a rounded core. All rows stay eleven
-// columns wide so the adjacent activity text never moves in Windows Terminal.
-export const sunFrames = [
-  [
-    "           ",
-    "           ",
-    "     .     ",
-    "           ",
-    "           "
-  ],
-  [
-    "     |     ",
-    "    .-.    ",
-    "  --(o)--  ",
-    "    '-'    ",
-    "     |     "
-  ],
-  [
-    "  \\  |  /  ",
-    "   .---.   ",
-    " --(ooo)-- ",
-    "   '---'   ",
-    "  /  |  \\  "
-  ],
-  [
-    "\\    |    /",
-    "  .-----.  ",
-    "--(ooooo)--",
-    "  '-----'  ",
-    "/    |    \\"
-  ],
-  [
-    "  \\  |  /  ",
-    "   .---.   ",
-    " --(ooo)-- ",
-    "   '---'   ",
-    "  /  |  \\  "
-  ],
-  [
-    "     |     ",
-    "    .-.    ",
-    "  --(o)--  ",
-    "    '-'    ",
-    "     |     "
-  ]
+// Keep a solid, rounded disk in every frame; only the rays and warmth pulse.
+// All frames occupy five rows by eleven columns, keeping the activity label still.
+const nearRays = [
+  "  \\  |  /  ",
+  "   .---.   ",
+  " -(*****)- ",
+  "   '---'   ",
+  "  /  |  \\  "
 ] as const;
 
-export const sunColors = [
-  "#b7791f",
-  "#d69e2e",
-  "#f6bd44",
-  "#ffd166",
-  "#f6bd44",
-  "#d69e2e"
+const middleRays = [
+  " \\   |   / ",
+  "   .---.   ",
+  "--(*****)--",
+  "   '---'   ",
+  " /   |   \\ "
 ] as const;
+
+const farRays = [
+  "\\    |    /",
+  "   .---.   ",
+  "--(*****)--",
+  "   '---'   ",
+  "/    |    \\"
+] as const;
+
+export const sunFrames = [nearRays, middleRays, farRays, farRays, middleRays, nearRays] as const;
+export const sunColors = ["#f6bd44", "#ffc857", "#ffd166", "#ffe08a", "#ffd166", "#ffc857"] as const;

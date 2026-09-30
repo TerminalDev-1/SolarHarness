@@ -75,12 +75,19 @@ test("Codex starts and resumes outside Git repositories", () => {
   assert.equal(buildCodexRunArgs("plan", { ...options, role: "planner" })[4], "read-only");
 });
 
-test("working sun expands and contracts in fixed-width text-safe frames", () => {
+test("working sun keeps a rounded disk while its rays pulse in fixed-width frames", () => {
   assert.equal(sunFrames.length, sunColors.length);
   assert.ok(sunFrames.every(frame => frame.length === 5 && frame.every(line => line.length === 11 && /^[\\/|().o*' -]+$/.test(line))));
-  assert.deepEqual(sunFrames[3], ["\\    |    /", "  .-----.  ", "--(ooooo)--", "  '-----'  ", "/    |    \\"]);
-  assert.deepEqual(sunFrames.slice(1, 3), [...sunFrames.slice(4, 6)].reverse());
-  assert.deepEqual(sunFrames.map(frame => (frame[2].match(/[.o]/g) ?? []).length), [1, 1, 3, 5, 3, 1]);
+  assert.deepEqual(sunFrames[3], ["\\    |    /", "   .---.   ", "--(*****)--", "   '---'   ", "/    |    \\"]);
+  assert.deepEqual(sunFrames.slice(0, 3), [...sunFrames.slice(3)].reverse());
+  for (const frame of sunFrames) {
+    assert.equal(frame[1], "   .---.   ");
+    assert.equal(frame[2].slice(2, 9), "(*****)");
+    assert.equal(frame[3], "   '---'   ");
+    assert.match(frame[0], /\\.*\|.*\//);
+    assert.match(frame[4], /\/.*\|.*\\/);
+  }
+  assert.notDeepEqual(sunFrames[0], sunFrames[2]);
 });
 
 test("sun and activity render as one aligned five-row unit", () => {
@@ -88,7 +95,7 @@ test("sun and activity render as one aligned five-row unit", () => {
   const lines = output.split("\n");
   assert.equal(lines.length, 5);
   assert.ok(lines[0].includes("\\    |    /"));
-  assert.ok(lines[2].includes("--(ooooo)-- Working · 2s"));
+  assert.ok(lines[2].includes("--(*****)-- Working · 2s"));
   assert.ok(lines[4].includes("/    |    \\"));
 });
 
