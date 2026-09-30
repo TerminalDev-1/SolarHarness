@@ -86,7 +86,7 @@ const slashCommands = [
   { command: "/agents", detail: "Show assigned agents", insert: "/agents" },
   { command: "/agent", detail: "Control an assigned agent", insert: "/agent " },
   { command: "/delegate", detail: "Prepare an agent plan", insert: "/delegate" },
-  { command: "/sidebyside", detail: "Two recorded agents discuss a topic", insert: "/sidebyside " },
+  { command: "/sidebyside", detail: "Two recorded agents work on a request", insert: "/sidebyside " },
   { command: "/plan", detail: "Plan a task read-only, then approve", insert: "/plan " },
   { command: "/ultra", detail: "Run a task at Max effort with Fast on", insert: "/ultra " },
   { command: "/ultraplan", detail: "Max-effort plan with a self-critique", insert: "/ultraplan " },
@@ -462,13 +462,13 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /ultra <task> · /sidebyside <topic> · /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /model · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /default-effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
+        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /ultra <task> · /sidebyside <request> · /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /model · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /default-effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
       } else if (meetingCommand) {
         const topic = meetingCommand[1]?.trim();
         if (topic === "close") { setMeetingPanes(null); addMessage({ role: "solar", text: "Returned to Solar chat. Meeting recordings and notes are saved." }); }
-        else if (!topic) addMessage({ role: "error", text: "Usage: /sidebyside <meeting topic> · /sidebyside close" });
+        else if (!topic) addMessage({ role: "error", text: "Usage: /sidebyside <request> · /sidebyside close" });
         else {
-          setCurrentActivity("Aurora and Helios are meeting");
+          setCurrentActivity("Aurora and Helios are working on it");
           setMeetingSelection(0);
           setMeetingPanes(["Aurora", "Helios"].map(speaker => ({ speaker, status: "starting", activity: "Starting independent session", messages: [`You: ${topic}`], scroll: 0 })));
           await runMeeting(topic, false);

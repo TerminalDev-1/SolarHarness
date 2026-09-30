@@ -1,7 +1,7 @@
 # SolarHarness
 
-> **v1.4 Reborn:** a refreshed solar chat icon, `/sidebyside <topic>` meetings
-> between two recorded agents, and mandatory `session_notes.md` readbacks for every session.
+> **v1.4 Reborn:** a refreshed solar chat icon, `/sidebyside <request>`: two recorded
+> agents working on your request side by side, and mandatory `session_notes.md` readbacks for every session.
 
 **First committed:** 20 September 2026.
 
@@ -150,7 +150,7 @@ command, and Esc closes the menu. Press Enter again to run the command.
 | `/model` | Opens a picker to switch between **GPT-6 Luna** and **GPT-5.6 Luna**. `/model gpt-5.6-luna` switches directly. |
 | `/speed` | Opens a picker for Standard or Fast. `/fast on`, `/fast off`, and `/fast status` also work. Fast uses more credits. |
 | `/memory` | Shows which `SOLAR.md` instruction files are loaded. |
-| `/sidebyside <topic>` | Opens two panes with independent recorded Aurora and Helios sessions. They converse with each other; send follow-ups to both sessions, Tab selects a pane, and PgUp/PgDn scroll it. `/sidebyside close` returns to chat. Meetings are read-only. |
+| `/sidebyside <request>` | Opens two panes with independent recorded Aurora and Helios sessions that act on your request: Aurora carries it out and edits, Helios inspects and verifies read-only. Send follow-ups to both sessions, Tab selects a pane, and PgUp/PgDn scroll it. `/sidebyside close` returns to chat. |
 | `/delegate` | Prepares a team of sub-agents for your last request. |
 | `/agents` | Shows whether sub-agents are assigned. |
 | `/agent <name> reasoning <level>` | Changes one agent's effort for its next step. |
@@ -205,19 +205,23 @@ Effort is how hard Solar thinks. Every session starts at your default, which is
 **Max** until you change it with `/default-effort`. `/effort` changes only the
 session you are in. The footer always shows the current effort.
 
-## Side-by-side meetings
+## Side-by-side sessions
 
-Run `/sidebyside <topic>` to invite Aurora and Helios to a meeting. They start
-in parallel in two visible panes. Each pane has its own conversation history,
+Run `/sidebyside <request>` to have Aurora and Helios work on it together. Your
+message is a request, not just a topic: ask them to inspect the repo, fix a bug,
+or explain something, and they do it. Aurora carries out the request and is the
+only one who edits files; Helios independently inspects the workspace, answers
+and checks from a read-only session, and verifies Aurora's changes, and Aurora
+fixes what Helios finds in the next round. They start in parallel in two visible panes. Each pane has its own conversation history,
 session ID, status, and activity. The agents see each other's previous message
-and converse for three rounds per user message, finishing with their readbacks.
+and work through three rounds per user message, finishing with their readbacks.
 The panes stay open: type a follow-up to resume both existing sessions, retaining
 their separate context. Tab selects a pane; PgUp/PgDn scroll only that pane,
 including while the agents work. `/sidebyside close` returns to Solar chat;
-`/sidebyside <new topic>` starts two fresh sessions. Other slash commands return
+`/sidebyside <new request>` starts two fresh sessions. Other slash commands return
 to the normal chat controls. Images remain queued for the normal chat.
-The meeting stops with an error if either session fails. It proposes changes
-for review and does not implement them.
+The session stops with an error if either side fails. Readbacks report only
+changes that were actually made.
 
 ![Two independent sessions conversing in separate panes](docs/images/sidebyside.png)
 

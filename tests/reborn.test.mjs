@@ -32,7 +32,7 @@ test("recordings preserve resumed exchanges and mandatory failure readbacks", as
   } finally { await rm(cwd, { recursive: true, force: true }); }
 });
 
-test("sidebyside starts two sessions concurrently and exchanges actual peer messages", async () => {
+test("sidebyside starts two sessions concurrently, acts on the request, and exchanges actual peer messages", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "solar-meeting-"));
   try {
     const harness = new SolarHarness({ cwd, task: "", model: "fake", reasoning: "light" });
@@ -44,13 +44,17 @@ test("sidebyside starts two sessions concurrently and exchanges actual peer mess
       starts++;
       if (starts === 2) release();
       await barrier;
-      assert.equal(options.role, "planner");
       const name = prompt.includes("You are Aurora") ? "Aurora" : "Helios";
+      // Aurora carries out the request and may edit; Helios verifies from a read-only session.
+      assert.equal(options.role, name === "Aurora" ? "main-agent" : "planner");
+      assert.match(prompt, /request for you to act on/);
+      assert.match(prompt, /User's request: Discuss a redesign/);
+      assert.doesNotMatch(prompt, /This meeting is read-only/);
       return { text: `${name} opening`, sessionId: name };
     };
     harness.provider.resume = async (id, prompt, options) => {
       calls.push({ id, prompt });
-      assert.equal(options.role, "planner");
+      assert.equal(options.role, id === "Aurora" ? "main-agent" : "planner");
       return { text: `${id} response ${calls.filter(call => call.id === id).length}`, sessionId: id };
     };
     const messages = [];
