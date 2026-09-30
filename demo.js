@@ -220,7 +220,11 @@ async function checkSideBySide(run, shot) {
   await wait(1400);
   await shot("meeting");
   results.first = await panes();
-  results.edit = await run(`[...document.querySelectorAll("#side-changes .side-file")].some(row => row.textContent.includes("pricing.css"))`);
+  // Aurora's edit shows up under Changes in the top bar.
+  await run(`document.getElementById("changes-toggle").click()`);
+  await wait(500);
+  results.edit = await run(`[...document.querySelectorAll(".review-file")].some(row => row.textContent.includes("pricing.css"))`);
+  await run(`document.getElementById("review-close").click()`);
   results.roles = await run(`[...document.querySelectorAll("#meeting-panes .pane-role")].map(node => node.textContent).join()`);
   results.view = await run(`[document.getElementById("thread").hidden, document.getElementById("meeting-tag").hidden, document.getElementById("attach").hidden, document.getElementById("modes").hidden, document.getElementById("meeting-note").hidden].join()`);
   await run(`document.getElementById("input").dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }))`);
@@ -344,29 +348,66 @@ async function checkHistory(run, shot) {
   const results = {};
   await wait(600);
   results.listed = await run(`[document.querySelectorAll(".side-workspace").length, document.querySelectorAll(".side-workspace.current .side-chat").length, document.querySelector(".side-chat.current .side-chat-title")?.textContent].join("|")`);
-  const turnsBefore = await run(`document.querySelectorAll(".turn.solar").length`);
+  const turnsBefore = await run(`document.querySelectorAll(".thread-view:not([hidden]) .turn.solar").length`);
   await run(`document.getElementById("new-chat").click()`);
   await wait(500);
-  results.fresh = await run(`[Boolean(document.querySelector(".hero")), document.querySelectorAll(".turn").length, document.getElementById("chat-title").textContent].join()`);
+  results.fresh = await run(`[Boolean(document.querySelector(".thread-view:not([hidden]) .hero")), document.querySelectorAll(".thread-view:not([hidden]) .turn").length, document.getElementById("chat-title").textContent].join()`);
   await run(`document.querySelector(".side-workspace.current .side-chat-open").click()`);
   await wait(900);
-  results.reopened = await run(`[document.querySelectorAll(".turn.solar").length === ${turnsBefore}, Boolean(document.querySelector(".files-summary .review-button")), document.getElementById("chat-title").textContent, Boolean(document.querySelector(".side-chat.current"))].join()`);
+  results.reopened = await run(`[document.querySelectorAll(".thread-view:not([hidden]) .turn.solar").length === ${turnsBefore}, Boolean(document.querySelector(".thread-view:not([hidden]) .files-summary .review-button")), document.getElementById("chat-title").textContent, Boolean(document.querySelector(".side-chat.current"))].join()`);
   await run(`document.getElementById("thread").scrollTop = 0`);
   await wait(200);
   await shot("history");
   // The replayed response still opens its own diffs.
-  await run(`document.querySelector(".files-summary .review-button").click()`);
+  await run(`document.querySelector(".thread-view:not([hidden]) .files-summary .review-button").click()`);
   await wait(700);
   results.replayReview = await run(`[document.getElementById("review-title-text").textContent, document.querySelectorAll(".review-file").length > 0].join()`);
   await run(`document.getElementById("review-close").click()`);
   await run(`[...document.querySelectorAll(".side-workspace")].find(group => !group.classList.contains("current")).querySelector(".side-workspace-open").click()`);
   await wait(600);
-  results.switched = await run(`[Boolean(document.querySelector(".hero")), document.querySelector(".side-workspace.current .side-workspace-name").textContent.startsWith("solar-demo-second-"), document.getElementById("chat-sub").textContent.includes("solar-demo-second-")].join()`);
+  results.switched = await run(`[Boolean(document.querySelector(".thread-view:not([hidden]) .hero")), document.querySelector(".side-workspace.current .side-workspace-name").textContent.startsWith("solar-demo-second-"), document.getElementById("chat-sub").textContent.includes("solar-demo-second-")].join()`);
   await shot("workspaces");
   const ok = /^2\|1\|Build a landing page/.test(results.listed) && results.fresh === "true,0,New chat"
     && results.reopened === "true,true,Build a landing page for Aurora and make the button nicer,true"
     && results.replayReview === "This response,true" && results.switched === "true,true,true";
   console.log(`history: ${JSON.stringify(results)} ${ok ? "OK" : "WRONG"}`);
+}
+
+/**
+ * Several chats work at once: a second chat starts and finishes while the first is still working, both show as
+ * working in the sidebar, and the first chat's reply is there on return. A reload then draws a chat from history.
+ * Prints `parallel chats: ... OK` and `replay: ... OK`.
+ */
+async function checkParallel(window, run, shot) {
+  const send = async text => { await run(`(() => { const input = document.getElementById("input"); input.value = ${JSON.stringify(text)}; input.dispatchEvent(new Event("input")); document.getElementById("send").click(); })()`); };
+  const results = {};
+  await run(`document.getElementById("new-chat").click()`);
+  await wait(400);
+  await send("Build the first landing page");
+  await wait(700);
+  await run(`document.getElementById("new-chat").click()`);
+  await wait(400);
+  results.secondStarts = await run(`[Boolean(document.querySelector(".thread-view:not([hidden]) .hero")), document.getElementById("toast").hidden || !document.getElementById("toast").classList.contains("show")].join()`);
+  await send("Build the second landing page");
+  await wait(600);
+  results.bothWorking = await run(`document.querySelectorAll(".side-chat.running").length`);
+  await shot("parallel");
+  await wait(6000);
+  results.idle = await run(`document.querySelectorAll(".side-chat.running").length`);
+  await run(`[...document.querySelectorAll(".side-chat-open")].find(row => row.textContent.includes("Build the first landing page")).click()`);
+  await wait(600);
+  results.first = await run(`[document.getElementById("chat-title").textContent, document.querySelectorAll(".thread-view:not([hidden]) .turn.solar").length, document.querySelector(".thread-view:not([hidden]) .turn.solar .solar-body")?.textContent.includes("Built the") ?? false].join()`);
+  const ok = results.secondStarts === "true,true" && results.bothWorking === 2 && results.idle === 0 && results.first === "Build the first landing page,1,true";
+  console.log(`parallel chats: ${JSON.stringify(results)} ${ok ? "OK" : "WRONG"}`);
+
+  // After a reload the renderer has no chats in memory, so opening one draws it from the saved history.
+  await new Promise(resolve => { window.webContents.once("did-finish-load", resolve); window.webContents.reload(); });
+  await wait(1200);
+  await run(`[...document.querySelectorAll(".side-chat-open")].find(row => row.textContent.includes("Build the first landing page")).click()`);
+  await wait(800);
+  const replay = await run(`[document.getElementById("chat-title").textContent, document.querySelectorAll(".thread-view:not([hidden]) .turn.user").length, document.querySelectorAll(".thread-view:not([hidden]) .turn.solar .files-summary .review-button").length, document.querySelector(".thread-view:not([hidden]) .turn.solar .steps-toggle")?.textContent.startsWith("Worked for") ?? false].join()`);
+  await shot("replay");
+  console.log(`replay: ${replay} ${replay === "Build the first landing page,1,1,true" ? "OK" : "WRONG"}`);
 }
 
 /** Types a request, waits for the scripted turn, and saves screenshots of the key views. */
@@ -416,7 +457,8 @@ export async function captureScreenshots(window, directory) {
   await run(`document.getElementById("thread").scrollTop = 1e6`);
   await wait(300);
   await shot("diff");
-  results0.reviewButton = await run(`Boolean(document.querySelector(".files-summary .review-button")) && !document.getElementById("review-toggle")`);
+  // Changes sit in the top bar with a golden count; each reply also has its own Review button.
+  results0.reviewButton = await run(`Boolean(document.querySelector(".files-summary .review-button")) && !document.getElementById("side-changes") && document.getElementById("changes-count").textContent === "3" && !document.getElementById("changes-count").hidden`);
   await run(`document.querySelector(".files-summary .review-button").click()`);
   await wait(900);
   results0.reviewScope = await run(`[document.getElementById("review-title-text").textContent, document.querySelectorAll(".review-file").length].join()`);
@@ -458,4 +500,5 @@ export async function captureScreenshots(window, directory) {
   const dark = await run(`[document.documentElement.dataset.theme, getComputedStyle(document.body).backgroundColor].join()`);
   console.log(`themes: ${JSON.stringify({ light, dark })} ${light === "light,rgb(247, 246, 243)" && dark === "dark,rgb(11, 11, 16)" ? "OK" : "WRONG"}`);
   await checkHistory(run, shot);
+  await checkParallel(window, run, shot);
 }

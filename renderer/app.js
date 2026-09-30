@@ -66,7 +66,7 @@ const SLASH_COMMANDS = [
   { command: "/exit", detail: "Close Solar", insert: "/exit" }
 ];
 // Commands that change the session; like the CLI, they wait until Solar finishes.
-const WAIT_WHILE_BUSY = new Set(["new", "delegate", "sidebyside", "model", "effort", "speed", "fast"]);
+const WAIT_WHILE_BUSY = new Set(["delegate", "sidebyside", "model", "effort", "speed", "fast"]);
 const MEETING_SPEAKERS = ["Aurora", "Helios"];
 const MEETING_HINT = "Enter sends to both sessions. Tab switches pane, PgUp and PgDn scroll it, /sidebyside close leaves.";
 const MEETING_BUSY = "Aurora and Helios are still talking. Wait for this round to finish.";
@@ -89,6 +89,10 @@ let reviewScope = null;
 // The chat on screen as a replayable record; it is saved after each change and listed in the sidebar.
 let chat = null;
 let replaying = false;
+// Each chat has its own thread element and state, so a chat keeps working while another is on screen.
+// `chat`, `busy`, `lastRequestSent`, and `activeTurnMode` are the shown view's; showView swaps them.
+const views = new Map();
+let view;
 let reviewSelected;
 let turnCounter = 0;
 // The mode of the turn in flight; /ultraplan and /ultrareview speed up the rainbow while they run.
@@ -107,6 +111,7 @@ let meeting = null;
 
 hydrateIcons();
 app = await window.solar.state();
+showView(createView());
 document.body.classList.add(`platform-${app.platform}`);
 applyTheme();
 renderChrome();
@@ -179,6 +184,8 @@ async function setTheme(theme) {
 }
 $("new-chat").addEventListener("click", newChat);
 $("add-workspace").addEventListener("click", chooseWorkspace);
+// Shows every change in this chat; from a single reply's review it switches to the whole chat.
+$("changes-toggle").addEventListener("click", () => void toggleReview($("review").hidden || Boolean(reviewScope)));
 $("review-close").addEventListener("click", () => toggleReview(false));
 
 async function chooseWorkspace() {
@@ -194,7 +201,7 @@ async function chooseWorkspace() {
 
 /** Starts a new chat in another open folder; its earlier chats stay in the sidebar. */
 async function switchWorkspace(path) {
-  if (busy) return toast("Solar is still working. Wait for it to finish first.");
+  if (meeting?.busy) return toast(MEETING_BUSY);
   try {
     await flushChat();
     app = await window.solar.switchWorkspace(path);
@@ -219,16 +226,17 @@ async function removeWorkspace(path) {
   } catch (error) { toast(cleanError(error)); }
 }
 
+/** A new chat beside the others; chats that are still working carry on. */
 async function newChat() {
-  if (busy) return toast("Solar is still working. Wait for it to finish first.");
+  if (meeting?.busy) return toast(MEETING_BUSY);
   try {
     await flushChat();
-    const result = await window.solar.newChat();
+    const id = newChatId();
+    const result = await window.solar.newChat(id);
     if (!result.started) return;
     app = result.state;
-    closeMeeting({ quiet: true });
-    renderChrome();
-    clearThread();
+    closeMeeting();
+    showView(createView(id));
     renderEmpty();
     await refreshChanges();
     await renderHistory();
@@ -493,13 +501,13 @@ const COMMANDS = {
     await talkInMeeting(arg, false);
   },
   agents: async () => {
-    const agents = await window.solar.agents();
+    const agents = await window.solar.agents(view.id);
     addNote("Team", agents.length ? teamList(agents) : "No sub-agents are assigned. Ask Solar to delegate when you want sub-agents.");
   },
   agent: async arg => {
     const [agentId, action, ...rest] = arg.split(/\s+/);
     const value = action === "reasoning" ? rest[0]?.toLowerCase() : rest.join(" ");
-    const agents = await window.solar.controlAgent({ agentId, action, value });
+    const agents = await window.solar.controlAgent({ chatId: view.id, agentId, action, value });
     const done = action === "reasoning" ? `Changed ${agentId}'s reasoning effort to ${value}.`
       : action === "context" ? `Passed the new context to ${agentId}.` : `Cancelled ${agentId} and any sub-delegates it owns.`;
     addNote("Team", done, teamList(agents));
@@ -539,9 +547,9 @@ const COMMANDS = {
     renderChrome();
     addNote("Speed", `Speed is now ${enabled ? "Fast" : "Standard"}. New Codex turns will use this setting.`);
   },
-  stats: async () => addNote("Stats", preformatted(await window.solar.stats())),
+  stats: async () => addNote("Stats", preformatted(await window.solar.stats(view.id))),
   memory: async () => {
-    const { files, paths } = await window.solar.memory();
+    const { files, paths } = await window.solar.memory(view.id);
     addNote("Memory", files.length
       ? preformatted(`Loaded SOLAR.md instructions (later files override earlier ones):\n${files.map(file => `${file.scope}: ${file.path}${file.truncated ? " (truncated)" : ""}`).join("\n")}`)
       : preformatted(`No SOLAR.md instructions are loaded. Create one at any of:\n${paths.map(item => `${item.scope}: ${item.path}`).join("\n")}`));
@@ -659,13 +667,42 @@ thread.addEventListener("scroll", () => { stickToBottom = thread.scrollHeight - 
 const scrollToBottom = (force = false) => { if (force || stickToBottom) thread.scrollTop = thread.scrollHeight; updateJump(); };
 $("jump-latest").addEventListener("click", () => { stickToBottom = true; thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" }); });
 
+/** Shows an empty new chat. The chat that was on screen stays open, and keeps working if it is. */
 function clearThread() {
-  chat = null;
-  lastRequestSent = false;
-  $("thread-inner").replaceChildren();
+  showView(createView());
+}
+
+function newChatId() { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`; }
+
+function createView(id = newChatId()) {
+  const element = el("div", "thread-view");
+  $("thread-inner").append(element);
+  const created = { id, el: element, chat: null, busy: false, lastRequestSent: false, activeTurnMode: undefined, title: "New chat" };
+  views.set(id, created);
+  return created;
+}
+
+function showView(next) {
+  if (view) {
+    Object.assign(view, { chat, busy, lastRequestSent, activeTurnMode, title: $("chat-title").textContent });
+    // An empty chat left behind has nothing to keep.
+    if (view !== next && !view.chat && !view.busy) { view.el.remove(); views.delete(view.id); }
+  }
+  view = next;
+  ({ chat, busy, lastRequestSent, activeTurnMode } = next);
+  for (const item of views.values()) item.el.hidden = item !== next;
+  $("chat-title").textContent = next.title;
   $("jump-latest").hidden = true;
-  turns.clear();
-  $("chat-title").textContent = "New chat";
+  stickToBottom = true;
+  renderChrome();
+}
+
+/** Marks a chat working or idle, whichever chat is on screen. */
+function setBusy(target, value) {
+  target.busy = value;
+  if (target === view) busy = value;
+  renderChrome();
+  void renderHistory();
 }
 
 function workspaceCard() {
@@ -679,7 +716,7 @@ function workspaceCard() {
 }
 
 function renderEmpty() {
-  const inner = $("thread-inner");
+  const inner = view.el;
   inner.replaceChildren();
   const hero = el("div", "hero");
   const sun = el("div", "hero-sun");
@@ -706,7 +743,7 @@ function renderEmpty() {
 }
 
 function addUserMessage(text, images, turnMode) {
-  $("thread-inner").querySelector(".hero")?.remove();
+  view.el.querySelector(".hero")?.remove();
   const article = el("article", "turn user");
   const bubble = el("div", "bubble");
   if (turnMode !== "chat") bubble.append(el("span", `mode-tag ${turnMode}`, MODE_NAMES[turnMode]));
@@ -717,7 +754,7 @@ function addUserMessage(text, images, turnMode) {
     bubble.append(strip);
   }
   article.append(bubble);
-  $("thread-inner").append(article);
+  view.el.append(article);
   const title = text.length > 60 ? `${text.slice(0, 57)}...` : text;
   if ($("chat-title").textContent === "New chat") $("chat-title").textContent = title;
   record({ type: "user", text, images, mode: turnMode });
@@ -725,39 +762,44 @@ function addUserMessage(text, images, turnMode) {
 }
 
 /** One request to Solar: a chat message, a reviewed plan to run, a team to plan (/delegate), or an approved team to launch. */
-async function runTurn({ text, display = text, images = [], mode: turnMode = "chat", plan, delegation }) {
+async function runTurn({ text, display = text, images = [], mode: turnMode = "chat", plan, delegation, owner = view }) {
   const turnId = ++turnCounter;
   if (!plan && !delegation) addUserMessage(display, images, turnMode);
-  const entry = record({ type: "solar", mode: delegation ? "team" : turnMode, activity: [], diffs: [], agents: null, result: null, elapsed: 0 });
-  const turn = createSolarTurn(turnId, delegation ? "team" : turnMode, { entry });
+  if (owner === view) owner.chat = chat;
+  // The turn stays with its chat: it keeps recording and drawing there while another chat is on screen.
+  const entry = { type: "solar", mode: delegation ? "team" : turnMode, activity: [], diffs: [], agents: null, result: null, elapsed: 0 };
+  owner.chat?.items.push(entry);
+  const turn = createSolarTurn(turnId, delegation ? "team" : turnMode, { entry, container: owner.el });
   turns.set(turnId, turn);
-  activeTurnMode = plan || delegation ? undefined : turnMode;
-  busy = true;
-  renderChrome();
-  scrollToBottom(true);
+  if (owner === view) activeTurnMode = plan || delegation ? undefined : turnMode;
+  else owner.activeTurnMode = plan || delegation ? undefined : turnMode;
+  setBusy(owner, true);
+  if (owner === view) scrollToBottom(true);
+  // Listed in the sidebar while it works.
+  saveChat(owner.chat);
+  const chatId = owner.id;
   let result;
   try {
-    result = plan ? await window.solar.runPlan({ turnId, request: text, plan })
-      : delegation ? await window.solar.runDelegation({ turnId, request: delegation.request, context: delegation.context, plan: delegation.plan })
-      : turnMode === "delegate" ? await window.solar.delegate({ turnId })
-      : await window.solar.send({ turnId, text, images, mode: turnMode });
+    result = plan ? await window.solar.runPlan({ chatId, turnId, request: text, plan })
+      : delegation ? await window.solar.runDelegation({ chatId, turnId, request: delegation.request, context: delegation.context, plan: delegation.plan })
+      : turnMode === "delegate" ? await window.solar.delegate({ chatId, turnId })
+      : await window.solar.send({ chatId, turnId, text, images, mode: turnMode });
     if (result.kind === "plan") turn.finishPlan(result.request, result.plan, result.ultra, result.achievements);
     else turn.finish(result.reply, result);
   } catch (error) {
     turn.fail(cleanError(error));
   } finally {
-    busy = false;
-    renderChrome();
-    void refreshChanges();
-    scrollToBottom();
-    saveChat();
+    turns.delete(turnId);
+    setBusy(owner, false);
+    if (owner === view) { void refreshChanges(); scrollToBottom(); }
+    saveChat(owner.chat);
   }
   // With auto-approve on, a drafted team launches straight away, as in the CLI.
-  if (result?.delegation?.autoApproved) await runTurn({ delegation: result.delegation });
+  if (result?.delegation?.autoApproved) await runTurn({ delegation: result.delegation, owner });
 }
 
 /** One Solar reply: a live header, a timeline of steps with inline diffs, then the answer and a files summary. */
-function createSolarTurn(turnId, turnMode, { entry = {}, elapsed: replayed } = {}) {
+function createSolarTurn(turnId, turnMode, { entry = {}, elapsed: replayed, container = view.el } = {}) {
   // A turn replayed from history draws what it recorded; only live turns record.
   const replay = replayed !== undefined;
   const article = el("article", `turn solar${turnMode === "ultra" || turnMode === "ultraplan" || turnMode === "ultrareview" ? " ultra" : ""}`);
@@ -777,7 +819,7 @@ function createSolarTurn(turnId, turnMode, { entry = {}, elapsed: replayed } = {
   steps.append(toggle, list);
   const body = el("div", "solar-body");
   article.append(head, steps, body);
-  $("thread-inner").append(article);
+  container.append(article);
 
   const started = Date.now() - (replayed ?? 0) * 1000;
   const timer = replay ? undefined : setInterval(() => { elapsed.textContent = formatElapsed((Date.now() - started) / 1000); }, 1000);
@@ -798,7 +840,7 @@ function createSolarTurn(turnId, turnMode, { entry = {}, elapsed: replayed } = {
     step.append(marker, content);
     list.append(step);
     stepCount++;
-    scrollToBottom();
+    if (article.isConnected && !container.hidden) scrollToBottom();
     return step;
   };
 
@@ -1049,13 +1091,13 @@ function teamList(agents) {
 
 /** A note from the app itself (slash command output), styled apart from Solar's replies. */
 function addNote(title, ...content) {
-  $("thread-inner").querySelector(".hero")?.remove();
+  view.el.querySelector(".hero")?.remove();
   const article = el("article", "turn note");
   const card = el("div", "note-card");
   card.append(el("div", "note-title", title));
   for (const item of content) card.append(typeof item === "string" ? el("p", "", item) : item);
   article.append(card);
-  $("thread-inner").append(article);
+  view.el.append(article);
   scrollToBottom(true);
   // Buttons are live controls, so history keeps the note's words only.
   record({ type: "note", title, parts: content.map(item => typeof item === "string" ? item : item.tagName === "BUTTON" ? null : { pre: item.innerText || item.textContent }).filter(Boolean) });
@@ -1067,16 +1109,15 @@ function addNote(title, ...content) {
 /** Adds an item to the chat record. A chat starts with its first message, so notes before that are not kept. */
 function record(item) {
   if (replaying) return item;
-  if (!chat && item.type === "user" && app.workspace) chat = { id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`, workspace: app.workspace, title: "New chat", created: Date.now(), items: [] };
+  if (!chat && item.type === "user" && app.workspace) chat = view.chat = { id: view.id, workspace: app.workspace, title: "New chat", created: Date.now(), items: [] };
   chat?.items.push(item);
   return item;
 }
 
 let saveTimer;
 let pendingSave;
-function saveChat() {
-  if (!chat || replaying) return;
-  const saving = chat;
+function saveChat(saving = chat) {
+  if (!saving || replaying) return;
   clearTimeout(saveTimer);
   pendingSave = async () => {
     pendingSave = undefined;
@@ -1113,18 +1154,23 @@ function replayChat(saved) {
 }
 
 async function openChat(id) {
-  if (chat?.id === id) return;
-  if (busy) return toast("Solar is still working. Wait for it to finish first.");
+  if (view?.id === id) return;
+  if (meeting?.busy) return toast(MEETING_BUSY);
   try {
     await flushChat();
     const result = await window.solar.openChat(id);
-    closeMeeting({ quiet: true });
+    closeMeeting();
     app = result.state;
-    clearThread();
-    chat = result.chat;
-    lastRequestSent = Boolean(chat.lastRequest);
-    replayChat(chat);
-    $("chat-title").textContent = chat.title;
+    // A chat open this run (maybe still working) is shown as it is; others are drawn from history.
+    const open = views.get(id);
+    if (open) showView(open);
+    else {
+      showView(createView(id));
+      chat = view.chat = result.chat;
+      lastRequestSent = Boolean(chat.lastRequest);
+      replayChat(chat);
+      $("chat-title").textContent = chat.title;
+    }
     renderChrome();
     await refreshChanges();
     await renderHistory();
@@ -1152,10 +1198,11 @@ async function renderHistory() {
     group.append(head);
     const mine = chats.filter(item => item.workspace === workspace.path);
     for (const item of mine) {
-      const row = el("div", `side-chat${item.id === chat?.id ? " current" : ""}`);
+      const running = views.get(item.id)?.busy;
+      const row = el("div", `side-chat${item.id === view?.id ? " current" : ""}${running ? " running" : ""}`);
       const openButton = el("button", "side-chat-open");
       openButton.title = item.title;
-      openButton.append(el("span", "side-chat-title", item.title), el("span", "side-chat-time", relativeTime(item.updated)));
+      openButton.append(el("span", "side-chat-title", item.title), el("span", "side-chat-time", running ? "working" : relativeTime(item.updated)));
       openButton.addEventListener("click", () => void openChat(item.id));
       const remove = el("button", "icon-button side-remove");
       remove.title = "Delete chat";
@@ -1163,7 +1210,9 @@ async function renderHistory() {
       remove.addEventListener("click", async () => {
         try {
           if (!await window.solar.deleteChat(item.id)) return;
-          if (chat?.id === item.id) await newChat();
+          if (view?.id === item.id) await newChat();
+          const closed = views.get(item.id);
+          if (closed && closed !== view) { closed.el.remove(); views.delete(item.id); }
           await renderHistory();
         } catch (error) { toast(cleanError(error)); }
       });
@@ -1270,14 +1319,14 @@ function meetingEvent({ turnId, speaker, text, sessionId, status, activity }) {
 /** Sends the request or a follow-up to both sessions: three rounds, then each saves a readback. */
 async function talkInMeeting(text, continuing) {
   const current = meeting;
+  const owner = view;
   current.turnId = ++turnCounter;
   current.busy = true;
   for (const pane of current.panes) { pane.round = 0; pane.stick = true; paneMessage(pane, "You", text); }
   $("meeting-note").hidden = true;
-  busy = true;
-  renderChrome();
+  setBusy(owner, true);
   try {
-    const result = await window.solar.meeting({ turnId: current.turnId, topic: text, continuing });
+    const result = await window.solar.meeting({ chatId: owner.id, turnId: current.turnId, topic: text, continuing });
     current.recordings = result.recordings;
     current.readback = result.readback;
     $("meeting-recordings").hidden = false;
@@ -1286,8 +1335,7 @@ async function talkInMeeting(text, continuing) {
     meetingNote(cleanError(error), true);
   } finally {
     current.busy = false;
-    busy = false;
-    renderChrome();
+    setBusy(owner, false);
     void refreshChanges();
   }
 }
@@ -1402,23 +1450,18 @@ let changesTimer;
 function scheduleChangesRefresh() { clearTimeout(changesTimer); changesTimer = setTimeout(() => void refreshChanges(), 400); }
 
 async function refreshChanges() {
-  try { reviewFiles = await window.solar.changes(); } catch { reviewFiles = []; }
+  const shown = view;
+  let files;
+  try { files = await window.solar.changes(shown.id); } catch { files = []; }
+  if (shown !== view) return;
+  reviewFiles = files;
   let added = 0;
   let removed = 0;
   for (const file of reviewFiles) { added += file.added; removed += file.removed; }
-  $("side-stats").replaceChildren(...(reviewFiles.length ? [diffStat(added, removed)] : []));
-  const side = $("side-changes");
-  side.replaceChildren(...(reviewFiles.length ? reviewFiles.map(file => {
-    const row = el("button", "side-file");
-    const { dir, base } = splitName(file.name);
-    const name = el("span", "side-file-name");
-    name.append(el("span", "file-base", base));
-    if (dir) name.append(el("span", "file-dir", dir.replace(/\/$/, "")));
-    row.title = file.name;
-    row.append(fileIcon(file.kind), name, diffStat(file.added, file.removed));
-    row.addEventListener("click", () => void toggleReview(true, file.path));
-    return row;
-  }) : [el("div", "side-empty", "Files Solar edits will show up here.")]));
+  const count = $("changes-count");
+  count.hidden = !reviewFiles.length;
+  count.textContent = String(reviewFiles.length);
+  $("changes-stats").replaceChildren(...(reviewFiles.length ? [diffStat(added, removed)] : []));
   if (!$("review").hidden) renderReview();
 }
 
@@ -1428,8 +1471,9 @@ async function toggleReview(force, path, scope) {
   const open = force ?? panel.hidden;
   panel.hidden = !open;
   $("app").classList.toggle("reviewing", open);
-  if (!open) { reviewScope = null; return; }
-  reviewScope = scope ?? null;
+  reviewScope = open ? scope ?? null : null;
+  $("changes-toggle").classList.toggle("on", open && !reviewScope);
+  if (!open) return;
   $("review-title-text").textContent = reviewScope ? "This response" : "Changes";
   if (path) reviewSelected = path;
   await refreshChanges();

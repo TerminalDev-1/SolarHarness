@@ -30,15 +30,6 @@
         <div class="side-history" id="side-history"></div>
       </div>
 
-      <div class="side-section side-changes-section">
-        <div class="side-label">
-          <span>Changes</span>
-          <span class="side-stats" id="side-stats"></span>
-        </div>
-        <div class="side-changes" id="side-changes">
-          <div class="side-empty">Files Solar edits will show up here.</div>
-        </div>
-      </div>
 
       <div class="sidebar-foot">
         <span class="status-dot" id="status-dot"></span>
@@ -52,6 +43,14 @@
         <div class="topbar-title">
           <span id="chat-title">New chat</span>
           <button class="topbar-sub no-drag" id="chat-sub" title="Open a different folder (Ctrl+O)"></button>
+        </div>
+        <div class="topbar-actions no-drag">
+          <button class="ghost-button changes-button" id="changes-toggle" title="Every change in this chat (Ctrl+\)">
+            <span class="icon" data-icon="diff"></span>
+            <span>Changes</span>
+            <span class="changes-stats" id="changes-stats"></span>
+            <span class="count-badge" id="changes-count" hidden>0</span>
+          </button>
         </div>
       </header>
 

@@ -823,7 +823,10 @@ label.task-row { cursor: pointer; }
 .side-remove .icon { width: 13px; height: 13px; }
 .side-workspace-head:hover .side-remove, .side-chat:hover .side-remove, .side-remove:focus-visible { opacity: 1; }
 .side-chat:hover .side-chat-time { display: none; }
-.side-changes-section { flex: none; max-height: 32%; }
+.side-chat.running::before { content: ""; position: absolute; left: 13px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: var(--sun-2); box-shadow: 0 0 8px var(--sun-2); animation: pulse 1.2s ease-in-out infinite; }
+.side-chat.running .side-chat-time { color: var(--sun-text); }
+.thread-view { display: flex; flex-direction: column; gap: 28px; }
+.changes-button .changes-stats .diffstat { font-size: 12px; }
 
 /* Review lives on each finished response now. */
 .files-summary-head .review-button { margin-left: auto; }
