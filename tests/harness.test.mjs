@@ -122,6 +122,27 @@ test("the main agent tool can turn auto permissions on and off", async () => {
   assert.doesNotMatch(response.reply, /SOLAR_TOOL/);
 });
 
+test("a saved conversation restores its Codex session and transcript", async () => {
+  const harness = new SolarHarness({ task: "", model: "fake", reasoning: "light", cwd: process.cwd() });
+  harness.provider.run = async () => ({ text: "Hi there.\nSOLAR_STATE: DISCOVER", sessionId: "saved-session" });
+  await harness.converse("Remember the word apricot.");
+  const saved = harness.conversationState();
+  assert.equal(saved.sessionId, "saved-session");
+  assert.ok(saved.transcript.some(line => line.includes("apricot")));
+
+  harness.resetConversation();
+  assert.equal(harness.conversationState().sessionId, undefined);
+  assert.deepEqual(harness.conversationState().transcript, []);
+
+  harness.restoreConversation(JSON.parse(JSON.stringify(saved)));
+  assert.deepEqual(harness.conversationState(), saved);
+  let resumed;
+  harness.provider.run = async () => assert.fail("a restored chat must resume its session, not start a new one");
+  harness.provider.resume = async sessionId => { resumed = sessionId; return { text: "Apricot.\nSOLAR_STATE: DISCOVER", sessionId }; };
+  await harness.converse("What was the word?");
+  assert.equal(resumed, "saved-session");
+});
+
 test("standalone auto-permission requests apply immediately without a model response", async () => {
   const harness = new SolarHarness({ task: "", model: "gpt-6-luna", reasoning: "light", cwd: process.cwd() });
   harness.provider.run = async () => { throw new Error("standalone setting should not need a model turn"); };

@@ -21,6 +21,14 @@ export type TaskPlan = { request: string; plan: string; ultra: boolean };
 /** `plan` is set when Solar switched itself into plan or ultraplan mode during the turn. */
 export type ConverseResult = { reply: string; readyToDelegate: boolean; plan?: TaskPlan };
 
+/** What restoreConversation needs to continue a saved chat. */
+export interface ConversationState {
+  sessionId?: string;
+  transcript: string[];
+  meetingSessions?: (string | undefined)[];
+  meetingPrevious?: string[];
+}
+
 export class SolarHarness {
   readonly provider: SolarModelProvider;
   readonly manager: AgentManager;
@@ -452,6 +460,26 @@ export class SolarHarness {
 
   getAutoPermissions(): AutoPermissionsState {
     return { enabled: this.autoPermissions };
+  }
+
+  /** The conversation's resumable state (Codex session and transcript), so an app can save a chat and continue it later. */
+  conversationState(): ConversationState {
+    return {
+      sessionId: this.mainSessionId,
+      transcript: [...this.mainTranscript],
+      meetingSessions: [...this.meetingSessions],
+      meetingPrevious: [...this.meetingPrevious]
+    };
+  }
+
+  /** Continues a saved conversation: the next turn resumes its Codex session with its transcript as context. */
+  restoreConversation(state: ConversationState): void {
+    this.resetConversation();
+    this.mainSessionId = state.sessionId ?? undefined;
+    this.mainTranscript.push(...(state.transcript ?? []));
+    // JSON turns an empty slot into null; either means that meeting session has not started.
+    this.meetingSessions = [state.meetingSessions?.[0] ?? undefined, state.meetingSessions?.[1] ?? undefined];
+    this.meetingPrevious = [...(state.meetingPrevious ?? [])];
   }
 
   resetConversation(): void {
