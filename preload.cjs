@@ -9,6 +9,12 @@ const listen = channel => callback => {
 contextBridge.exposeInMainWorld("solar", {
   state: () => ipcRenderer.invoke("state:get"),
   chooseWorkspace: () => ipcRenderer.invoke("workspace:choose"),
+  switchWorkspace: path => ipcRenderer.invoke("workspace:switch", path),
+  removeWorkspace: path => ipcRenderer.invoke("workspace:remove", path),
+  chats: () => ipcRenderer.invoke("chats:list"),
+  saveChat: chat => ipcRenderer.invoke("chats:save", chat),
+  openChat: id => ipcRenderer.invoke("chats:open", id),
+  deleteChat: id => ipcRenderer.invoke("chats:delete", id),
   setModel: model => ipcRenderer.invoke("settings:model", model),
   setEffort: effort => ipcRenderer.invoke("settings:effort", effort),
   setFast: enabled => ipcRenderer.invoke("settings:fast", enabled),

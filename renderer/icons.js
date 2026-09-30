@@ -29,7 +29,10 @@ const paths = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
   team: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A5 5 0 0 1 22 19"/>',
-  dot: '<circle cx="12" cy="12" r="3"/>'
+  dot: '<circle cx="12" cy="12" r="3"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  // The OpenAI mark: six interlocking petals around the centre.
+  openai: [0, 60, 120, 180, 240, 300].map(angle => `<rect x="10.4" y="2.6" width="5.4" height="10.6" rx="2.7" transform="rotate(${angle} 12 12)"/>`).join("")
 };
 
 export function icon(name, className = "") {

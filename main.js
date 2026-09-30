@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SolarHarness } from "solar-harness/dist/harness.js";
@@ -19,6 +19,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const preferencesPath = () => join(app.getPath("userData"), "preferences.json");
 
 let window;
+// Every open workspace keeps its own harness and change tracker; `harness` and `tracker` are the current one's.
+const workspaces = new Map();
 let harness;
 let tracker;
 let busy = false;
@@ -36,26 +38,70 @@ function savePreferences() {
   writeFileSync(preferencesPath(), `${JSON.stringify(preferences, null, 2)}\n`);
 }
 
+/** Makes `workspace` current, opening a harness for it the first time. The model, effort, speed, and auto-approve carry over. */
 function openWorkspace(workspace) {
   const model = harness?.getModel() ?? preferences.model ?? SOLAR_MODELS[0].id;
   const reasoning = harness?.options?.reasoning ?? loadDefaultEffort();
   const fast = harness?.getFast() ?? false;
   const autoApprove = harness?.getAutoPermissions().enabled ?? false;
-  if (harness) { void harness.browser.close(); void harness.workspace.close(); }
-  harness = new SolarHarness({ task: "", model, reasoning, cwd: workspace });
+  let entry = workspaces.get(workspace);
+  if (!entry) {
+    entry = { harness: new SolarHarness({ task: "", model, reasoning, cwd: workspace }), tracker: new ChangeTracker(workspace) };
+    entry.harness.stats.startChat();
+    workspaces.set(workspace, entry);
+  } else {
+    // Coming back to an open folder starts a fresh chat there; saved chats reopen from the sidebar.
+    entry.harness.resetConversation();
+    entry.tracker.setWorkspace(workspace);
+  }
+  ({ harness, tracker } = entry);
+  harness.setModel(model);
+  harness.setReasoning(reasoning);
   harness.setFast(fast);
   harness.setAutoPermissions(autoApprove);
   lastRequest = "";
-  harness.stats.startChat();
-  tracker = new ChangeTracker(workspace);
   void tracker.snapshot();
   preferences.workspace = workspace;
+  preferences.workspaces = [workspace, ...(preferences.workspaces ?? []).filter(path => path !== workspace)];
   savePreferences();
+}
+
+function closeWorkspace(workspace) {
+  const entry = workspaces.get(workspace);
+  if (entry) { void entry.harness.browser.close(); void entry.harness.workspace.close(); workspaces.delete(workspace); }
+  preferences.workspaces = (preferences.workspaces ?? []).filter(path => path !== workspace);
+  if (harness?.getWorkspace() === workspace) {
+    harness = undefined;
+    tracker = undefined;
+    const next = preferences.workspaces.find(path => existsSync(path));
+    if (next) openWorkspace(next); else { preferences.workspace = undefined; savePreferences(); }
+  } else savePreferences();
+}
+
+// ---------- chat history: one JSON file per chat, with the engine state that continues it ----------
+
+let chatsDirectory = () => join(app.getPath("userData"), "chats");
+const chatPath = id => {
+  if (!/^[a-z0-9-]+$/i.test(id)) throw new Error("Unknown chat.");
+  return join(chatsDirectory(), `${id}.json`);
+};
+
+async function listChats() {
+  let names = [];
+  try { names = (await readdir(chatsDirectory())).filter(name => name.endsWith(".json")); } catch { return []; }
+  const chats = await Promise.all(names.map(async name => {
+    try {
+      const { id, title, workspace, updated } = JSON.parse(await readFile(join(chatsDirectory(), name), "utf8"));
+      return { id, title, workspace, updated };
+    } catch { return undefined; }
+  }));
+  return chats.filter(Boolean).sort((a, b) => b.updated - a.updated);
 }
 
 function state() {
   return {
     version: SOLAR_VERSION_LABEL,
+    workspaces: (preferences.workspaces ?? []).filter(path => existsSync(path)).map(path => ({ path, name: basename(path) })),
     workspace: harness?.getWorkspace(),
     workspaceName: harness ? basename(harness.getWorkspace()) : undefined,
     model: harness?.getModel() ?? preferences.model ?? SOLAR_MODELS[0].id,
@@ -135,8 +181,55 @@ function registerIpc() {
     const result = await dialog.showOpenDialog(window, { title: "Open a folder for Solar", properties: ["openDirectory", "createDirectory"] });
     if (result.canceled || !result.filePaths[0]) return state();
     if (busy) throw new Error("Wait for Solar to finish before switching folders.");
-    openWorkspace(result.filePaths[0]);
+    if (result.filePaths[0] !== harness?.getWorkspace()) openWorkspace(result.filePaths[0]);
     return state();
+  });
+
+  ipcMain.handle("workspace:switch", (_event, path) => {
+    if (busy) throw new Error("Wait for Solar to finish before switching folders.");
+    if (!existsSync(path)) throw new Error(`${path} no longer exists.`);
+    openWorkspace(path);
+    return state();
+  });
+
+  // Removes a folder from the sidebar only; its files and saved chats stay.
+  ipcMain.handle("workspace:remove", (_event, path) => {
+    if (busy && harness?.getWorkspace() === path) throw new Error("Wait for Solar to finish before removing this folder.");
+    closeWorkspace(path);
+    return state();
+  });
+
+  ipcMain.handle("chats:list", () => listChats());
+
+  // Saves the renderer's record of the current chat plus what the engine needs to continue it.
+  ipcMain.handle("chats:save", async (_event, chat) => {
+    if (!chat?.id || !harness || chat.workspace !== harness.getWorkspace()) return;
+    await mkdir(chatsDirectory(), { recursive: true });
+    await writeFile(chatPath(chat.id), JSON.stringify({ ...chat, updated: Date.now(), lastRequest, engine: harness.conversationState() }));
+  });
+
+  // Reopens a saved chat in its folder; the next message resumes its Codex session.
+  ipcMain.handle("chats:open", async (_event, id) => {
+    if (busy) throw new Error("Wait for Solar to finish before opening another chat.");
+    const chat = JSON.parse(await readFile(chatPath(id), "utf8"));
+    if (!existsSync(chat.workspace)) throw new Error(`This chat's folder no longer exists: ${chat.workspace}`);
+    if (harness?.getWorkspace() !== chat.workspace) openWorkspace(chat.workspace);
+    harness.restoreConversation(chat.engine ?? { transcript: [] });
+    lastRequest = chat.lastRequest ?? "";
+    tracker.reset();
+    void tracker.snapshot();
+    return { chat, state: state() };
+  });
+
+  ipcMain.handle("chats:delete", async (_event, id) => {
+    const { title } = JSON.parse(await readFile(chatPath(id), "utf8"));
+    const { response } = await dialog.showMessageBox(window, {
+      type: "warning", buttons: ["Delete chat", "Cancel"], defaultId: 1, cancelId: 1,
+      title: "Delete chat", message: `Delete "${title}"?`, detail: "The chat is removed from your history. Files in the folder are not touched."
+    });
+    if (response !== 0) return false;
+    await rm(chatPath(id), { force: true });
+    return true;
   });
 
   ipcMain.handle("settings:model", (_event, model) => { harness?.setModel(model); preferences.model = model; savePreferences(); return state(); });
@@ -244,6 +337,7 @@ function registerIpc() {
     }
     await harness.startNewSession();
     lastRequest = "";
+    // The Review panel's session list starts over with each chat.
     tracker.setWorkspace(harness.getWorkspace());
     void tracker.snapshot();
     return { started: true, state: state() };
@@ -319,9 +413,14 @@ app.whenReady().then(() => {
     // The demo never touches saved preferences or a real project.
     demo.installDemoHarness();
     preferences = {};
+    // Demo chats go in a scratch folder, never the real history.
+    const demoChats = demo.demoChatsDirectory();
+    chatsDirectory = () => demoChats;
   }
   const launchFolder = demo ? demo.prepareDemoWorkspace() : process.env.SOLAR_WORKSPACE ?? preferences.workspace;
   if (launchFolder && existsSync(launchFolder)) openWorkspace(launchFolder);
+  if (demo) openWorkspace(demo.prepareDemoWorkspace("solar-demo-second-"));
+  if (demo && launchFolder) openWorkspace(launchFolder);
   registerIpc();
   createWindow();
   if (capturing) {

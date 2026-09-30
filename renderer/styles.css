@@ -798,3 +798,34 @@ label.task-row { cursor: pointer; }
 .note-details .markdown { margin-top: 8px; font-size: 13.5px; }
 [data-theme="light"] .pane { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -18px rgba(0, 0, 0, 0.3); }
 [data-theme="light"] .meeting-note:not(.failed) .icon { color: var(--add); }
+
+/* ---------- sidebar: workspaces and chat history ---------- */
+
+.side-add { width: 22px; height: 22px; margin-right: -4px; }
+.side-add .icon { width: 14px; height: 14px; }
+.side-history { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.side-workspace { display: flex; flex-direction: column; gap: 1px; }
+.side-workspace-head, .side-chat { position: relative; display: flex; align-items: center; border-radius: 8px; transition: background 0.12s; }
+.side-workspace-head:hover, .side-chat:hover { background: var(--surface); }
+.side-workspace-open, .side-chat-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 6px 8px; text-align: left; }
+.side-workspace-open .icon { width: 15px; height: 15px; flex: none; color: var(--muted); }
+.side-workspace.current .side-workspace-open .icon { color: var(--sun-text); }
+.side-workspace-name { font-size: 13px; font-weight: 600; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-workspace.current .side-workspace-name { color: var(--text); }
+.side-chat-open { padding-left: 31px; }
+.side-chat-title { flex: 1; min-width: 0; font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-chat-time { flex: none; font-size: 11px; color: var(--faint); }
+.side-chat.current { background: var(--surface-2); }
+.side-chat.current .side-chat-title { color: var(--text); }
+.side-chat.current::before { content: ""; position: absolute; left: 14px; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: var(--sun-2); }
+.side-workspace .side-empty { padding: 2px 8px 4px 31px; font-size: 12px; }
+.side-remove { width: 22px; height: 22px; margin-right: 4px; opacity: 0; flex: none; }
+.side-remove .icon { width: 13px; height: 13px; }
+.side-workspace-head:hover .side-remove, .side-chat:hover .side-remove, .side-remove:focus-visible { opacity: 1; }
+.side-chat:hover .side-chat-time { display: none; }
+.side-changes-section { flex: none; max-height: 32%; }
+
+/* Review lives on each finished response now. */
+.files-summary-head .review-button { margin-left: auto; }
+.pill .icon.openai { width: 16px; height: 16px; }
+.pill .icon.openai svg { stroke-width: 1.4; }

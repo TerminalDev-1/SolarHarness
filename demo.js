@@ -8,8 +8,13 @@ import { SolarHarness } from "solar-harness/dist/harness.js";
  * `npm run demo`: a scripted Solar that makes real file edits in a scratch folder, so the
  * interface (timeline, diffs, Review panel) can be seen and screenshotted with no Codex calls.
  */
-export function prepareDemoWorkspace() {
-  const workspace = mkdtempSync(join(tmpdir(), "solar-demo-"));
+/** Demo chats are saved here, never in the real history. */
+export function demoChatsDirectory() {
+  return mkdtempSync(join(tmpdir(), "solar-demo-chats-"));
+}
+
+export function prepareDemoWorkspace(prefix = "solar-demo-") {
+  const workspace = mkdtempSync(join(tmpdir(), prefix));
   mkdirSync(join(workspace, "src"));
   writeFileSync(join(workspace, "src", "styles.css"), [
     ":root {",
@@ -331,9 +336,43 @@ async function checkCliParity(run, shot) {
   console.log(`cli parity: ${JSON.stringify(results)} ${ok ? "OK" : "WRONG"}`);
 }
 
+/**
+ * Chat history and workspaces: the chat is saved and listed under its folder, a new chat starts empty, the saved
+ * chat reopens with its turns and diffs, and a second folder starts its own chat. Prints `history: ... OK` if all hold.
+ */
+async function checkHistory(run, shot) {
+  const results = {};
+  await wait(600);
+  results.listed = await run(`[document.querySelectorAll(".side-workspace").length, document.querySelectorAll(".side-workspace.current .side-chat").length, document.querySelector(".side-chat.current .side-chat-title")?.textContent].join("|")`);
+  const turnsBefore = await run(`document.querySelectorAll(".turn.solar").length`);
+  await run(`document.getElementById("new-chat").click()`);
+  await wait(500);
+  results.fresh = await run(`[Boolean(document.querySelector(".hero")), document.querySelectorAll(".turn").length, document.getElementById("chat-title").textContent].join()`);
+  await run(`document.querySelector(".side-workspace.current .side-chat-open").click()`);
+  await wait(900);
+  results.reopened = await run(`[document.querySelectorAll(".turn.solar").length === ${turnsBefore}, Boolean(document.querySelector(".files-summary .review-button")), document.getElementById("chat-title").textContent, Boolean(document.querySelector(".side-chat.current"))].join()`);
+  await run(`document.getElementById("thread").scrollTop = 0`);
+  await wait(200);
+  await shot("history");
+  // The replayed response still opens its own diffs.
+  await run(`document.querySelector(".files-summary .review-button").click()`);
+  await wait(700);
+  results.replayReview = await run(`[document.getElementById("review-title-text").textContent, document.querySelectorAll(".review-file").length > 0].join()`);
+  await run(`document.getElementById("review-close").click()`);
+  await run(`[...document.querySelectorAll(".side-workspace")].find(group => !group.classList.contains("current")).querySelector(".side-workspace-open").click()`);
+  await wait(600);
+  results.switched = await run(`[Boolean(document.querySelector(".hero")), document.querySelector(".side-workspace.current .side-workspace-name").textContent.startsWith("solar-demo-second-"), document.getElementById("chat-sub").textContent.includes("solar-demo-second-")].join()`);
+  await shot("workspaces");
+  const ok = /^2\|1\|Build a landing page/.test(results.listed) && results.fresh === "true,0,New chat"
+    && results.reopened === "true,true,Build a landing page for Aurora and make the button nicer,true"
+    && results.replayReview === "This response,true" && results.switched === "true,true,true";
+  console.log(`history: ${JSON.stringify(results)} ${ok ? "OK" : "WRONG"}`);
+}
+
 /** Types a request, waits for the scripted turn, and saves screenshots of the key views. */
 export async function captureScreenshots(window, directory) {
   mkdirSync(directory, { recursive: true });
+  const results0 = {};
   const run = script => window.webContents.executeJavaScript(script);
   const shot = async name => writeFile(join(directory, `${name}.png`), (await window.webContents.capturePage()).toPNG());
   await wait(1200);
@@ -369,8 +408,11 @@ export async function captureScreenshots(window, directory) {
   await run(`document.getElementById("thread").scrollTop = 1e6`);
   await wait(300);
   await shot("diff");
-  await run(`document.getElementById("review-toggle").click()`);
+  results0.reviewButton = await run(`Boolean(document.querySelector(".files-summary .review-button")) && !document.getElementById("review-toggle")`);
+  await run(`document.querySelector(".files-summary .review-button").click()`);
   await wait(900);
+  results0.reviewScope = await run(`[document.getElementById("review-title-text").textContent, document.querySelectorAll(".review-file").length].join()`);
+  console.log(`review button: ${JSON.stringify(results0)} ${results0.reviewButton && results0.reviewScope === "This response,3" ? "OK" : "WRONG"}`);
   await run(`[...document.querySelectorAll(".review-file")].find(row => row.textContent.includes("styles.css"))?.click()`);
   await wait(500);
   await shot("review");
@@ -398,7 +440,7 @@ export async function captureScreenshots(window, directory) {
   await shot("light-ultra");
   await run(`document.querySelector('[data-mode="ultra"]').dispatchEvent(new PointerEvent("pointerleave"))`);
   await run(`document.querySelector('[data-mode="chat"]').click()`);
-  await run(`document.getElementById("review-toggle").click()`);
+  await run(`[...document.querySelectorAll(".files-summary .review-button")].at(-1).click()`);
   await wait(900);
   await shot("light-review");
   const light = await run(`[document.documentElement.dataset.theme, getComputedStyle(document.body).backgroundColor].join()`);
@@ -407,4 +449,5 @@ export async function captureScreenshots(window, directory) {
   await wait(500);
   const dark = await run(`[document.documentElement.dataset.theme, getComputedStyle(document.body).backgroundColor].join()`);
   console.log(`themes: ${JSON.stringify({ light, dark })} ${light === "light,rgb(247, 246, 243)" && dark === "dark,rgb(11, 11, 16)" ? "OK" : "WRONG"}`);
+  await checkHistory(run, shot);
 }

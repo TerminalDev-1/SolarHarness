@@ -84,6 +84,11 @@ let attachments = [];
 let busy = false;
 let stickToBottom = true;
 let reviewFiles = [];
+// What the Review panel shows: one response's files ({ files }) or, when null, every change this chat.
+let reviewScope = null;
+// The chat on screen as a replayable record; it is saved after each change and listed in the sidebar.
+let chat = null;
+let replaying = false;
 let reviewSelected;
 let turnCounter = 0;
 // The mode of the turn in flight; /ultraplan and /ultrareview speed up the rainbow while they run.
@@ -107,6 +112,7 @@ applyTheme();
 renderChrome();
 renderEmpty();
 void refreshChanges();
+void renderHistory();
 void showPet();
 
 window.solar.onActivity(({ turnId, text }) => turns.get(turnId)?.activity(text));
@@ -172,21 +178,51 @@ async function setTheme(theme) {
   applyTheme();
 }
 $("new-chat").addEventListener("click", newChat);
-$("review-toggle").addEventListener("click", () => toggleReview());
+$("add-workspace").addEventListener("click", chooseWorkspace);
 $("review-close").addEventListener("click", () => toggleReview(false));
 
 async function chooseWorkspace() {
   try {
     const previous = app.workspace;
+    await flushChat();
     app = await window.solar.chooseWorkspace();
     renderChrome();
     if (app.workspace !== previous) { closeMeeting({ quiet: true }); clearThread(); renderEmpty(); await refreshChanges(); }
-  } catch (error) { toast(error.message); }
+    await renderHistory();
+  } catch (error) { toast(cleanError(error)); }
+}
+
+/** Starts a new chat in another open folder; its earlier chats stay in the sidebar. */
+async function switchWorkspace(path) {
+  if (busy) return toast("Solar is still working. Wait for it to finish first.");
+  try {
+    await flushChat();
+    app = await window.solar.switchWorkspace(path);
+    closeMeeting({ quiet: true });
+    clearThread();
+    renderEmpty();
+    renderChrome();
+    await refreshChanges();
+    await renderHistory();
+    $("input").focus();
+  } catch (error) { toast(cleanError(error)); }
+}
+
+async function removeWorkspace(path) {
+  try {
+    const current = app.workspace;
+    await flushChat();
+    app = await window.solar.removeWorkspace(path);
+    if (current !== app.workspace) { closeMeeting({ quiet: true }); clearThread(); renderEmpty(); await refreshChanges(); }
+    renderChrome();
+    await renderHistory();
+  } catch (error) { toast(cleanError(error)); }
 }
 
 async function newChat() {
   if (busy) return toast("Solar is still working. Wait for it to finish first.");
   try {
+    await flushChat();
     const result = await window.solar.newChat();
     if (!result.started) return;
     app = result.state;
@@ -195,6 +231,7 @@ async function newChat() {
     clearThread();
     renderEmpty();
     await refreshChanges();
+    await renderHistory();
     $("input").focus();
   } catch (error) { toast(error.message); }
 }
@@ -622,8 +659,10 @@ const scrollToBottom = (force = false) => { if (force || stickToBottom) thread.s
 $("jump-latest").addEventListener("click", () => { stickToBottom = true; thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" }); });
 
 function clearThread() {
+  chat = null;
   lastRequestSent = false;
   $("thread-inner").replaceChildren();
+  $("jump-latest").hidden = true;
   turns.clear();
   $("chat-title").textContent = "New chat";
 }
@@ -678,14 +717,18 @@ function addUserMessage(text, images, turnMode) {
   }
   article.append(bubble);
   $("thread-inner").append(article);
-  if ($("chat-title").textContent === "New chat") $("chat-title").textContent = text.length > 60 ? `${text.slice(0, 57)}...` : text;
+  const title = text.length > 60 ? `${text.slice(0, 57)}...` : text;
+  if ($("chat-title").textContent === "New chat") $("chat-title").textContent = title;
+  record({ type: "user", text, images, mode: turnMode });
+  if (chat && chat.title === "New chat") chat.title = title;
 }
 
 /** One request to Solar: a chat message, a reviewed plan to run, a team to plan (/delegate), or an approved team to launch. */
 async function runTurn({ text, display = text, images = [], mode: turnMode = "chat", plan, delegation }) {
   const turnId = ++turnCounter;
   if (!plan && !delegation) addUserMessage(display, images, turnMode);
-  const turn = createSolarTurn(turnId, delegation ? "team" : turnMode);
+  const entry = record({ type: "solar", mode: delegation ? "team" : turnMode, activity: [], diffs: [], agents: null, result: null, elapsed: 0 });
+  const turn = createSolarTurn(turnId, delegation ? "team" : turnMode, { entry });
   turns.set(turnId, turn);
   activeTurnMode = plan || delegation ? undefined : turnMode;
   busy = true;
@@ -706,13 +749,16 @@ async function runTurn({ text, display = text, images = [], mode: turnMode = "ch
     renderChrome();
     void refreshChanges();
     scrollToBottom();
+    saveChat();
   }
   // With auto-approve on, a drafted team launches straight away, as in the CLI.
   if (result?.delegation?.autoApproved) await runTurn({ delegation: result.delegation });
 }
 
 /** One Solar reply: a live header, a timeline of steps with inline diffs, then the answer and a files summary. */
-function createSolarTurn(turnId, turnMode) {
+function createSolarTurn(turnId, turnMode, { entry = {}, elapsed: replayed } = {}) {
+  // A turn replayed from history draws what it recorded; only live turns record.
+  const replay = replayed !== undefined;
   const article = el("article", `turn solar${turnMode === "ultra" || turnMode === "ultraplan" || turnMode === "ultrareview" ? " ultra" : ""}`);
   const head = el("div", "solar-head");
   const avatar = el("span", "avatar working");
@@ -732,8 +778,8 @@ function createSolarTurn(turnId, turnMode) {
   article.append(head, steps, body);
   $("thread-inner").append(article);
 
-  const started = Date.now();
-  const timer = setInterval(() => { elapsed.textContent = formatElapsed((Date.now() - started) / 1000); }, 1000);
+  const started = Date.now() - (replayed ?? 0) * 1000;
+  const timer = replay ? undefined : setInterval(() => { elapsed.textContent = formatElapsed((Date.now() - started) / 1000); }, 1000);
   let stepCount = 0;
   let lastText = "";
   let lastNote;
@@ -759,6 +805,7 @@ function createSolarTurn(turnId, turnMode) {
     activity(text) {
       if (text === lastText) return;
       lastText = text;
+      if (!replay) entry.activity?.push(text);
       const parsed = classify(text);
       if (!parsed) return;
       // Solar switched itself into an Ultra mode mid-turn: the turn takes on the Ultra look.
@@ -776,6 +823,7 @@ function createSolarTurn(turnId, turnMode) {
       if (parsed.kind === "command") commands.set(parsed.detail, step);
     },
     diff(file) {
+      if (!replay) entry.diffs?.push(file);
       let card = files.get(file.path);
       if (!card) {
         card = { added: 0, removed: 0, diffs: [], kind: file.kind, name: file.name, path: file.path };
@@ -788,13 +836,14 @@ function createSolarTurn(turnId, turnMode) {
       const step = el("div", "step file");
       const marker = el("span", "step-marker");
       marker.append(icon(file.kind === "added" ? "file-plus" : file.kind === "deleted" ? "file-minus" : "file"));
-      step.append(marker, fileCard(file, { preview: 14 }));
+      step.append(marker, fileCard(file, { preview: 14, onOpen: () => reviewTurn(file.path) }));
       list.append(step);
       stepCount++;
       status.textContent = `${file.kind === "added" ? "Created" : file.kind === "deleted" ? "Deleted" : "Edited"} ${splitName(file.name).base}`;
       scrollToBottom();
     },
     agents(list) {
+      if (!replay) entry.agents = list;
       if (!team) { team = el("div", "team"); article.insertBefore(team, body); }
       team.replaceChildren(el("div", "team-head", "Team"), teamList(list));
       const running = list.filter(agent => agent.status === "running");
@@ -802,6 +851,7 @@ function createSolarTurn(turnId, turnMode) {
       scrollToBottom();
     },
     finish(reply = "", { achievements = [], delegation } = {}) {
+      if (!replay) entry.result = { kind: "reply", reply, achievements, delegation };
       done();
       // The final agent message is also narrated; drop the note that repeats the reply.
       if (reply && lastNote && reply.replace(/\s+/g, " ").startsWith(lastNote.text.replace(/\.\.\.$/, "").replace(/\s+/g, " "))) { lastNote.step.remove(); stepCount--; }
@@ -810,11 +860,12 @@ function createSolarTurn(turnId, turnMode) {
       if (reply || !delegation) body.append(renderMarkdown(reply || "Done."));
       if (files.size) body.append(filesSummary());
       for (const achievement of achievements) body.append(achievementBadge(achievement));
-      if (delegation) body.append(delegationCard(delegation));
+      if (delegation) body.append(delegationCard(delegation, entry));
       avatar.classList.remove("working");
       status.textContent = "";
     },
     finishPlan(request, plan, ultra, achievements = []) {
+      if (!replay) entry.result = { kind: "plan", request, plan, ultra, achievements };
       done();
       toggleLabel.textContent = summary();
       if (!stepCount) steps.remove();
@@ -828,10 +879,13 @@ function createSolarTurn(turnId, turnMode) {
       run.addEventListener("click", async () => {
         if (busy) return toast("Solar is still working.");
         actions.replaceChildren(el("span", "plan-status", "Approved"));
+        entry.decided = "Approved";
         await runTurn({ text: request, plan });
       });
-      dismiss.addEventListener("click", () => actions.replaceChildren(el("span", "plan-status muted", "Dismissed")));
-      actions.append(run, dismiss);
+      dismiss.addEventListener("click", () => { actions.replaceChildren(el("span", "plan-status muted", "Dismissed")); entry.decided = "Dismissed"; saveChat(); });
+      // A plan reopened from history keeps the decision made on it.
+      if (entry.decided) actions.append(el("span", `plan-status${entry.decided === "Dismissed" ? " muted" : ""}`, entry.decided));
+      else actions.append(run, dismiss);
       card.append(header, renderMarkdown(plan), actions);
       body.append(card);
       for (const achievement of achievements) body.append(achievementBadge(achievement));
@@ -839,12 +893,14 @@ function createSolarTurn(turnId, turnMode) {
       status.textContent = "";
     },
     fail(message) {
+      if (!replay) entry.result = { kind: "error", message };
       done();
       toggleLabel.textContent = summary();
       if (!stepCount) steps.remove();
       const card = el("div", "error-card");
       card.append(icon("alert"), el("span", "", message));
       body.append(card);
+      if (files.size) body.append(filesSummary());
       avatar.classList.remove("working");
       avatar.classList.add("failed");
       status.textContent = "";
@@ -853,6 +909,7 @@ function createSolarTurn(turnId, turnMode) {
 
   function done() {
     clearInterval(timer);
+    if (!replay) entry.elapsed = (Date.now() - started) / 1000;
     elapsed.textContent = formatElapsed((Date.now() - started) / 1000);
     status.classList.remove("shimmer");
     steps.classList.remove("open");
@@ -871,6 +928,13 @@ function createSolarTurn(turnId, turnMode) {
     return `Worked for ${seconds}${stepCount ? ` · ${stepCount} step${stepCount === 1 ? "" : "s"}` : ""}`;
   }
 
+  /** This response's files, each with every hunk it made, for the Review panel. */
+  function turnFiles() {
+    return [...files.values()].map(file => ({ path: file.path, name: file.name, kind: file.kind, added: file.added, removed: file.removed, hunks: file.diffs.flatMap(diff => diff.hunks) }));
+  }
+
+  function reviewTurn(path) { void toggleReview(true, path, { files: turnFiles() }); }
+
   function filesSummary() {
     const box = el("div", "files-summary");
     const header = el("div", "files-summary-head");
@@ -878,20 +942,19 @@ function createSolarTurn(turnId, turnMode) {
     let removed = 0;
     for (const file of files.values()) { added += file.added; removed += file.removed; }
     header.append(el("span", "", `${files.size} file${files.size === 1 ? "" : "s"} changed`), diffStat(added, removed));
-    const review = el("button", "link-button", "Review all");
-    review.addEventListener("click", () => toggleReview(true));
+    // Opens the diff pane with just this response's changes.
+    const review = el("button", "ghost-button small review-button");
+    review.append(icon("diff"), document.createTextNode("Review"));
+    review.addEventListener("click", () => reviewTurn());
     header.append(review);
     box.append(header);
-    for (const file of files.values()) {
-      const merged = { ...file, hunks: file.diffs.flatMap(diff => diff.hunks) };
-      box.append(fileCard(merged, { collapsed: true }));
-    }
+    for (const file of turnFiles()) box.append(fileCard(file, { collapsed: true, onOpen: () => reviewTurn(file.path) }));
     return box;
   }
 }
 
 /** The sub-agent plan Solar drafted: accept or reject each agent, then launch the accepted ones. */
-function delegationCard(delegation) {
+function delegationCard(delegation, entry = {}) {
   const { plan } = delegation;
   const card = el("div", "plan-card delegation-card");
   const header = el("div", "plan-head");
@@ -900,6 +963,12 @@ function delegationCard(delegation) {
   const actions = el("div", "plan-actions");
   if (delegation.autoApproved) {
     actions.append(el("span", "plan-status", `Auto-approve is on, so the ${plan.tasks.length}-sub-agent plan launches without pausing for review.`));
+    card.append(taskList(plan.tasks), actions);
+    return card;
+  }
+  if (entry.decided) {
+    card.classList.add("decided");
+    actions.append(el("span", "plan-status", entry.decided));
     card.append(taskList(plan.tasks), actions);
     return card;
   }
@@ -919,11 +988,14 @@ function delegationCard(delegation) {
     const chosen = plan.tasks.filter((_, index) => accepted[index]);
     card.classList.add("decided");
     actions.replaceChildren(el("span", "plan-status", `Launching ${chosen.length} sub-agent${chosen.length === 1 ? "" : "s"}`));
+    entry.decided = `Launched ${chosen.length} sub-agent${chosen.length === 1 ? "" : "s"}`;
     await runTurn({ delegation: { ...delegation, plan: { ...plan, tasks: chosen } } });
   });
   reject.addEventListener("click", () => {
     card.classList.add("decided");
     actions.replaceChildren(el("span", "plan-status muted", "Delegation rejected. No sub-agents were launched and no workspace changes were made."));
+    entry.decided = "Delegation rejected. No sub-agents were launched.";
+    saveChat();
   });
   refresh();
   actions.append(run, reject);
@@ -984,6 +1056,132 @@ function addNote(title, ...content) {
   article.append(card);
   $("thread-inner").append(article);
   scrollToBottom(true);
+  // Buttons are live controls, so history keeps the note's words only.
+  record({ type: "note", title, parts: content.map(item => typeof item === "string" ? item : item.tagName === "BUTTON" ? null : { pre: item.innerText || item.textContent }).filter(Boolean) });
+  saveChat();
+}
+
+// ---------- chat history ----------
+
+/** Adds an item to the chat record. A chat starts with its first message, so notes before that are not kept. */
+function record(item) {
+  if (replaying) return item;
+  if (!chat && item.type === "user" && app.workspace) chat = { id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`, workspace: app.workspace, title: "New chat", created: Date.now(), items: [] };
+  chat?.items.push(item);
+  return item;
+}
+
+let saveTimer;
+let pendingSave;
+function saveChat() {
+  if (!chat || replaying) return;
+  const saving = chat;
+  clearTimeout(saveTimer);
+  pendingSave = async () => {
+    pendingSave = undefined;
+    try { await window.solar.saveChat(saving); } catch { /* A chat that can't be saved still works on screen. */ }
+  };
+  saveTimer = setTimeout(async () => { await pendingSave?.(); await renderHistory(); }, 250);
+}
+
+/** Writes a waiting save now: the engine state saved with a chat must be that chat's, before a new chat, folder, or chat replaces it. */
+async function flushChat() {
+  clearTimeout(saveTimer);
+  await pendingSave?.();
+}
+
+/** Draws a saved chat exactly as it was recorded. */
+function replayChat(saved) {
+  replaying = true;
+  try {
+    for (const item of saved.items) {
+      if (item.type === "user") addUserMessage(item.text, item.images ?? [], item.mode ?? "chat");
+      else if (item.type === "note") addNote(item.title, ...item.parts.map(part => typeof part === "string" ? part : preformatted(part.pre)));
+      else if (item.type === "solar") {
+        const turn = createSolarTurn(0, item.mode, { entry: item, elapsed: item.elapsed ?? 0 });
+        for (const text of item.activity ?? []) turn.activity(text);
+        for (const file of item.diffs ?? []) turn.diff(file);
+        if (item.agents) turn.agents(item.agents);
+        const result = item.result;
+        if (result?.kind === "reply") turn.finish(result.reply, result);
+        else if (result?.kind === "plan") turn.finishPlan(result.request, result.plan, result.ultra, result.achievements);
+        else turn.fail(result?.message ?? "This reply was interrupted before it finished.");
+      }
+    }
+  } finally { replaying = false; }
+}
+
+async function openChat(id) {
+  if (chat?.id === id) return;
+  if (busy) return toast("Solar is still working. Wait for it to finish first.");
+  try {
+    await flushChat();
+    const result = await window.solar.openChat(id);
+    closeMeeting({ quiet: true });
+    app = result.state;
+    clearThread();
+    chat = result.chat;
+    lastRequestSent = Boolean(chat.lastRequest);
+    replayChat(chat);
+    $("chat-title").textContent = chat.title;
+    renderChrome();
+    await refreshChanges();
+    await renderHistory();
+    scrollToBottom(true);
+    $("input").focus();
+  } catch (error) { toast(cleanError(error)); }
+}
+
+/** The sidebar: each open folder with its chats, newest first. */
+async function renderHistory() {
+  let chats = [];
+  try { chats = await window.solar.chats(); } catch { /* No history yet. */ }
+  const groups = (app.workspaces ?? []).map(workspace => {
+    const group = el("div", `side-workspace${workspace.path === app.workspace ? " current" : ""}`);
+    const head = el("div", "side-workspace-head");
+    const open = el("button", "side-workspace-open");
+    open.title = `${workspace.path}\nStart a new chat in this folder`;
+    open.append(icon("folder"), el("span", "side-workspace-name", workspace.name));
+    open.addEventListener("click", () => void switchWorkspace(workspace.path));
+    const remove = el("button", "icon-button side-remove");
+    remove.title = "Remove from the sidebar (the folder and its chats are kept)";
+    remove.append(icon("close"));
+    remove.addEventListener("click", () => void removeWorkspace(workspace.path));
+    head.append(open, remove);
+    group.append(head);
+    const mine = chats.filter(item => item.workspace === workspace.path);
+    for (const item of mine) {
+      const row = el("div", `side-chat${item.id === chat?.id ? " current" : ""}`);
+      const openButton = el("button", "side-chat-open");
+      openButton.title = item.title;
+      openButton.append(el("span", "side-chat-title", item.title), el("span", "side-chat-time", relativeTime(item.updated)));
+      openButton.addEventListener("click", () => void openChat(item.id));
+      const remove = el("button", "icon-button side-remove");
+      remove.title = "Delete chat";
+      remove.append(icon("trash"));
+      remove.addEventListener("click", async () => {
+        try {
+          if (!await window.solar.deleteChat(item.id)) return;
+          if (chat?.id === item.id) await newChat();
+          await renderHistory();
+        } catch (error) { toast(cleanError(error)); }
+      });
+      row.append(openButton, remove);
+      group.append(row);
+    }
+    if (!mine.length) group.append(el("div", "side-empty", "No chats yet"));
+    return group;
+  });
+  $("side-history").replaceChildren(...(groups.length ? groups : [el("div", "side-empty", "Add a folder to start.")]));
+}
+
+function relativeTime(time) {
+  const minutes = Math.floor((Date.now() - time) / 60000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60 * 24) return `${Math.floor(minutes / 60)}h`;
+  if (minutes < 60 * 24 * 7) return `${Math.floor(minutes / 1440)}d`;
+  return new Date(time).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 // ---------- side-by-side meetings ----------
@@ -1155,7 +1353,7 @@ async function showPet() {
 }
 
 /** A collapsible file card: icon, path, +/- counts, and its diff. */
-function fileCard(file, { preview, collapsed = false } = {}) {
+function fileCard(file, { preview, collapsed = false, onOpen = () => void toggleReview(true, file.path) } = {}) {
   const card = el("div", `file-card${collapsed ? "" : " open"}`);
   const header = el("button", "file-card-head");
   const { dir, base } = splitName(file.name);
@@ -1169,7 +1367,7 @@ function fileCard(file, { preview, collapsed = false } = {}) {
   const open = el("button", "icon-button file-open");
   open.title = "Open in the Review panel";
   open.append(icon("expand"));
-  open.addEventListener("click", event => { event.stopPropagation(); void toggleReview(true, file.path); });
+  open.addEventListener("click", event => { event.stopPropagation(); onOpen(); });
   header.append(open);
   header.addEventListener("click", () => card.classList.toggle("open"));
   const body = el("div", "file-card-body");
@@ -1207,9 +1405,6 @@ async function refreshChanges() {
   let added = 0;
   let removed = 0;
   for (const file of reviewFiles) { added += file.added; removed += file.removed; }
-  const count = $("review-count");
-  count.hidden = !reviewFiles.length;
-  count.textContent = String(reviewFiles.length);
   $("side-stats").replaceChildren(...(reviewFiles.length ? [diffStat(added, removed)] : []));
   const side = $("side-changes");
   side.replaceChildren(...(reviewFiles.length ? reviewFiles.map(file => {
@@ -1226,24 +1421,27 @@ async function refreshChanges() {
   if (!$("review").hidden) renderReview();
 }
 
-async function toggleReview(force, path) {
+/** Opens or closes the diff pane: one response's files with `scope`, or every change this chat without. */
+async function toggleReview(force, path, scope) {
   const panel = $("review");
   const open = force ?? panel.hidden;
   panel.hidden = !open;
   $("app").classList.toggle("reviewing", open);
-  $("review-toggle").classList.toggle("on", open);
-  if (!open) return;
+  if (!open) { reviewScope = null; return; }
+  reviewScope = scope ?? null;
+  $("review-title-text").textContent = reviewScope ? "This response" : "Changes";
   if (path) reviewSelected = path;
   await refreshChanges();
 }
 
 function renderReview() {
+  const shown = reviewScope?.files ?? reviewFiles;
   let added = 0;
   let removed = 0;
-  for (const file of reviewFiles) { added += file.added; removed += file.removed; }
-  $("review-totals").replaceChildren(el("span", "muted", `${reviewFiles.length} file${reviewFiles.length === 1 ? "" : "s"}`), diffStat(added, removed, { bar: true }));
-  if (!reviewFiles.some(file => file.path === reviewSelected)) reviewSelected = reviewFiles[0]?.path;
-  $("review-files").replaceChildren(...reviewFiles.map(file => {
+  for (const file of shown) { added += file.added; removed += file.removed; }
+  $("review-totals").replaceChildren(el("span", "muted", `${shown.length} file${shown.length === 1 ? "" : "s"}`), diffStat(added, removed, { bar: true }));
+  if (!shown.some(file => file.path === reviewSelected)) reviewSelected = shown[0]?.path;
+  $("review-files").replaceChildren(...shown.map(file => {
     const row = el("button", `review-file${file.path === reviewSelected ? " selected" : ""}`);
     const { dir, base } = splitName(file.name);
     const name = el("span", "review-file-name");
@@ -1254,7 +1452,7 @@ function renderReview() {
     return row;
   }));
   const diffBox = $("review-diff");
-  const file = reviewFiles.find(item => item.path === reviewSelected);
+  const file = shown.find(item => item.path === reviewSelected);
   if (!file) {
     const empty = el("div", "review-empty");
     empty.append(icon("diff"), el("strong", "", "No changes yet"), el("span", "", "When Solar edits files, every change lands here as a diff you can review."));

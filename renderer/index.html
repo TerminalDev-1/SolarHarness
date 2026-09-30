@@ -24,6 +24,14 @@
 
       <div class="side-section grow">
         <div class="side-label">
+          <span>Workspaces</span>
+          <button class="icon-button side-add no-drag" id="add-workspace" title="Add a folder (Ctrl+O)"><span class="icon" data-icon="plus"></span></button>
+        </div>
+        <div class="side-history" id="side-history"></div>
+      </div>
+
+      <div class="side-section side-changes-section">
+        <div class="side-label">
           <span>Changes</span>
           <span class="side-stats" id="side-stats"></span>
         </div>
@@ -44,13 +52,6 @@
         <div class="topbar-title">
           <span id="chat-title">New chat</span>
           <button class="topbar-sub no-drag" id="chat-sub" title="Open a different folder (Ctrl+O)"></button>
-        </div>
-        <div class="topbar-actions no-drag">
-          <button class="ghost-button" id="review-toggle" title="Review changes (Ctrl+\)">
-            <span class="icon" data-icon="diff"></span>
-            <span>Review</span>
-            <span class="count-badge" id="review-count" hidden>0</span>
-          </button>
         </div>
       </header>
 
@@ -96,7 +97,7 @@
                 <span class="meeting-tag" id="meeting-tag" hidden><span class="icon" data-icon="team"></span>To Aurora and Helios</span>
               </div>
               <div class="bar-right">
-                <button class="pill" id="model-button"><span class="icon" data-icon="spark"></span><span id="model-label">Model</span><span class="icon caret" data-icon="caret"></span></button>
+                <button class="pill" id="model-button"><span class="icon openai" data-icon="openai" aria-label="OpenAI"></span><span id="model-label">Model</span><span class="icon caret" data-icon="caret"></span></button>
                 <button class="pill" id="effort-button"><span class="effort-meter" id="effort-meter"><i></i><i></i><i></i><i></i><i></i></span><span id="effort-label">Max</span><span class="icon caret" data-icon="caret"></span></button>
                 <button class="pill" id="speed-button"><span class="icon" data-icon="bolt"></span><span id="speed-label">Standard</span><span class="icon caret" data-icon="caret"></span></button>
                 <button class="send-button" id="send" title="Send (Enter)" disabled>
@@ -113,7 +114,7 @@
     <aside class="review" id="review" hidden>
       <header class="review-head drag">
         <div class="review-title">
-          <span>Changes</span>
+          <span id="review-title-text">Changes</span>
           <span class="review-totals" id="review-totals"></span>
         </div>
         <button class="icon-button no-drag" id="review-close" title="Close"><span class="icon" data-icon="close"></span></button>
