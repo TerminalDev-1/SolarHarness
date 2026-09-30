@@ -1,8 +1,7 @@
 # SolarHarness
 
-> **v1.1:** add images with Tab or paste them with Ctrl+V / Alt+V, and see them as
-> previews right in the terminal; pick GPT-6 Luna or GPT-5.6 Luna with `/model`.
-> v1.0 was the first stable release.
+> **v1.4 Reborn:** a refreshed solar chat icon, `/sidebyside <topic>` meetings
+> between two recorded agents, and mandatory `session_notes.md` readbacks for every session.
 
 **First committed:** 20 September 2026.
 
@@ -32,16 +31,16 @@ Solar's workspace.
 The top of the screen shows which Solar you are running:
 
 ```text
-▣ Solar Harness v1.1 build 36b877c
+(o) Solar Harness v1.4 Reborn build 36b877c
 ```
 
-- **`v1.1`** is the release. It changes only for a new release, not for every fix
+- **`v1.4`** is the release. It changes only for a new release, not for every fix
   or feature.
 - **`build 36b877c`** is the commit your copy was built from. Each change to Solar
   gets a new build, so this tells you exactly which code you have. You can look it
   up at `github.com/TerminalDev-1/SolarHarness/commit/<build>`.
 
-`solar --version` prints the same thing, for example `1.1 build 36b877c`.
+`solar --version` prints the same thing, for example `1.4 Reborn build 36b877c`.
 
 To update to the latest build, run these in the SolarHarness folder:
 
@@ -53,14 +52,14 @@ npm run build
 
 The build shown only changes after `npm run build`, so it always matches the code
 that is actually running. When you report a problem, include the whole line, such
-as `v1.1 build 36b877c`.
+as `v1.4 Reborn build 36b877c`.
 
 ## The interface
 
 ![The Solar welcome screen](docs/images/welcome.png)
 
 ```text
- ▣ Solar Harness v1.1 build 36b877c       ← version and the commit it was built from
+ (o) Solar Harness v1.4 Reborn build 36b877c       ← version and the commit it was built from
                                           ← your workspace folder is shown below
  C:\Users\you\projects\portfolio
  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
@@ -151,6 +150,7 @@ command, and Esc closes the menu. Press Enter again to run the command.
 | `/model` | Opens a picker to switch between **GPT-6 Luna** and **GPT-5.6 Luna**. `/model gpt-5.6-luna` switches directly. |
 | `/speed` | Opens a picker for Standard or Fast. `/fast on`, `/fast off`, and `/fast status` also work. Fast uses more credits. |
 | `/memory` | Shows which `SOLAR.md` instruction files are loaded. |
+| `/sidebyside <topic>` | Starts Aurora and Helios in independent recorded sessions for three rounds: opening views, peer responses, and final readbacks. Meetings are read-only; proposed changes come back to you. |
 | `/delegate` | Prepares a team of sub-agents for your last request. |
 | `/agents` | Shows whether sub-agents are assigned. |
 | `/agent <name> reasoning <level>` | Changes one agent's effort for its next step. |
@@ -204,6 +204,23 @@ GPT-6 Luna.
 Effort is how hard Solar thinks. Every session starts at your default, which is
 **Max** until you change it with `/default-effort`. `/effort` changes only the
 session you are in. The footer always shows the current effort.
+
+## Side-by-side meetings
+
+Run `/sidebyside <topic>` to invite Aurora and Helios to a meeting. They start
+in parallel, see each other's previous message, and converse for three rounds.
+Both speakers' messages appear in the chat. Their last round records decisions,
+disagreements, proposed changes, validation needed, and next steps. The meeting
+stops with an error if either session fails. It does not implement changes.
+
+Every Codex session (main chat, planners, reviewers, and delegated agents) is
+recorded under `.solarharness/sessions/<recording-id>/`. Each folder contains
+`transcript.jsonl` with prompts, activity, responses, and status, plus mandatory
+`session_notes.md` with recorded activity and agent reports for readback. Resumed
+turns append to the same recording during the running Solar instance. Notes are
+created before launch and updated after each exchange, including failures. Logs
+contain the prompts and results sent to the model, so treat them as project data.
+The normal `/new` cleanup of a scratch `test` workspace deletes these logs too.
 
 ## Delegation
 

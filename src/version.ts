@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-// npm needs a three-part version (1.1.0); users see major.minor (1.1).
+// npm needs a three-part version (1.4.0); users see major.minor (1.4).
 const packageVersion = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
 export const SOLAR_VERSION = packageVersion.replace(/\.0$/, "");
@@ -9,8 +9,8 @@ export const SOLAR_VERSION = packageVersion.replace(/\.0$/, "");
 /** The commit this code was built from: dist/build-info.json after `npm run build`, else Git (for `npm run dev`). */
 export const SOLAR_BUILD = buildCommit();
 
-/** "1.1 build fb241f7", or "1.1" when the commit is unknown. */
-export const SOLAR_VERSION_LABEL = SOLAR_BUILD ? `${SOLAR_VERSION} build ${SOLAR_BUILD}` : SOLAR_VERSION;
+/** "1.4 Reborn build fb241f7", or "1.4 Reborn" when the commit is unknown. */
+export const SOLAR_VERSION_LABEL = SOLAR_BUILD ? `${SOLAR_VERSION} Reborn build ${SOLAR_BUILD}` : `${SOLAR_VERSION} Reborn`;
 
 function buildCommit(): string | undefined {
   try {

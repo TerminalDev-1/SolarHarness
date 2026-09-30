@@ -85,6 +85,7 @@ const slashCommands = [
   { command: "/agents", detail: "Show assigned agents", insert: "/agents" },
   { command: "/agent", detail: "Control an assigned agent", insert: "/agent " },
   { command: "/delegate", detail: "Prepare an agent plan", insert: "/delegate" },
+  { command: "/sidebyside", detail: "Two recorded agents discuss a topic", insert: "/sidebyside " },
   { command: "/plan", detail: "Plan a task read-only, then approve", insert: "/plan " },
   { command: "/ultra", detail: "Run a task at Max effort with Fast on", insert: "/ultra " },
   { command: "/ultraplan", detail: "Max-effort plan with a self-critique", insert: "/ultraplan " },
@@ -435,6 +436,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
     const planCommand = line.match(/^\/(plan|ultraplan)(?:\s+([\s\S]*))?$/);
     const reviewCommand = line.match(/^\/ultrareview(?:\s+([\s\S]*))?$/);
     const ultraCommand = line.match(/^\/ultra(?:\s+([\s\S]*))?$/);
+    const meetingCommand = line.match(/^\/sidebyside(?:\s+([\s\S]*))?$/);
     if (planCommand) setCurrentActivity(planCommand[1] === "ultraplan" ? "drafting an ultraplan" : "drafting a plan");
     if (reviewCommand) setCurrentActivity("starting the ultrareview");
     setUltra(planCommand?.[1] === "ultraplan" && planCommand[2]?.trim() ? "ultraplan" : reviewCommand ? "ultrareview" : ultraCommand?.[1]?.trim() ? "ultra" : null);
@@ -442,7 +444,15 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
 
     try {
       if (line === "/help") {
-        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /ultra <task> · /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /model · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /default-effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
+        addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /ultra <task> · /sidebyside <topic> · /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /model · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /default-effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
+      } else if (meetingCommand) {
+        const topic = meetingCommand[1]?.trim();
+        if (!topic) addMessage({ role: "error", text: "Usage: /sidebyside <meeting topic>" });
+        else {
+          setCurrentActivity("Aurora and Helios are meeting");
+          await harness.sideBySide(topic, reportActivity, (speaker, text) => addMessage({ role: "solar", text: `${speaker}\n\n${text}` }));
+          addMessage({ role: "solar", text: "Meeting complete. Both agents' final messages contain their readbacks. Recordings and mandatory session_notes.md are saved in .solarharness/sessions/." });
+        }
       } else if (planCommand) {
         const request = planCommand[2]?.trim();
         if (!request) addMessage({ role: "error", text: `Usage: /${planCommand[1]} <task to plan>` });
@@ -921,7 +931,7 @@ function Header({ compact, workspace, width }: { compact: boolean; workspace: st
   return (
     <Box marginTop={1} marginBottom={1} flexDirection="column">
       <Box paddingX={1} flexDirection="column">
-        <Text><Text bold color={theme.pulse}>▣ Solar</Text><Text color={theme.secondary}> Harness</Text><Text color={theme.subtle}> v{SOLAR_VERSION_LABEL}</Text></Text>
+        <Text><Text bold color={theme.pulse}>(o) Solar</Text><Text color={theme.secondary}> Harness</Text><Text color={theme.subtle}> v{SOLAR_VERSION_LABEL}</Text></Text>
         <Text color={theme.subtle}>{workspaceLabel}</Text>
       </Box>
       <GradientRail width={width} glyph="▄" colors={theme.rail} />

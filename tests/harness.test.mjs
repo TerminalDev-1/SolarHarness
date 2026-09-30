@@ -77,10 +77,10 @@ test("Codex starts and resumes outside Git repositories", () => {
 
 test("working sun expands and contracts in fixed-width text-safe frames", () => {
   assert.equal(sunFrames.length, sunColors.length);
-  assert.ok(sunFrames.every(frame => frame.length === 5 && frame.every(line => line.length === 11 && /^[\\/|.*' -]+$/.test(line))));
-  assert.deepEqual(sunFrames[3], ["\\    |    /", "  .-----.  ", "--|*****|--", "  '-----'  ", "/    |    \\"]);
+  assert.ok(sunFrames.every(frame => frame.length === 5 && frame.every(line => line.length === 11 && /^[\\/|().o*' -]+$/.test(line))));
+  assert.deepEqual(sunFrames[3], ["\\    |    /", "  .-----.  ", "--(ooooo)--", "  '-----'  ", "/    |    \\"]);
   assert.deepEqual(sunFrames.slice(1, 3), [...sunFrames.slice(4, 6)].reverse());
-  assert.deepEqual(sunFrames.map(frame => (frame[2].match(/\*/g) ?? []).length), [1, 1, 3, 5, 3, 1]);
+  assert.deepEqual(sunFrames.map(frame => (frame[2].match(/[.o]/g) ?? []).length), [1, 1, 3, 5, 3, 1]);
 });
 
 test("sun and activity render as one aligned five-row unit", () => {
@@ -88,7 +88,7 @@ test("sun and activity render as one aligned five-row unit", () => {
   const lines = output.split("\n");
   assert.equal(lines.length, 5);
   assert.ok(lines[0].includes("\\    |    /"));
-  assert.ok(lines[2].includes("--|*****|-- Working · 2s"));
+  assert.ok(lines[2].includes("--(ooooo)-- Working · 2s"));
   assert.ok(lines[4].includes("/    |    \\"));
 });
 
@@ -1195,7 +1195,7 @@ test("a full terminal is not cleared on idle redraws, so scrolling stays where t
     assert.match(writes.join(""), /Controls: \/ultra <task>/);
     const { execFileSync } = await import("node:child_process");
     const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"]).toString().trim();
-    assert.match(writes.join("").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""), new RegExp(`▣ Solar Harness v1\\.1 build ${commit}\\n`));
+    assert.match(writes.join("").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, ""), new RegExp(`\\(o\\) Solar Harness v1\\.4 Reborn build ${commit}\\n`));
     writes = [];
     await sleep(1_000);
     assert.ok(writes.length > 0, "the pet should keep animating while idle");

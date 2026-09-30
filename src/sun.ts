@@ -1,45 +1,45 @@
-// A five-line disk and rays grow together, then contract. All rows stay eleven
+// A five-line solar halo breathes around a rounded core. All rows stay eleven
 // columns wide so the adjacent activity text never moves in Windows Terminal.
 export const sunFrames = [
   [
     "           ",
     "           ",
-    "     *     ",
+    "     .     ",
     "           ",
     "           "
   ],
   [
     "     |     ",
     "    .-.    ",
-    " ---|*|--- ",
+    "  --(o)--  ",
     "    '-'    ",
     "     |     "
   ],
   [
     "  \\  |  /  ",
     "   .---.   ",
-    " --|***|-- ",
+    " --(ooo)-- ",
     "   '---'   ",
     "  /  |  \\  "
   ],
   [
     "\\    |    /",
     "  .-----.  ",
-    "--|*****|--",
+    "--(ooooo)--",
     "  '-----'  ",
     "/    |    \\"
   ],
   [
     "  \\  |  /  ",
     "   .---.   ",
-    " --|***|-- ",
+    " --(ooo)-- ",
     "   '---'   ",
     "  /  |  \\  "
   ],
   [
     "     |     ",
     "    .-.    ",
-    " ---|*|--- ",
+    "  --(o)--  ",
     "    '-'    ",
     "     |     "
   ]

@@ -1,3 +1,4 @@
+import { recordSession } from "./session-recorder.js";
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
@@ -42,60 +43,12 @@ export class CodexCliProvider {
   }
 
   async run(prompt: string, options: CodexRunOptions, extraArgs: string[] = []): Promise<CodexRunResult> {
-    const child = spawnCodex(this.codexExecutable, buildCodexRunArgs(prompt, options, extraArgs), options.cwd);
-    const finalMessages: string[] = [];
-    const eventErrors: string[] = [];
-    const fileChanges = new FileChangeTracker(options.cwd);
-    let sessionId: string | undefined;
-    let stderr = "";
-    let stdoutRemainder = "";
-
-    const consume = (chunk: string) => {
-      const lines = (stdoutRemainder + chunk).split(/\r?\n/);
-      stdoutRemainder = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const event = JSON.parse(line) as CodexEvent;
-          if (event.type === "thread.started") sessionId = (event as CodexEvent & { thread_id?: string }).thread_id;
-          if (event.type === "turn.completed" && event.usage) options.onUsage?.(event.usage.input_tokens ?? 0, event.usage.output_tokens ?? 0);
-          if (event.type === "error") {
-            const message = typeof event.error === "string" ? event.error : event.error?.message;
-            if (message) eventErrors.push(message);
-          }
-          const item = event.item;
-          for (const step of fileChangeSteps(event, fileChanges)) options.onEvent?.(`File: ${step}`);
-          if (item?.type === "agent_message" && item.text) {
-            finalMessages.push(item.text);
-            const note = narration(item.text);
-            if (note) options.onEvent?.(`Note: ${note}`);
-          }
-          const activity = commandActivity(item) ?? itemActivity(item) ?? (typeof event.error === "string" ? event.error : event.error?.message);
-          if (activity) options.onEvent?.(activity.slice(0, 180));
-        } catch {
-          options.onEvent?.(line.slice(0, 180));
-        }
-      }
-    };
-    child.stdout.on("data", (data: Buffer) => consume(data.toString()));
-    child.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
-    options.signal?.addEventListener("abort", () => child.kill(), { once: true });
-
-    return await new Promise<CodexRunResult>((resolve, reject) => {
-      child.on("error", (error) => reject(codexStartError(error, this.codexExecutable)));
-      child.on("close", (code) => {
-        if (stdoutRemainder) consume("\n");
-        if (code !== 0) return reject(new Error(eventErrors.at(-1) ?? cleanStderr(stderr) ?? `Codex CLI exited with code ${code}.`));
-        const output = finalMessages.at(-1);
-        if (!output) return reject(new Error("Codex CLI completed without an agent message."));
-        resolve({ text: output, sessionId });
-      });
-    });
+    return recordSession(prompt, options, recorded => this.runWithArgs(buildCodexRunArgs(prompt, recorded, extraArgs), recorded));
   }
 
   async resume(sessionId: string, prompt: string, options: CodexRunOptions, extraArgs: string[] = []): Promise<CodexRunResult> {
     const args = buildCodexResumeArgs(sessionId, prompt, options, extraArgs);
-    return this.runWithArgs(args, options);
+    return recordSession(prompt, options, recorded => this.runWithArgs(args, recorded), sessionId);
   }
 
   private async writePlanSchema(cwd: string, requestedCount?: number): Promise<string> {
