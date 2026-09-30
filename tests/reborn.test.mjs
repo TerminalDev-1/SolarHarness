@@ -3,6 +3,9 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import React from "react";
+import { renderToString } from "ink";
+import { MeetingPanes } from "../dist/meeting-ui.js";
 import { SolarHarness } from "../dist/harness.js";
 import { recordSession } from "../dist/session-recorder.js";
 
@@ -61,8 +64,63 @@ test("sidebyside starts two sessions concurrently and exchanges actual peer mess
     assert.match(calls[2].prompt, /session readback/);
     assert.equal(messages.length, 6);
     assert.match(result, /meeting complete/);
+    calls.length = 0;
+    await harness.sideBySide("Refine the design", undefined, undefined, { continue: true });
+    assert.equal(starts, 2, "follow-ups must resume the two existing sessions");
+    assert.equal(calls.length, 6);
+    assert.deepEqual(new Set(calls.map(call => call.id)), new Set(["Aurora", "Helios"]));
+    assert.match(calls[0].prompt, /Refine the design/);
+    assert.match(calls[0].prompt, /Helios response 2/);
     await assert.rejects(harness.sideBySide(" "), /Usage/);
   } finally { await rm(cwd, { recursive: true, force: true }); }
+});
+
+test("two pane view separates histories and bounds long output to the viewport", () => {
+  const panes = ["Aurora", "Helios"].map(speaker => ({ speaker, sessionId: `${speaker}-session`, status: "completed",
+    activity: "Readback saved", messages: [`${speaker} history\n` + Array.from({ length: 100 }, (_, index) => `${speaker} line ${index}`).join("\n")], scroll: 0 }));
+  const output = renderToString(React.createElement(MeetingPanes, { panes, selected: 0, width: 88, rows: 10 }), { columns: 90 });
+  assert.equal(output.split("\n").length, 11);
+  assert.match(output, /Aurora.*Helios/);
+  assert.match(output, /Aurora-session.*Helios-session/);
+  assert.match(output, /Aurora line 99.*Helios line 99/);
+  assert.doesNotMatch(output, /line 0\n/);
+  panes[0].scroll = 10;
+  const scrolled = renderToString(React.createElement(MeetingPanes, { panes, selected: 1, width: 88, rows: 10 }), { columns: 90 });
+  assert.match(scrolled, /Helios line 99/);
+  assert.doesNotMatch(scrolled, /Aurora line 99/);
+});
+
+test("sidebyside UI opens panes, resumes on input, and returns to chat", async () => {
+  const { PassThrough } = await import("node:stream");
+  const { render } = await import("ink");
+  const { SolarApp } = await import("../dist/ui.js");
+  const cwd = await mkdtemp(join(tmpdir(), "solar-panes-ui-"));
+  const stdout = Object.assign(new PassThrough(), { isTTY: true, rows: 24, columns: 90 });
+  const stdin = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
+  let output = "";
+  stdout.on("data", data => { output += data.toString(); });
+  const harness = new SolarHarness({ cwd, task: "", model: "fake", reasoning: "light" });
+  let starts = 0;
+  let resumes = 0;
+  harness.provider.run = async prompt => { starts++; const speaker = prompt.includes("You are Aurora") ? "Aurora" : "Helios"; return { text: `${speaker} opening`, sessionId: speaker }; };
+  harness.provider.resume = async id => { resumes++; return { text: `${id} follow-up ${resumes}`, sessionId: id }; };
+  const app = render(React.createElement(SolarApp, { harness, model: "fake", reasoning: "light", initialSplash: false }), { stdout, stdin, exitOnCtrlC: false, patchConsole: false });
+  const pause = () => new Promise(resolve => setTimeout(resolve, 200));
+  try {
+    await pause();
+    stdin.write("/sidebyside Design a menu"); await pause(); stdin.write("\r"); await pause();
+    assert.equal(starts, 2);
+    assert.equal(resumes, 4);
+    assert.match(output, /Session: Aurora.*Session: Helios/);
+    assert.match(output, /Send a message to both sessions/);
+    output = "";
+    stdin.write("Make it simpler"); await pause(); stdin.write("\r"); await pause();
+    assert.equal(starts, 2);
+    assert.equal(resumes, 10);
+    assert.doesNotMatch(output, /\x1b\[2J|\x1b\[3J/, "pane redraws must preserve scrollback");
+    stdin.write("/sidebyside close"); await pause(); stdin.write("\r"); await pause();
+    assert.match(output, /Returned to Solar chat/);
+  } finally { app.unmount(); await rm(cwd, { recursive: true, force: true }); }
 });
 
 test("sidebyside stops without inventing a peer response after a failed launch", async () => {

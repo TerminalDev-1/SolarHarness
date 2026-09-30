@@ -208,6 +208,22 @@ const scenes = [];
   solar.close();
 }
 
+// Two persistent sessions in separate panes; both show their own peer response.
+{
+  const solar = await startSolar(scratch);
+  solar.harness.provider.run = async prompt => {
+    const name = prompt.includes("You are Aurora") ? "Aurora" : "Helios";
+    return { text: "Let's compare the layout and validation options.", sessionId: `${name.toLowerCase()}-meeting` };
+  };
+  solar.harness.provider.resume = async id => ({ sessionId: id, text: id.startsWith("aurora")
+    ? "I agree with Helios about inline errors.\n\nReadback: keep one clear submit action, validate on blur, and test keyboard navigation."
+    : "Aurora's simpler layout works well.\n\nReadback: use explicit labels, preserve entered values, and announce validation errors." });
+  await solar.type("/sidebyside design the contact form");
+  await sleep(300);
+  scenes.push(["sidebyside", solar.output()]);
+  solar.close();
+}
+
 // Replay each scene's terminal output in xterm.js and screenshot the screen.
 const require = createRequire(import.meta.url);
 const xtermDirectory = join(require.resolve("@xterm/xterm/package.json"), "..");

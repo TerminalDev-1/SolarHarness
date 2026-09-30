@@ -13,6 +13,7 @@ import { basename } from "node:path";
 import { loadDefaultEffort, saveDefaultEffort } from "./settings.js";
 import { instructionPaths } from "./instructions.js";
 import { sunColors, sunFrames } from "./sun.js";
+import { MeetingPanes, meetingLines, type MeetingPane } from "./meeting-ui.js";
 import { REASONING_EFFORTS, type AgentRecord, type DelegationPlan, type ReasoningEffort } from "./types.js";
 
 type UiPhase = "idle" | "thinking" | "browsing" | "planning" | "delegating" | "working" | "command" | "synthesizing" | "updating" | "reviewing";
@@ -120,6 +121,8 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [inputHistory, setInputHistory] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [meetingPanes, setMeetingPanes] = useState<MeetingPane[] | null>(null);
+  const [meetingSelection, setMeetingSelection] = useState(0);
   const [phase, setPhase] = useState<UiPhase>("idle");
   const [brief, setBrief] = useState<string[]>([]);
   const [conversation, setConversation] = useState<ChatMessage[]>([]);
@@ -364,6 +367,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
     }
     try {
       const { workspace: nextWorkspace, cleared } = await harness.startNewSession();
+      setMeetingPanes(null);
       setWorkspace(nextWorkspace);
       setAgents([]);
       setBrief([]);
@@ -416,13 +420,25 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
     finally { setBusy(false); setPhase("idle"); }
   };
 
+  const runMeeting = async (topic: string, continuing: boolean): Promise<void> => {
+    await harness.sideBySide(topic, undefined, (speaker, text) => {
+      setMeetingPanes(current => current?.map(pane => pane.speaker === speaker
+        ? { ...pane, messages: [...pane.messages, `${speaker}: ${text}`] } : pane) ?? null);
+    }, { continue: continuing, onSession: (speaker, sessionId, status, activity) => {
+      setMeetingPanes(current => current?.map(pane => pane.speaker === speaker
+        ? { ...pane, sessionId, status, activity } : pane) ?? null);
+    } });
+    addMessage({ role: "solar", text: "Both sessions have saved their readbacks. Send another message to continue in the same sessions, or /sidebyside close to leave." });
+  };
+
   const submit = async (): Promise<void> => {
     const typed = inputRef.current.trim();
     // Attached images go with an ordinary message or /ultra; other commands leave them waiting.
-    const takesImages = !typed.startsWith("/") || /^\/ultra(?:\s|$)/.test(typed);
+    const takesImages = !meetingPanes && (!typed.startsWith("/") || /^\/ultra(?:\s|$)/.test(typed));
     const images = takesImages ? attachmentsRef.current : [];
     const line = typed || (images.length ? `Take a look at the attached image${images.length === 1 ? "" : "s"}.` : "");
     if (!line || busy) return;
+    if (meetingPanes && line.startsWith("/") && !/^\/sidebyside(?:\s|$)/.test(line)) setMeetingPanes(null);
     updateInput("", false);
     setSlashSelection(0);
     setHistoryIndex(-1);
@@ -449,11 +465,13 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
         addMessage({ role: "solar", text: "Describe a task or ask to delegate it. Controls: /ultra <task> · /sidebyside <topic> · /plan <task> · /ultraplan <task> · /ultrareview [target] · /memory · /model · /theme <dark|light> · /speed · /fast <on|off|status> · /stats · /pets <cat|dog|fox|off> · /effort · /default-effort · /agents · /delegate · /new · /auto-approve · /help · /quit" });
       } else if (meetingCommand) {
         const topic = meetingCommand[1]?.trim();
-        if (!topic) addMessage({ role: "error", text: "Usage: /sidebyside <meeting topic>" });
+        if (topic === "close") { setMeetingPanes(null); addMessage({ role: "solar", text: "Returned to Solar chat. Meeting recordings and notes are saved." }); }
+        else if (!topic) addMessage({ role: "error", text: "Usage: /sidebyside <meeting topic> · /sidebyside close" });
         else {
           setCurrentActivity("Aurora and Helios are meeting");
-          await harness.sideBySide(topic, reportActivity, (speaker, text) => addMessage({ role: "solar", text: `${speaker}\n\n${text}` }));
-          addMessage({ role: "solar", text: "Meeting complete. Both agents' final messages contain their readbacks. Recordings and mandatory session_notes.md are saved in .solarharness/sessions/." });
+          setMeetingSelection(0);
+          setMeetingPanes(["Aurora", "Helios"].map(speaker => ({ speaker, status: "starting", activity: "Starting independent session", messages: [`You: ${topic}`], scroll: 0 })));
+          await runMeeting(topic, false);
         }
       } else if (planCommand) {
         const request = planCommand[2]?.trim();
@@ -543,6 +561,9 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
         } else {
           await preparePlan(brief.join("\n"), brief.join("\n"));
         }
+      } else if (meetingPanes && !line.startsWith("/")) {
+        setMeetingPanes(current => current?.map(pane => ({ ...pane, messages: [...pane.messages, `You: ${line}`], scroll: 0 })) ?? null);
+        await runMeeting(line, true);
       } else {
         await runConversation(line, undefined, false, images);
       }
@@ -560,6 +581,16 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
     if (showSplash) {
       setShowSplash(false);
       if (!key.return && !key.escape && !key.ctrl && !key.meta && character) updateInput(character);
+      return;
+    }
+    if (meetingPanes && !slashMenuOpenRef.current && (key.tab || key.pageUp || key.pageDown)) {
+      if (key.tab) setMeetingSelection(index => 1 - index);
+      else {
+        const paneWidth = Math.max(4, Math.floor((Math.min(Math.max((stdout.columns || 80) - 4, 20), 140) - 3) / 2));
+        const bodyRows = Math.max(1, Math.max(5, Math.min(22, (stdout.rows || 24) - 12)) - 4);
+        setMeetingPanes(current => current?.map((pane, index) => index === meetingSelection
+          ? { ...pane, scroll: Math.min(Math.max(0, meetingLines(pane.messages, paneWidth).length - bodyRows), Math.max(0, pane.scroll + (key.pageUp ? 5 : -5))) } : pane) ?? null);
+      }
       return;
     }
     if (busy) return;
@@ -653,7 +684,7 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
   const terminalWidth = stdout.columns || 80;
   const compact = terminalWidth < 62;
   if (showSplash) return <Splash compact={compact} />;
-  const contentWidth = Math.min(Math.max(terminalWidth - 4, 20), 88);
+  const contentWidth = Math.min(Math.max(terminalWidth - 4, 20), meetingPanes ? 140 : 88);
   const latestStep = activityLog.at(-1);
   const latestStepLabel = latestStep ? activityDetail(latestStep) ?? latestStep : undefined;
   // The header and finished messages print once into the terminal's scrollback via <Static>.
@@ -673,6 +704,9 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
     </Static>
     <Box width={terminalWidth - 1} justifyContent="center">
     <Box width={contentWidth} flexDirection="column">
+      {meetingPanes && <MeetingPanes panes={meetingPanes} selected={meetingSelection} width={contentWidth}
+        rows={Math.max(5, Math.min(22, (stdout.rows || 24) - 12 - (slashMatches.length ? 9 : 0)))} />}
+      {!meetingPanes && <>
       {pet !== "off" && <PetCompanion pet={pet} tick={petTick} width={contentWidth} />}
 
       {conversation.length === 0 && <Welcome />}
@@ -698,17 +732,18 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
           <StepList steps={steps.slice(-6)} width={contentWidth - 4} />
         </Box>
       )}
+      </>}
 
       {slashMatches.length > 0 && <SlashCommandMenu matches={slashMatches} selected={slashSelection} />}
 
-      {attachments.length > 0 && <Box marginTop={1} paddingX={1} flexDirection="column">
+      {!meetingPanes && attachments.length > 0 && <Box marginTop={1} paddingX={1} flexDirection="column">
         <ImagePreviews images={previewsFor(attachments)} />
         <Text color={theme.subtle}>Backspace removes the last image</Text>
       </Box>}
 
       <RainbowInput
         width={contentWidth}
-        value={ultra && busy && !input ? `Solar is running ${ultra} at max effort with Fast on…`
+        value={meetingPanes ? input || (busy ? "Aurora and Helios are conversing…" : "Send a message to both sessions") : ultra && busy && !input ? `Solar is running ${ultra} at max effort with Fast on…`
           : attaching === "picker" ? "Choose images in the file picker…"
           : attaching === "clipboard" ? "Pasting the image from your clipboard…"
           : attachments.length && !input && !busy ? `Ask about the image${attachments.length === 1 ? "" : "s"}, or press Enter to send` : pendingTaskPlan ? "Approve or keep the plan above" : pendingPlan ? "Review the proposed sub-agents above" : pendingEffort ? "Choose an effort level above" : pendingSpeed ? "Choose a speed above" : pendingModel ? "Choose a model above" : pendingNew ? "Confirm the new session above" : input || (busy ? "Solar is working…" : "Ask Solar anything")}
@@ -717,9 +752,10 @@ export function SolarApp({ harness, model, reasoning, initialSplash, imageSource
         busy={busy}
         ultra={Boolean(ultra && busy)}
         tick={petTick}
+        imagesEnabled={!meetingPanes}
       />
 
-      <Footer compact={compact} model={currentModel} reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast || (Boolean(ultra) && busy)} themeName={themeName} />
+      <Footer compact={compact} model={currentModel} reasoning={ultra && busy ? "max" : currentReasoning} autoApprove={autoApprove} fast={fast || (Boolean(ultra) && busy)} themeName={themeName} meeting={Boolean(meetingPanes)} />
     </Box>
     </Box>
     </Box>
@@ -764,7 +800,7 @@ function SlashCommandMenu({ matches, selected }: { matches: readonly SlashComman
   );
 }
 
-function RainbowInput({ width, value, entered, cursor, busy, ultra = false, tick = 0 }: { width: number; value: string; entered: boolean; cursor: boolean; busy: boolean; ultra?: boolean; tick?: number }): React.JSX.Element {
+function RainbowInput({ width, value, entered, cursor, busy, ultra = false, tick = 0, imagesEnabled = true }: { width: number; value: string; entered: boolean; cursor: boolean; busy: boolean; ultra?: boolean; tick?: number; imagesEnabled?: boolean }): React.JSX.Element {
   const offset = (ultra ? tick * 2 : tick) % rainbowInput.rail.length;
   const rail: readonly string[] = [...rainbowInput.rail.slice(offset), ...rainbowInput.rail.slice(0, offset)];
   const background = ultra ? ultraInputBackground : rainbowInput.background;
@@ -778,7 +814,7 @@ function RainbowInput({ width, value, entered, cursor, busy, ultra = false, tick
       <Box width={width}>
         <Text color={rail[0]}>▌</Text>
         <Text backgroundColor={background}>
-          <Text bold color={rainbowInput.plus}> + </Text>
+          <Text bold color={rainbowInput.plus}>{imagesEnabled ? " + " : "   "}</Text>
           <Text color={rainbowInput.prompt}>› </Text>
           <Text color={entered ? rainbowInput.primary : busy ? rainbowInput.secondary : rainbowInput.placeholder}>{visibleValue}</Text>
           {cursor && <Text inverse> </Text>}
@@ -1089,10 +1125,10 @@ function TerminalActivity({ agents, spinner }: { agents: AgentRecord[]; spinner:
   );
 }
 
-function Footer({ compact, model, reasoning, autoApprove, fast, themeName }: { compact: boolean; model: string; reasoning: ReasoningEffort; autoApprove: boolean; fast: boolean; themeName: ThemeName }): React.JSX.Element {
+function Footer({ compact, model, reasoning, autoApprove, fast, themeName, meeting = false }: { compact: boolean; model: string; reasoning: ReasoningEffort; autoApprove: boolean; fast: boolean; themeName: ThemeName; meeting?: boolean }): React.JSX.Element {
   return (
     <Box paddingX={1} marginTop={1} justifyContent="space-between">
-      <Text color={theme.subtle}>Enter send · Tab image · /help</Text>
+      <Text color={theme.subtle}>{meeting ? "Enter send to both · Tab pane" : "Enter send · Tab image · /help"}</Text>
       {!compact && <Text color={theme.subtle}>{model} · {reasoning} · {fast ? "Fast" : "Standard"} · {themeName} · auto {autoApprove ? "on" : "off"}</Text>}
     </Box>
   );

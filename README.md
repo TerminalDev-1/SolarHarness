@@ -150,7 +150,7 @@ command, and Esc closes the menu. Press Enter again to run the command.
 | `/model` | Opens a picker to switch between **GPT-6 Luna** and **GPT-5.6 Luna**. `/model gpt-5.6-luna` switches directly. |
 | `/speed` | Opens a picker for Standard or Fast. `/fast on`, `/fast off`, and `/fast status` also work. Fast uses more credits. |
 | `/memory` | Shows which `SOLAR.md` instruction files are loaded. |
-| `/sidebyside <topic>` | Starts Aurora and Helios in independent recorded sessions for three rounds: opening views, peer responses, and final readbacks. Meetings are read-only; proposed changes come back to you. |
+| `/sidebyside <topic>` | Opens two panes with independent recorded Aurora and Helios sessions. They converse with each other; send follow-ups to both sessions, Tab selects a pane, and PgUp/PgDn scroll it. `/sidebyside close` returns to chat. Meetings are read-only. |
 | `/delegate` | Prepares a team of sub-agents for your last request. |
 | `/agents` | Shows whether sub-agents are assigned. |
 | `/agent <name> reasoning <level>` | Changes one agent's effort for its next step. |
@@ -208,10 +208,18 @@ session you are in. The footer always shows the current effort.
 ## Side-by-side meetings
 
 Run `/sidebyside <topic>` to invite Aurora and Helios to a meeting. They start
-in parallel, see each other's previous message, and converse for three rounds.
-Both speakers' messages appear in the chat. Their last round records decisions,
-disagreements, proposed changes, validation needed, and next steps. The meeting
-stops with an error if either session fails. It does not implement changes.
+in parallel in two visible panes. Each pane has its own conversation history,
+session ID, status, and activity. The agents see each other's previous message
+and converse for three rounds per user message, finishing with their readbacks.
+The panes stay open: type a follow-up to resume both existing sessions, retaining
+their separate context. Tab selects a pane; PgUp/PgDn scroll only that pane,
+including while the agents work. `/sidebyside close` returns to Solar chat;
+`/sidebyside <new topic>` starts two fresh sessions. Other slash commands return
+to the normal chat controls. Images remain queued for the normal chat.
+The meeting stops with an error if either session fails. It proposes changes
+for review and does not implement them.
+
+![Two independent sessions conversing in separate panes](docs/images/sidebyside.png)
 
 Every Codex session (main chat, planners, reviewers, and delegated agents) is
 recorded under `.solarharness/sessions/<recording-id>/`. Each folder contains
