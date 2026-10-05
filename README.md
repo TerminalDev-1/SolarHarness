@@ -3,7 +3,12 @@
 > **v1.4 Reborn:** a refreshed solar chat icon, `/sidebyside <request>`: two recorded
 > agents working on your request side by side, and mandatory `session_notes.md` readbacks for every session.
 
-**First committed:** 20 September 2026.
+> **No longer maintained.** Development of SolarHarness has ended. The current
+> terminal and desktop builds stay exactly as they are: no new features, fixes, or
+> releases are planned.
+
+**20 September 2026 – 5 October 2026.** First committed on 20 September; development
+ended on 5 October.
 
 SolarHarness is a coding agent that lives in your terminal. You talk to **Solar**,
 and it works in your project: it reads and edits files, runs commands, tests pages in
@@ -42,7 +47,8 @@ The top of the screen shows which Solar you are running:
 
 `solar --version` prints the same thing, for example `1.4 Reborn build 36b877c`.
 
-To update to the latest build, run these in the SolarHarness folder:
+Development has ended, so the latest build is the final one. To make sure you are
+on it, run these in the SolarHarness folder:
 
 ```powershell
 git pull
@@ -374,6 +380,9 @@ with `SOLAR_SUBDELEGATE_TOOL:` lines.
 See [`CLAUDE.md`](./CLAUDE.md) for the rules contributors follow.
 
 ## Contributing
+
+SolarHarness is no longer maintained, so issues and pull requests will not be
+reviewed. The commands below still work if you fork it:
 
 ```powershell
 npm run dev                 # run the UI from source
