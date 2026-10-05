@@ -390,5 +390,3 @@ contents are never committed.
 The screenshots in `docs/images` come from `scripts/readme-screenshots.mjs`. It
 drives the real interface through each scene with a scripted model, so no Codex
 calls are made, then renders the terminal output with xterm.js.
-
-<sub>Not everything here is documented yet. [native.txt](native.txt)</sub>
