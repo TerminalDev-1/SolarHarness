@@ -1,0 +1,20 @@
+Why SolarHarness was deprecated after 17 days
+
+SolarHarness was first built on 18 September 2026 and first committed on
+20 September 2026. Development ended on 5 October 2026, 17 days after it began.
+
+There was no single breaking point. Three things ended it:
+
+1. It hit its ceiling. The terminal version felt complete. Everything it was
+   meant to do, it did, and there was nowhere left for it to grow.
+
+2. I lost interest. Once it stopped evolving, I stopped wanting to work on it.
+
+3. I am moving on. My time is going to other projects now.
+
+This applies to both the terminal harness and the Solar desktop app. Neither
+will get new features, fixes, releases, or support. The repository is archived
+and the code stays as it was on the last day, for anyone who wants to read it
+or fork it.
+
+-- TerminalDev-1, 5 October 2026

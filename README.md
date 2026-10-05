@@ -1,9 +1,11 @@
 # SolarHarness (discontinued)
 
-> **This project is finished and deprecated.** SolarHarness was developed from
-> 20 September 2026 to 5 October 2026 and is no longer worked on. That covers both
-> the terminal harness and the Solar desktop app. There will be no new features,
-> fixes, releases, or support, and this repository is archived and read-only.
+> **This project is finished and deprecated.** SolarHarness was first built on
+> 18 September 2026, first committed on 20 September, and development ended on
+> 5 October 2026, 17 days after it began. That covers both the terminal harness and
+> the Solar desktop app. There will be no new features, fixes, releases, or support,
+> and this repository is archived and read-only. [deprecated.txt](deprecated.txt)
+> explains why.
 
 SolarHarness was a coding agent that lived in your terminal. You talked to **Solar**,
 and it worked in your project: it read and edited files, ran commands, tested pages in
