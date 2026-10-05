@@ -1,23 +1,23 @@
-# SolarHarness
+# SolarHarness (discontinued)
 
-> **v1.4 Reborn:** a refreshed solar chat icon, `/sidebyside <request>`: two recorded
-> agents working on your request side by side, and mandatory `session_notes.md` readbacks for every session.
+> **This project is finished and deprecated.** SolarHarness was developed from
+> 20 September 2026 to 5 October 2026 and is no longer worked on. That covers both
+> the terminal harness and the Solar desktop app. There will be no new features,
+> fixes, releases, or support, and this repository is archived and read-only.
 
-> **No longer maintained.** Development of SolarHarness has ended. The current
-> terminal and desktop builds stay exactly as they are: no new features, fixes, or
-> releases are planned.
-
-**20 September 2026 – 5 October 2026.** First committed on 20 September; development
-ended on 5 October.
-
-SolarHarness is a coding agent that lives in your terminal. You talk to **Solar**,
-and it works in your project: it reads and edits files, runs commands, tests pages in
-a visible browser, researches the web, looks at images, and tells you what it is doing
-as it goes.
+SolarHarness was a coding agent that lived in your terminal. You talked to **Solar**,
+and it worked in your project: it read and edited files, ran commands, tested pages in
+a visible browser, researched the web, looked at images, and told you what it was
+doing as it went.
 
 ![Solar after building a landing page: its plan, the files it created, and its reply](docs/images/finished.png)
 
-## Getting started
+The final release is **v1.4 Reborn**. Everything below is kept as a record of how
+that last build works. It is provided as-is: it depends on the Codex CLI and on the
+models named here, so it may stop working as those change, and nothing will be
+updated to follow them.
+
+## Running the final build
 
 You need Node.js 20 or newer, the Codex desktop app or Codex CLI (signed in), and
 Chromium or Microsoft Edge for browser features. Set up the `solar` command once:
@@ -39,26 +39,15 @@ The top of the screen shows which Solar you are running:
 (o) Solar Harness v1.4 Reborn build 36b877c
 ```
 
-- **`v1.4`** is the release. It changes only for a new release, not for every fix
-  or feature.
-- **`build 36b877c`** is the commit your copy was built from. Each change to Solar
-  gets a new build, so this tells you exactly which code you have. You can look it
-  up at `github.com/TerminalDev-1/SolarHarness/commit/<build>`.
+- **`v1.4`** is the release. v1.4 Reborn is the last one.
+- **`build 36b877c`** is the commit your copy was built from, so it tells you
+  exactly which code you have. You can look it up at
+  `github.com/TerminalDev-1/SolarHarness/commit/<build>`.
 
 `solar --version` prints the same thing, for example `1.4 Reborn build 36b877c`.
 
-Development has ended, so the latest build is the final one. To make sure you are
-on it, run these in the SolarHarness folder:
-
-```powershell
-git pull
-npm install
-npm run build
-```
-
 The build shown only changes after `npm run build`, so it always matches the code
-that is actually running. When you report a problem, include the whole line, such
-as `v1.4 Reborn build 36b877c`.
+that is actually running. There are no further builds to update to.
 
 ## The interface
 
@@ -377,12 +366,13 @@ the main conversation's session. Sub-agents each get their own session; a
 sub-agent requests sub-delegates with a `SOLAR_SUBDELEGATE:` line and controls them
 with `SOLAR_SUBDELEGATE_TOOL:` lines.
 
-See [`CLAUDE.md`](./CLAUDE.md) for the rules contributors follow.
+[`CLAUDE.md`](./CLAUDE.md) holds the rules the project was developed under.
 
-## Contributing
+## If you fork it
 
-SolarHarness is no longer maintained, so issues and pull requests will not be
-reviewed. The commands below still work if you fork it:
+This repository is archived, so it takes no issues or pull requests. The code is
+left here for anyone who wants to read it or fork it. These commands worked at the
+final build:
 
 ```powershell
 npm run dev                 # run the UI from source
@@ -399,7 +389,6 @@ contents are never committed.
 
 The screenshots in `docs/images` come from `scripts/readme-screenshots.mjs`. It
 drives the real interface through each scene with a scripted model, so no Codex
-calls are made, then renders the terminal output with xterm.js. Rerun it after
-changing the interface.
+calls are made, then renders the terminal output with xterm.js.
 
 <sub>Not everything here is documented yet. [native.txt](native.txt)</sub>
