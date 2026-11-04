@@ -35,8 +35,10 @@ export class CodexCliProvider {
       context ? `Shared context: ${context}` : ""
     ].filter(Boolean).join("\n\n");
     const output = await this.run(prompt, { ...options, role: "planner" }, ["--output-schema", schemaPath]);
-    const parsed = JSON.parse(output.text) as DelegationPlan;
-    if (!Array.isArray(parsed.tasks) || parsed.tasks.length === 0 || parsed.tasks.length > 8 || (requestedCount && parsed.tasks.length !== requestedCount)) {
+    let parsed: DelegationPlan;
+    try { parsed = JSON.parse(output.text) as DelegationPlan; }
+    catch { throw new Error("Codex returned a delegation plan that is not valid JSON."); }
+    if (!parsed || !Array.isArray(parsed.tasks) || parsed.tasks.length === 0 || parsed.tasks.length > 8 || (requestedCount && parsed.tasks.length !== requestedCount)) {
       throw new Error("Codex returned an invalid delegation plan (expected one to eight tasks).");
     }
     return parsed;
@@ -72,6 +74,8 @@ export class CodexCliProvider {
   }
 
   private async runWithArgs(args: string[], options: CodexRunOptions): Promise<CodexRunResult> {
+    // An abort listener never fires for a signal that is already aborted, so check before starting Codex.
+    if (options.signal?.aborted) throw new Error("Codex run cancelled before it started.");
     const child = spawnCodex(this.codexExecutable, args, options.cwd);
     const messages: string[] = [];
     const eventErrors: string[] = [];

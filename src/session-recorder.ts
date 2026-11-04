@@ -38,11 +38,16 @@ export async function recordSession(
   } catch (error) { failure = error; throw error; }
   finally {
     await pendingWrites;
-    if (recordingError) throw recordingError;
+    // The finish entry and readback are always attempted, even after a failed activity write. A recording
+    // failure is raised only when the run itself succeeded, so it never hides the run's own error.
     const status = failure ? (options.signal?.aborted ? "cancelled" : "failed") : "completed";
     const error = failure instanceof Error ? failure.message : failure ? String(failure) : undefined;
-    await appendFile(log, JSON.stringify({ type: "finish", finished: new Date().toISOString(), sessionId: result?.sessionId ?? sessionId, status, events, reply: result?.text, error }) + "\n");
-    await appendFile(notes, `## Readback\n\nStatus: ${status}\nSession: ${result?.sessionId ?? sessionId ?? "unavailable"}\n\n${events.length ? "### Recorded activity\n\n" + events.map(event => `- ${event}`).join("\n") + "\n\n" : ""}### Agent report\n\n${readback(result?.text) ?? error ?? "No report returned."}\n\n`);
+    try {
+      await appendFile(log, JSON.stringify({ type: "finish", finished: new Date().toISOString(), sessionId: result?.sessionId ?? sessionId, status, events, reply: result?.text, error }) + "\n")
+        .catch(writeError => { recordingError ??= writeError; });
+      await appendFile(notes, `## Readback\n\nStatus: ${status}\nSession: ${result?.sessionId ?? sessionId ?? "unavailable"}\n\n${events.length ? "### Recorded activity\n\n" + events.map(event => `- ${event}`).join("\n") + "\n\n" : ""}### Agent report\n\n${readback(result?.text) ?? error ?? "No report returned."}\n\n`);
+    } catch (writeError) { recordingError ??= writeError; }
+    if (recordingError && !failure) throw recordingError;
   }
 }
 

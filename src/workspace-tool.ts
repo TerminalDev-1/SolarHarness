@@ -34,18 +34,7 @@ export class SolarWorkspaceTool {
     const staticServers = [...this.staticServers];
     this.staticServers.clear();
     await Promise.all(staticServers.map(server => new Promise<void>(resolve => server.close(() => resolve()))));
-    await Promise.all(running.map(async child => {
-      if (!child.pid || child.exitCode !== null) return;
-      if (process.platform !== "win32") {
-        try { process.kill(-child.pid, "SIGTERM"); } catch { child.kill(); }
-        return;
-      }
-      await new Promise<void>(resolve => {
-        const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
-        killer.on("error", () => { child.kill(); resolve(); });
-        killer.on("close", () => resolve());
-      });
-    }));
+    await Promise.all(running.map(child => killProcessTree(child)));
   }
 
   private async start(command: string): Promise<WorkspaceCommandResult> {
@@ -89,7 +78,7 @@ export class SolarWorkspaceTool {
 }
 
 /** Run a bounded workspace command and return its output to Solar. */
-export async function runWorkspaceCommand(cwd: string, input: WorkspaceCommandInput): Promise<WorkspaceCommandResult> {
+export async function runWorkspaceCommand(cwd: string, input: WorkspaceCommandInput, timeoutMs = TIMEOUT_MS): Promise<WorkspaceCommandResult> {
   if (!input || input.action !== "run" || typeof input.command !== "string" || !input.command.trim()) {
     throw new Error("workspace_command requires action run and a nonempty command.");
   }
@@ -102,9 +91,15 @@ export async function runWorkspaceCommand(cwd: string, input: WorkspaceCommandIn
   child.stdout?.on("data", (chunk: Buffer) => { stdout = (stdout + chunk.toString()).slice(-OUTPUT_LIMIT); });
   child.stderr?.on("data", (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-OUTPUT_LIMIT); });
   return await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { child.kill(); reject(new Error(`Workspace command timed out after ${TIMEOUT_MS / 1000} seconds.`)); }, TIMEOUT_MS);
-    child.on("error", error => { clearTimeout(timer); reject(error); });
-    child.on("close", exitCode => { clearTimeout(timer); resolve({ command: input.command, exitCode, stdout, stderr }); });
+    // Kill the shell and everything it started; killing only the shell leaves its children running on Windows.
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      void killProcessTree(child).then(() => reject(new Error(`Workspace command timed out after ${timeoutMs / 1000} seconds.`)));
+    }, timeoutMs);
+    child.on("error", error => { clearTimeout(timer); if (!timedOut) reject(error); });
+    // The killed shell closes before the timeout rejects; that close is not a result.
+    child.on("close", exitCode => { clearTimeout(timer); if (!timedOut) resolve({ command: input.command, exitCode, stdout, stderr }); });
   });
 }
 
@@ -144,6 +139,20 @@ export function terminalLaunch(cwd: string, command: string, platform: NodeJS.Pl
     return { file: "osascript", args: ["-e", `tell application "Terminal" to do script "${inner}"`, "-e", 'tell application "Terminal" to activate'] };
   }
   return { file: "/bin/sh", args: ["-c", `x-terminal-emulator -e sh -c ${shellQuote(`${command}; exec "\${SHELL:-sh}"`)} >/dev/null 2>&1 &`] };
+}
+
+/** Stops a shell and the processes it started: taskkill /T on Windows, the process group elsewhere when it has one. */
+async function killProcessTree(child: ChildProcess): Promise<void> {
+  if (!child.pid || child.exitCode !== null) return;
+  if (process.platform !== "win32") {
+    try { process.kill(-child.pid, "SIGTERM"); } catch { child.kill(); }
+    return;
+  }
+  await new Promise<void>(resolve => {
+    const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+    killer.on("error", () => { child.kill(); resolve(); });
+    killer.on("close", () => resolve());
+  });
 }
 
 function spawnShell(cwd: string, command: string, stdio: ["ignore", "ignore" | "pipe", "ignore" | "pipe"], detached: boolean): ChildProcess {

@@ -114,8 +114,21 @@ export class AgentManager {
       });
       record.sessionId = result.sessionId;
 
-      const request = record.depth === 0 ? extractSubDelegateRequest(result.text) : undefined;
-      if (request) {
+      const runOptions = { ...this.options, role: "sub-agent" as const, reasoning: record.reasoning, signal: controller.signal, onEvent: (event: string) => this.recordActivity(record, event) };
+      const parsedRequest = record.depth === 0 ? parseSubDelegateRequest(result.text) : undefined;
+      const request = parsedRequest && "request" in parsedRequest ? parsedRequest.request : undefined;
+      if (parsedRequest && "error" in parsedRequest) {
+        // A malformed request must not discard the agent's work: ask it to finish the assignment itself.
+        this.recordActivity(record, `Invalid sub-delegate request: ${parsedRequest.error}`);
+        const recovered = record.sessionId
+          ? await this.provider.resume(record.sessionId, [
+              `Your SOLAR_SUBDELEGATE request was rejected: ${parsedRequest.error}`,
+              "Do not request sub-delegates again. Complete the remaining parts of your assignment yourself, then give your final report to Solar."
+            ].join("\n\n"), runOptions)
+          : result;
+        record.report = stripControlLines(recovered.text);
+        record.sessionId = recovered.sessionId ?? record.sessionId;
+      } else if (request) {
         record.status = "waiting";
         record.latestActivity = `Delegating ${request.tasks.length} sub-delegate${request.tasks.length === 1 ? "" : "s"}`;
         const childPromises = request.tasks.slice(0, MAX_SUB_DELEGATES_PER_AGENT).map(task => this.spawn({
@@ -130,6 +143,8 @@ export class AgentManager {
           const child = result.value;
           return `${child.name} (${child.id}, ${child.status}, ${child.reasoning}):\n${child.report ?? child.error ?? "No report"}`;
         }).join("\n\n");
+        // Cancelled while waiting on its children: no Codex call is in flight to abort, so stop here.
+        if (controller.signal.aborted) throw new Error("Cancelled while waiting for sub-delegates.");
         record.status = "running";
         record.latestActivity = "Reviewing sub-delegate reports";
         let resumed = record.sessionId
@@ -138,21 +153,23 @@ export class AgentManager {
               "If a direct sub-delegate needs a follow-up, emit exactly one line instead of a final report: SOLAR_SUBDELEGATE_TOOL: {\"action\":\"inject_context|cancel|set_reasoning\",\"agentId\":\"name-or-id\",\"context\":\"required for inject_context\",\"reasoning\":\"light\"}. You may control only your children and cannot raise them above Light.",
               "Do not request another delegation level.",
               `Sub-delegate reports:\n${reports}`
-            ].join("\n\n"), { ...this.options, role: "sub-agent", reasoning: record.reasoning, signal: controller.signal, onEvent: event => this.recordActivity(record, event) })
-          : await this.provider.run([this.agentPrompt(record), `Sub-delegate reports:\n${reports}`].join("\n\n"), { ...this.options, role: "sub-agent", reasoning: record.reasoning, signal: controller.signal, onEvent: event => this.recordActivity(record, event) });
+            ].join("\n\n"), runOptions)
+          : await this.provider.run([this.agentPrompt(record), `Sub-delegate reports:\n${reports}`].join("\n\n"), runOptions);
         let controlRounds = 0;
-        let control = extractSubDelegateControl(resumed.text);
-        while (control && controlRounds < 4) {
+        let parsedControl = parseSubDelegateControl(resumed.text);
+        while (parsedControl && controlRounds < 4) {
           controlRounds += 1;
           let outcome: string;
           try {
+            if ("error" in parsedControl) throw new Error(parsedControl.error);
+            const control = parsedControl.control;
             if (control.action === "set_reasoning") {
               if (!control.reasoning) throw new Error("set_reasoning requires a reasoning level.");
               const child = this.setReasoning(control.agentId, control.reasoning, record.id);
               outcome = `${child.name} remains at ${child.reasoning} reasoning.`;
             } else {
               const updated = await this.orchestrate({ action: control.action, agentId: control.agentId, context: control.context }, record.id);
-              const child = updated.find(candidate => candidate.id === control!.agentId || candidate.name.toLowerCase() === control!.agentId.toLowerCase());
+              const child = updated.find(candidate => candidate.id === control.agentId || candidate.name.toLowerCase() === control.agentId.toLowerCase());
               outcome = child ? `${child.name} is ${child.status}. Latest report:\n${child.report ?? child.error ?? child.latestActivity}` : "Sub-delegate control completed.";
             }
           } catch (error) {
@@ -161,8 +178,8 @@ export class AgentManager {
           resumed = await this.provider.resume(resumed.sessionId ?? record.sessionId!, [
             `Sub-delegate control result:\n${outcome}`,
             "Continue integrating the work. You may emit another SOLAR_SUBDELEGATE_TOOL line if a direct child needs a follow-up; otherwise provide your final report to Solar."
-          ].join("\n\n"), { ...this.options, role: "sub-agent", reasoning: record.reasoning, signal: controller.signal, onEvent: event => this.recordActivity(record, event) });
-          control = extractSubDelegateControl(resumed.text);
+          ].join("\n\n"), runOptions);
+          parsedControl = parseSubDelegateControl(resumed.text);
         }
         record.report = stripControlLines(resumed.text);
         record.sessionId = resumed.sessionId ?? record.sessionId;
@@ -264,19 +281,22 @@ export class AgentManager {
   }
 }
 
-function extractSubDelegateRequest(text: string): SubDelegateRequest | undefined {
+/** A SOLAR_SUBDELEGATE line as a request, or the reason it is invalid. No line returns undefined. */
+function parseSubDelegateRequest(text: string): { request: SubDelegateRequest } | { error: string } | undefined {
   const match = text.match(/^SOLAR_SUBDELEGATE:\s*(\{[^\r\n]+\})\s*$/m);
   if (!match) return undefined;
-  const parsed = JSON.parse(match[1]) as SubDelegateRequest;
-  if (!Array.isArray(parsed.tasks) || parsed.tasks.length === 0 || parsed.tasks.length > MAX_SUB_DELEGATES_PER_AGENT) {
-    throw new Error("Sub-agent requested an invalid sub-delegate plan (expected one to eight tasks).");
+  let parsed: SubDelegateRequest;
+  try { parsed = JSON.parse(match[1]) as SubDelegateRequest; }
+  catch { return { error: "the SOLAR_SUBDELEGATE line is not valid JSON." }; }
+  if (!parsed || !Array.isArray(parsed.tasks) || parsed.tasks.length === 0 || parsed.tasks.length > MAX_SUB_DELEGATES_PER_AGENT) {
+    return { error: "expected one to eight sub-delegate tasks." };
   }
   for (const task of parsed.tasks) {
-    if (!task.name?.trim() || !task.title?.trim() || !task.instructions?.trim()) {
-      throw new Error("Every sub-delegate request requires a name, title, and instructions.");
+    if (!task?.name?.trim() || !task.title?.trim() || !task.instructions?.trim()) {
+      return { error: "every sub-delegate task requires a name, title, and instructions." };
     }
   }
-  return parsed;
+  return { request: parsed };
 }
 
 function stripControlLines(text: string): string {
@@ -286,13 +306,16 @@ function stripControlLines(text: string): string {
     .trim();
 }
 
-function extractSubDelegateControl(text: string): SubDelegateControl | undefined {
+/** A SOLAR_SUBDELEGATE_TOOL line as a control request, or the reason it is invalid. No line returns undefined. */
+function parseSubDelegateControl(text: string): { control: SubDelegateControl } | { error: string } | undefined {
   const match = text.match(/^SOLAR_SUBDELEGATE_TOOL:\s*(\{[^\r\n]+\})\s*$/m);
   if (!match) return undefined;
-  const parsed = JSON.parse(match[1]) as SubDelegateControl;
-  if (!parsed.agentId || !["cancel", "inject_context", "set_reasoning"].includes(parsed.action)) {
-    throw new Error("Sub-agent emitted an invalid sub-delegate control request.");
+  let parsed: SubDelegateControl;
+  try { parsed = JSON.parse(match[1]) as SubDelegateControl; }
+  catch { return { error: "the SOLAR_SUBDELEGATE_TOOL line is not valid JSON." }; }
+  if (!parsed?.agentId || !["cancel", "inject_context", "set_reasoning"].includes(parsed.action)) {
+    return { error: "invalid sub-delegate control request." };
   }
-  if (parsed.action === "inject_context" && !parsed.context?.trim()) throw new Error("inject_context requires context.");
-  return parsed;
+  if (parsed.action === "inject_context" && !parsed.context?.trim()) return { error: "inject_context requires context." };
+  return { control: parsed };
 }

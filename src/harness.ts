@@ -759,7 +759,8 @@ function youtubeSearchQuery(message: string): string | undefined {
 }
 
 function webSearchQuery(message: string): string | undefined {
-  if (/\b(?:in|within)\s+(?:the\s+)?(?:repo|repository|workspace|codebase|project|files?)\b/i.test(message)) return undefined;
+  if (/\b(?:in|within|across|through)\s+(?:the\s+|this\s+|my\s+|our\s+)?(?:repo|repository|workspace|codebase|code|source|src|project|folder|directory|files?)\b/i.test(message)) return undefined;
+  if (codeSearchRequested(message)) return undefined;
   const stop = "(?=\\s+and\\s+(?:open|click|read|visit|tell|explain|summarize|report)\\b|[.!?]\\s+(?:then|also|next|after|please)\\b|[.!?]$|$)";
   const patterns = [
     new RegExp(`\\bsearch\\s+(?:google|bing|the\\s+web|online)\\s+(?:for\\s+)?(.+?)${stop}`, "i"),
@@ -775,6 +776,20 @@ function webSearchQuery(message: string): string | undefined {
     return message.trim().replace(/[.!?]+$/, "");
   }
   return undefined;
+}
+
+/**
+ * "search for usages of parseHostToolCall" is a code search, not web research: the message names code
+ * (backticks, a source file, a camelCase or snake_case identifier, a path) or asks for usages or references.
+ */
+function codeSearchRequested(message: string): boolean {
+  // Case-sensitive on purpose: lowercase file stems (harness.ts) count, product names (Node.js) do not;
+  // camelCase needs two lowercase letters first so iPhone and macOS stay web searches.
+  return /`[^`]+`/.test(message)
+    || /(?:^|[\s(/\\])[a-z0-9_-]*[a-z0-9]\.(?:tsx?|jsx?|mjs|cjs|py|rs|go|java|cs|cpp|rb|php|json|ya?ml|toml|md|css|scss|html?)\b/.test(message)
+    || /\b[a-z]{2,}[A-Z][a-z]+[A-Za-z0-9]*\b|\b[A-Za-z]+_[A-Za-z0-9_]+\b/.test(message)
+    || /(?:^|\s)\.{0,2}\/?(?:src|lib|tests?|dist|scripts)\/\S*/i.test(message)
+    || /\b(?:usages?|occurrences?|callers?|call sites?|TODOs?|FIXMEs?)\b/i.test(message);
 }
 
 function isYoutubeUrl(url: string): boolean {
