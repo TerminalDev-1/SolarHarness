@@ -1,25 +1,29 @@
-# SolarHarness (discontinued)
+# SolarHarness
 
-> **This project is finished and deprecated.** SolarHarness was first built on
-> 18 September 2026, first committed on 20 September, and development ended on
-> 5 October 2026, 17 days after it began. That covers both the terminal harness and
-> the Solar desktop app. There will be no new features, fixes, releases, or support,
-> and this repository is archived and read-only. [deprecated.txt](deprecated.txt)
-> explains why.
+> **What's new in v2.0 New Beginning:** SolarHarness is back in development.
+> This release picks up where v1.4 Reborn stopped and fixes these bugs:
+>
+> - Cancelling a sub-agent that is waiting on its sub-delegates now stops it,
+>   instead of letting it resume and report "completed".
+> - Session notes always get their readback, even when writing the transcript fails,
+>   and a recording problem no longer hides the real error.
+> - Asking Solar to search your code ("search for usages of `parseHostToolCall`")
+>   no longer sends it off on a web search.
+> - A workspace command that times out on Windows now stops everything it started.
+> - A sub-agent that sends a malformed delegation line finishes its work instead
+>   of failing and losing it.
 
-SolarHarness was a coding agent that lived in your terminal. You talked to **Solar**,
-and it worked in your project: it read and edited files, ran commands, tested pages in
-a visible browser, researched the web, looked at images, and told you what it was
-doing as it went.
+SolarHarness is a coding agent that lives in your terminal. You talk to **Solar**,
+and it works in your project: it reads and edits files, runs commands, tests pages in
+a visible browser, researches the web, looks at images, and tells you what it is
+doing as it goes.
 
 ![Solar after building a landing page: its plan, the files it created, and its reply](docs/images/finished.png)
 
-The final release is **v1.4 Reborn**. Everything below is kept as a record of how
-that last build works. It is provided as-is: it depends on the Codex CLI and on the
-models named here, so it may stop working as those change, and nothing will be
-updated to follow them.
+The current release is **v2.0 New Beginning**. Solar runs on your Codex CLI login and
+the models named here.
 
-## Running the final build
+## Running Solar
 
 You need Node.js 20 or newer, the Codex desktop app or Codex CLI (signed in), and
 Chromium or Microsoft Edge for browser features. Set up the `solar` command once:
@@ -38,25 +42,25 @@ Solar's workspace.
 The top of the screen shows which Solar you are running:
 
 ```text
-(o) Solar Harness v1.4 Reborn build 36b877c
+(o) Solar Harness v2.0 New Beginning build 54b216c
 ```
 
-- **`v1.4`** is the release. v1.4 Reborn is the last one.
-- **`build 36b877c`** is the commit your copy was built from, so it tells you
+- **`v2.0 New Beginning`** is the release and its name.
+- **`build 54b216c`** is the commit your copy was built from, so it tells you
   exactly which code you have. You can look it up at
   `github.com/TerminalDev-1/SolarHarness/commit/<build>`.
 
-`solar --version` prints the same thing, for example `1.4 Reborn build 36b877c`.
+`solar --version` prints the same thing, for example `2.0 New Beginning build 54b216c`.
 
 The build shown only changes after `npm run build`, so it always matches the code
-that is actually running. There are no further builds to update to.
+that is actually running. To update, pull the latest code and run `npm run build`.
 
 ## The interface
 
 ![The Solar welcome screen](docs/images/welcome.png)
 
 ```text
- (o) Solar Harness v1.4 Reborn build 36b877c       ← version and the commit it was built from
+ (o) Solar Harness v2.0 New Beginning build 54b216c ← version and the commit it was built from
                                           ← your workspace folder is shown below
  C:\Users\you\projects\portfolio
  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
@@ -368,13 +372,9 @@ the main conversation's session. Sub-agents each get their own session; a
 sub-agent requests sub-delegates with a `SOLAR_SUBDELEGATE:` line and controls them
 with `SOLAR_SUBDELEGATE_TOOL:` lines.
 
-[`CLAUDE.md`](./CLAUDE.md) holds the rules the project was developed under.
+[`CLAUDE.md`](./CLAUDE.md) holds the rules the project is developed under.
 
-## If you fork it
-
-This repository is archived, so it takes no issues or pull requests. The code is
-left here for anyone who wants to read it or fork it. These commands worked at the
-final build:
+## Development
 
 ```powershell
 npm run dev                 # run the UI from source

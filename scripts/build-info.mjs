@@ -1,4 +1,4 @@
-// Records the commit the build came from, so the header can show "v1.0 build <commit>".
+// Records the commit the build came from, so the header can show "v2.0 New Beginning build <commit>".
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 
